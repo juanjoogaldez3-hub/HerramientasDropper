@@ -25,6 +25,7 @@
         <a href="inicio.html">Inicio</a>
         <a href="generador.html">Generador</a>
         <a href="pagos.html">Pagos</a>
+        <a href="comisiones.html">Comisiones</a>
         <a href="historial.html" class="active">Historial</a>
       </div>
       <span class="nav-sep"></span>
@@ -47,6 +48,7 @@
       <div class="tabs">
         <button id="tab-rep" class="active">Reportes</button>
         <button id="tab-pay">Pagos</button>
+        <button id="tab-com">Comisiones</button>
         <button id="tab-rec">Recibos</button>
       </div>
       <button class="btn btn-ghost" id="refresh">Actualizar</button>
@@ -105,6 +107,12 @@
       title: "Historial de pagos",
       sub: "Cada vez que guardás un pago desde Pagos a Mensajeros, queda registrado aquí.",
       empty: ["Todavía no hay pagos guardados", "Guardá tu primer pago desde Pagos a Mensajeros y aparecerá aquí."],
+    },
+    comisiones: {
+      table: "commission_sessions", source: "Comisiones de Cobro",
+      title: "Historial de comisiones",
+      sub: "Cada vez que guardás un cálculo desde Comisiones de Cobro, queda registrado aquí.",
+      empty: ["Todavía no hay comisiones guardadas", "Guardá tu primer cálculo desde Comisiones de Cobro y aparecerá aquí."],
     },
     recibos: {
       table: "receipts", source: "Pagos a Mensajeros",
@@ -165,6 +173,27 @@
       $("#panel").innerHTML =
         `<table class="hist"><thead><tr>
           <th>Fecha</th><th>Archivo</th><th>Período</th><th>Mensajeros</th><th>Entregas</th><th>Recolectas</th><th>Descuentos</th><th>Total pagado</th><th>Generado por</th>
+        </tr></thead><tbody>${body}</tbody></table>`;
+    } else if(TAB === "comisiones"){
+      const orders = rows.reduce((s,r)=>s+(r.orders_count||0),0);
+      const cobrado = rows.reduce((s,r)=>s+(Number(r.collected_total)||0),0);
+      const comi = rows.reduce((s,r)=>s+(Number(r.commission_total)||0),0);
+      $("#summary").innerHTML = stat("Sesiones",rows.length) + stat("Pedidos acumulados",nf(orders)) + stat("Precio de paquetes",fmtQ(cobrado)) + stat("Comisión acumulada",fmtQ(comi));
+      const body = rows.map(r=>`
+        <tr>
+          <td>${fmtDateTime(r.created_at)}</td>
+          <td>${esc(r.file_name||"—")}</td>
+          <td>${esc(r.period_text||"—")}</td>
+          <td class="num">${r.clients_count||0}</td>
+          <td class="num">${nf(r.orders_count)}</td>
+          <td class="num">${Number(r.rate_percent||0)}%</td>
+          <td class="num">${fmtQ(r.collected_total)}</td>
+          <td class="num total">${fmtQ(r.commission_total)}</td>
+          <td>${esc((r.created_by_email||"").split("@")[0])}</td>
+        </tr>`).join("");
+      $("#panel").innerHTML =
+        `<table class="hist"><thead><tr>
+          <th>Fecha</th><th>Archivo</th><th>Período</th><th>Clientes</th><th>Pedidos</th><th>% Comisión</th><th>Precio paquetes</th><th>Comisión</th><th>Generado por</th>
         </tr></thead><tbody>${body}</tbody></table>`;
     } else {
       const active = rows.filter(r=>r.status!=="anulado");
@@ -244,6 +273,7 @@
     TAB = tab;
     $("#tab-rep").classList.toggle("active", tab==="reportes");
     $("#tab-pay").classList.toggle("active", tab==="pagos");
+    $("#tab-com").classList.toggle("active", tab==="comisiones");
     $("#tab-rec").classList.toggle("active", tab==="recibos");
     $("#page-title").textContent = TABS[tab].title;
     $("#page-sub").textContent = TABS[tab].sub;
@@ -252,6 +282,7 @@
   }
   $("#tab-rep").addEventListener("click", ()=>switchTab("reportes"));
   $("#tab-pay").addEventListener("click", ()=>switchTab("pagos"));
+  $("#tab-com").addEventListener("click", ()=>switchTab("comisiones"));
   $("#tab-rec").addEventListener("click", ()=>switchTab("recibos"));
 
   function setupHistFilter(rows){

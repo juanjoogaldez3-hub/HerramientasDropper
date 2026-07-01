@@ -1,0 +1,832 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Comisiones de Cobro · Herramientas Dropper</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/css/app.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="assets/js/config.js"></script>
+<script src="assets/js/supabaseClient.js"></script>
+<script src="assets/js/auth-guard.js"></script>
+<script src="assets/js/brand.js"></script>
+<script src="assets/js/nav.js"></script>
+<style>
+  .drop{padding:42px 28px;text-align:center;cursor:pointer;position:relative;border:2px dashed #cdd8cf;
+    border-radius:var(--radius);background:var(--white);transition:.22s ease;overflow:hidden}
+  .drop:hover{border-color:var(--green);background:#fbfdfb}
+  .drop.drag{border-color:var(--green);background:var(--lime-soft);transform:scale(.997)}
+  .drop .ic{width:58px;height:58px;border-radius:50%;margin:0 auto 14px;background:var(--lime-soft);
+    display:grid;place-items:center;color:var(--green-dk);transition:.25s ease}
+  .drop:hover .ic{transform:translateY(-3px)}
+  .drop h2{font-family:'Sora',sans-serif;font-weight:700;font-size:1.15rem;letter-spacing:-.01em}
+  .drop p{color:var(--muted);font-size:.92rem;margin-top:6px}
+  .drop .hint{margin-top:13px;font-size:.78rem;color:#8a988e}
+  input[type=file]{display:none}
+
+  .status{margin-top:16px;font-size:.9rem;display:none;align-items:center;gap:9px;padding:12px 16px;border-radius:12px}
+  .status.show{display:flex}
+  .status.err{background:#fdecea;color:#a3261a;border:1px solid #f5c6c0}
+  .status.work{background:var(--lime-soft);color:var(--green-dk);border:1px solid #c4e3cd}
+  .spin{width:15px;height:15px;border:2px solid #bcd9c4;border-top-color:var(--green-dk);border-radius:50%;animation:sp .7s linear infinite;flex:none}
+  @keyframes sp{to{transform:rotate(360deg)}}
+
+  .ratebar{display:none;align-items:center;gap:12px;flex-wrap:wrap;margin:18px 0 4px;
+    background:var(--white);border:1px solid var(--line);border-radius:14px;padding:14px 18px;box-shadow:var(--shadow)}
+  .ratebar.show{display:flex}
+  .ratebar .rb-label{display:inline-flex;align-items:center;gap:8px;font-family:'Sora',sans-serif;font-weight:700;color:var(--green-dk)}
+  .ratebar .rb-label svg{width:18px;height:18px}
+  .ratebar .rb-input{display:inline-flex;align-items:center;gap:6px;font-weight:700;font-size:1.05rem}
+  .ratebar .rb-input span{color:var(--green-dk)}
+  .ratebar input[type=number]{width:96px;font-family:'Sora',sans-serif;font-weight:700;font-size:1.05rem;color:var(--ink);
+    border:1px solid #cdd8cf;border-radius:10px;padding:8px 12px;background:#fcfdfc}
+  .ratebar input[type=number]:focus{outline:none;border-color:var(--green);box-shadow:0 0 0 3px rgba(31,122,61,.12)}
+  .ratebar .rb-col{display:inline-flex;align-items:center;gap:7px;font-size:.86rem;color:var(--muted)}
+  .ratebar select{font-family:inherit;font-size:.9rem;color:var(--ink);border:1px solid #cdd8cf;border-radius:10px;padding:8px 10px;background:#fcfdfc;max-width:220px}
+  .ratebar select:focus{outline:none;border-color:var(--green);box-shadow:0 0 0 3px rgba(31,122,61,.12)}
+  .ratebar .rb-note{margin-left:auto;font-size:.8rem;color:var(--muted)}
+
+  .methodbar{display:none;flex-direction:column;gap:12px;margin:10px 0 4px;
+    background:var(--white);border:1px solid var(--line);border-radius:14px;padding:14px 18px;box-shadow:var(--shadow)}
+  .methodbar.show{display:flex}
+  .methodbar .mb-head{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+  .methodbar .mb-label{display:inline-flex;align-items:center;gap:8px;font-family:'Sora',sans-serif;font-weight:700;color:var(--green-dk)}
+  .methodbar .mb-label svg{width:18px;height:18px}
+  .methodbar .mb-note{font-size:.8rem;color:var(--muted)}
+  .methodbar .mb-chips{display:flex;gap:9px;flex-wrap:wrap}
+  .chip{display:inline-flex;align-items:center;gap:8px;cursor:pointer;user-select:none;
+    border:1px solid #cdd8cf;border-radius:20px;padding:7px 14px;font-size:.86rem;font-weight:600;color:var(--muted);background:#fcfdfc;transition:.15s ease}
+  .chip:hover{border-color:var(--green)}
+  .chip input{display:none}
+  .chip .dot{width:14px;height:14px;border-radius:50%;border:2px solid #cdd8cf;flex:none;transition:.15s ease}
+  .chip.on{color:var(--green-dk);background:var(--lime-soft);border-color:#c4e3cd}
+  .chip.on .dot{background:var(--green-dk);border-color:var(--green-dk);box-shadow:inset 0 0 0 2px var(--lime-soft)}
+  .chip .cnt{font-weight:700;opacity:.7}
+
+  .summary{display:none}
+  .summary.show{display:flex;gap:14px;margin:22px 0 8px;flex-wrap:wrap;animation:rise .5s ease both}
+
+  .toolbar{display:none;justify-content:space-between;align-items:center;gap:12px;margin:24px 0 14px;flex-wrap:wrap}
+  .toolbar.show{display:flex}
+  .toolbar h3{font-family:'Sora',sans-serif;font-weight:700;font-size:1.05rem}
+  .toolbar .tb-btns{display:flex;gap:10px;flex-wrap:wrap}
+
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(258px,1fr));gap:14px}
+  .card{background:var(--white);border:1px solid var(--line);border-radius:14px;padding:18px;box-shadow:var(--shadow);
+    display:flex;flex-direction:column;gap:14px;transition:.2s ease;position:relative;animation:rise .45s ease both}
+  .card:hover{transform:translateY(-2px);border-color:#cdd8cf}
+  .card .top{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+  .card .name{font-family:'Sora',sans-serif;font-weight:700;font-size:1.02rem;letter-spacing:-.01em;word-break:break-word}
+  .card .meta{display:flex;gap:18px;margin-top:4px}
+  .card .meta div{font-size:.8rem;color:var(--muted)}
+  .card .meta b{display:block;font-family:'Sora',sans-serif;color:var(--ink);font-size:1.12rem;font-weight:700;margin-top:1px}
+  .card .meta .comi{color:var(--green-dk)!important}
+  .chk{width:20px;height:20px;flex:none;accent-color:var(--green-dk);cursor:pointer;margin-top:2px}
+  .card .fields{display:flex;gap:8px}
+  .card .fld{flex:1;display:flex;flex-direction:column;gap:5px;background:#f4fbf5;border:1px solid #d7ecdb;border-radius:11px;padding:8px 10px}
+  .card .fld label{font-size:.74rem;font-weight:600;color:var(--green-dk);display:inline-flex;align-items:center;gap:5px}
+  .card .fld label svg{width:13px;height:13px}
+  .card .fld .inwrap{display:flex;align-items:center;gap:5px}
+  .card .fld input{width:100%;font-family:'Sora',sans-serif;font-weight:700;font-size:.95rem;color:var(--ink);
+    text-align:center;border:1px solid #cdd8cf;border-radius:8px;padding:5px 6px;background:#fff}
+  .card .fld input:focus{outline:none;border-color:var(--green);box-shadow:0 0 0 3px rgba(31,122,61,.12)}
+  .card .fld .suf{font-weight:700;color:var(--green-dk)}
+  .card .btns{display:flex;gap:8px}
+  .card .btns .btn{flex:1;justify-content:center;padding:10px 8px;width:auto}
+  .btn svg{width:16px;height:16px}
+  .btn.btn-primary{width:auto}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="topbar">
+    <a class="brand" href="inicio.html"><img id="brand-logo" alt="Dropper · Herramientas"></a>
+    <nav class="nav">
+      <div class="nav-links">
+        <a href="inicio.html">Inicio</a>
+        <a href="generador.html">Generador</a>
+        <a href="pagos.html">Pagos</a>
+        <a href="comisiones.html" class="active">Comisiones</a>
+        <a href="historial.html">Historial</a>
+      </div>
+      <span class="nav-sep"></span>
+      <span class="nav-av" id="nav-av"></span>
+      <a href="#" class="nav-logout" id="logout">Salir</a>
+    </nav>
+  </div>
+
+  <div class="notice" id="notice">
+    <b>Modo vista previa.</b> Supabase aún no está configurado: la herramienta funciona, pero no hay login.
+    Pegá tus llaves en <code>assets/js/config.js</code> (ver README).
+  </div>
+
+  <div class="page-head">
+    <div>
+      <h2>Comisiones de Cobro Contra Entrega</h2>
+      <div class="sub">Subí tu Excel de entregas y calculá la comisión que Dropper le cobra a cada cliente por gestionar el cobro contra entrega.</div>
+    </div>
+  </div>
+
+  <div class="drop" id="drop">
+    <input type="file" id="file" accept=".xlsx,.xls">
+    <div class="ic">
+      <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+    </div>
+    <h2>Arrastrá tu Excel de entregas aquí</h2>
+    <p>o hacé clic para elegir el archivo (.xlsx)</p>
+    <div class="hint">La comisión se calcula sobre el <b>precio del paquete</b>, solo para los <b>métodos de pago que cobra Dropper</b> (efectivo, POS Dropper, depósito a Dropper).</div>
+  </div>
+
+  <div class="status" id="status"></div>
+
+  <!-- Filtro por período -->
+  <div class="datefilter" id="datefilter" style="display:none">
+    <span class="df-label">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+      Período
+    </span>
+    <label>Desde <input type="date" id="df-from"></label>
+    <label>Hasta <input type="date" id="df-to"></label>
+    <button class="btn btn-primary df-btn" id="df-apply">Aplicar</button>
+    <button class="btn btn-ghost df-btn" id="df-clear">Todo</button>
+  </div>
+
+  <!-- Barra de % de comisión + columna de precio -->
+  <div class="ratebar" id="ratebar">
+    <span class="rb-label">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="5" x2="5" y2="19"/><circle cx="6.5" cy="6.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/></svg>
+      Comisión general
+    </span>
+    <span class="rb-input"><input type="number" id="rate" min="0" step="0.1" value="3"> <span>%</span></span>
+    <span class="rb-col">
+      Precio del paquete en la columna:
+      <select id="col-precio" title="Columna del Excel con el precio del paquete"></select>
+    </span>
+    <span class="rb-col">
+      Método de pago en la columna:
+      <select id="col-metodo" title="Columna del Excel con el método de pago"></select>
+    </span>
+    <span class="rb-note">Podés ajustar el % individual por cliente en cada tarjeta.</span>
+  </div>
+
+  <!-- Métodos de pago que generan comisión -->
+  <div class="methodbar" id="methodbar">
+    <div class="mb-head">
+      <span class="mb-label">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
+        Métodos de pago que cobra Dropper
+      </span>
+      <span class="mb-note">Marcá solo los métodos donde el dinero lo maneja Dropper. Los demás no generan comisión.</span>
+    </div>
+    <div class="mb-chips" id="method-chips"></div>
+  </div>
+
+  <!-- Resumen -->
+  <div class="summary" id="summary"></div>
+
+  <!-- Toolbar -->
+  <div class="toolbar" id="toolbar">
+    <h3>Comisiones por cliente</h3>
+    <div class="tb-btns">
+      <button class="btn btn-ghost" id="btn-toggle">Deseleccionar todos</button>
+      <button class="btn btn-ghost" id="btn-xlsx">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+        Excel consolidado
+      </button>
+      <button class="btn btn-primary" id="btn-pdf">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
+        PDF consolidado
+      </button>
+      <button class="btn btn-primary" id="btn-save-hist">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+        Guardar en historial
+      </button>
+    </div>
+  </div>
+
+  <div class="grid" id="grid"></div>
+
+  <footer>Dropper · Smart Delivery — Herramientas internas</footer>
+</div>
+
+<script>
+const $=s=>document.querySelector(s);
+const drop=$('#drop'), fileInput=$('#file');
+let RAW_DATA=[];      // filas crudas (todas, con precio parseado)
+let HEADERS=[];       // nombres de columnas del Excel
+let COL={};           // columnas detectadas
+let CLIENTES=[];      // [{name, rows, pedidos, cobrado, pct, comision}]
+let OVERRIDES={};     // % por cliente ingresado a mano, por nombre de cliente
+let METODOS=[];       // [{metodo, key, count}] métodos de pago presentes en el archivo
+let METODOS_SEL=new Set(); // keys (normalizadas) de los métodos que SÍ generan comisión
+const TARIFA_FMT='"Q"#,##0.00';
+// Regla por defecto: cobra comisión si el dinero lo maneja Dropper
+// (efectivo, POS Dropper, depósito a Dropper). Tarjeta, link de pago,
+// transferencia bancaria y los "a cliente"/"ya pagado" NO se marcan solos:
+// son métodos aparte que el usuario prende con el chip si corresponde.
+function metodoCobraDefault(m){
+  const n=norm(m);
+  if(/cliente/.test(n)) return false;            // transferencia/pago directo a cliente
+  return /efectivo/.test(n) || /dropper/.test(n);
+}
+
+/* ---------- helpers ---------- */
+function status(msg,type){ const s=$('#status'); s.className='status show '+(type||''); s.innerHTML=(type==='work'?'<span class="spin"></span>':'')+msg; }
+function hideStatus(){ $('#status').className='status'; }
+function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+function norm(s){ return String(s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,''); }
+function fmtQ(n){ return 'Q'+Number(n||0).toLocaleString('es-GT',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+function nf(n){ return Number(n||0).toLocaleString('es-GT'); }
+function fmtDate(v){
+  let d;
+  if(v instanceof Date) d=v;
+  else if(typeof v==='number') d=new Date(Math.round((v-25569)*86400*1000));
+  else { const t=Date.parse(v); if(isNaN(t)) return String(v); d=new Date(t); }
+  const p=x=>String(x).padStart(2,'0');
+  return `${p(d.getDate())}/${p(d.getMonth()+1)}/${d.getFullYear()}`;
+}
+function toDate(v){
+  if(v instanceof Date) return isNaN(v)?null:v;
+  if(typeof v==='number') return new Date(Math.round((v-25569)*86400*1000));
+  const t=Date.parse(v); return isNaN(t)?null:new Date(t);
+}
+function safeName(s){ return String(s).replace(/[^\p{L}\p{N}]+/gu,'_').replace(/^_+|_+$/g,''); }
+function getPct(){ const r=parseFloat($('#rate').value); return isNaN(r)||r<0?0:r; }
+// Convierte "Q1,234.50" / "1.234,50" / 1234.5 a número.
+function parseMoney(v){
+  if(v==null||v==='') return 0;
+  if(typeof v==='number') return isFinite(v)?v:0;
+  let s=String(v).replace(/[^0-9.,-]/g,'');
+  if(!s) return 0;
+  const hasDot=s.includes('.'), hasComma=s.includes(',');
+  if(hasDot && hasComma){
+    // el último separador es el decimal
+    if(s.lastIndexOf(',')>s.lastIndexOf('.')) s=s.replace(/\./g,'').replace(',','.');
+    else s=s.replace(/,/g,'');
+  } else if(hasDot && (s.split('.').length-1)>1){
+    // varios puntos y sin coma: son separadores de miles (ej. "2.500.000")
+    s=s.replace(/\./g,'');
+  } else if(hasComma){
+    // coma sola: decimal si hay 1-2 dígitos después, si no miles
+    const parts=s.split(',');
+    if(parts[parts.length-1].length<=2 && parts.length===2) s=s.replace(',','.');
+    else s=s.replace(/,/g,'');
+  }
+  const n=parseFloat(s); return isNaN(n)?0:n;
+}
+
+/* ---------- carga de archivo ---------- */
+drop.addEventListener('click',()=>fileInput.click());
+['dragover','dragenter'].forEach(e=>drop.addEventListener(e,ev=>{ev.preventDefault();drop.classList.add('drag')}));
+['dragleave','drop'].forEach(e=>drop.addEventListener(e,ev=>{ev.preventDefault();drop.classList.remove('drag')}));
+drop.addEventListener('drop',ev=>{ if(ev.dataTransfer.files.length) handleFile(ev.dataTransfer.files[0]); });
+fileInput.addEventListener('change',()=>{ if(fileInput.files.length) handleFile(fileInput.files[0]); });
+
+function handleFile(file){
+  window.LAST_FILENAME=file.name;
+  status('Leyendo <b style="margin:0 4px">'+esc(file.name)+'</b>…','work');
+  const reader=new FileReader();
+  reader.onload=async e=>{ try{ await parseWorkbook(e.target.result); }catch(err){ console.error(err); status('No se pudo leer el archivo. ¿Es un Excel válido? '+err.message,'err'); } };
+  reader.onerror=()=>status('Error al abrir el archivo.','err');
+  reader.readAsArrayBuffer(file);
+}
+
+function pickHeader(keys,cands){
+  const nk=keys.map(k=>({k,n:norm(k).trim()}));
+  for(const c of cands){ const h=nk.find(o=>o.n===c); if(h) return h.k; }
+  for(const c of cands){ const h=nk.find(o=>o.n.includes(c)); if(h) return h.k; }
+  return null;
+}
+
+async function parseWorkbook(buf){
+  const wb=XLSX.read(buf,{type:'array',cellDates:true});
+  const sheetName=wb.SheetNames.find(n=>/entrega/i.test(n))||wb.SheetNames[0];
+  const ws=wb.Sheets[sheetName];
+  const rowsRaw=XLSX.utils.sheet_to_json(ws,{raw:true,defval:''});
+  const rowsTxt=XLSX.utils.sheet_to_json(ws,{raw:false,defval:''});
+  if(!rowsRaw.length){ status('La hoja "'+esc(sheetName)+'" está vacía.','err'); return; }
+
+  HEADERS=Object.keys(rowsRaw[0]);
+  COL={
+    cliente:pickHeader(HEADERS,['nombre del cliente','cliente','tienda','comercio']),
+    mensajero:pickHeader(HEADERS,['nombre del mensajero','mensajero','repartidor','motorista','piloto']),
+    fecha:pickHeader(HEADERS,['fecha de entrega','fecha']),
+    idorden:pickHeader(HEADERS,['id de orden','id']),
+    norden:pickHeader(HEADERS,['numero de orden','no. de orden','orden']),
+    ciudad:pickHeader(HEADERS,['ciudad','municipio']),
+    estado:pickHeader(HEADERS,['estado del envio','estado de entrega','estado']),
+    metodopago:pickHeader(HEADERS,['metodo de pago real','método de pago real','forma de pago real',
+      'metodo de pago','forma de pago','tipo de pago','medio de pago','metodo pago','pago']),
+    precio:pickHeader(HEADERS,['precio del paquete','precio paquete','precio del producto','precio producto',
+      'valor del paquete','valor paquete','precio de venta','precio venta','precio','valor del pedido','valor de la orden','monto']),
+  };
+  if(!COL.cliente){
+    status('No encontré la columna del <b>cliente</b>. Asegurate de que el Excel tenga una columna con el nombre del cliente/tienda.','err');
+    return;
+  }
+
+  // guardamos todas las filas con el precio parseado desde la columna elegida
+  RAW_DATA=rowsRaw.map((r,i)=>{
+    const t=rowsTxt[i]||{};
+    const g=k=>k?(t[k]??r[k]):'';
+    return {
+      cliente:String(g(COL.cliente)||'').trim(),
+      mensajero:COL.mensajero?String(g(COL.mensajero)||'').trim():'',
+      fecha:COL.fecha?r[COL.fecha]:'',
+      idorden:COL.idorden?String(g(COL.idorden)||''):'',
+      norden:COL.norden?String(g(COL.norden)||''):'',
+      ciudad:COL.ciudad?String(g(COL.ciudad)||'').trim():'',
+      estado:COL.estado?String(g(COL.estado)||'').trim():'',
+      metodo:COL.metodopago?String(g(COL.metodopago)||'').trim():'',
+      _raw:r, _txt:t,
+    };
+  }).filter(r=>r.cliente);
+
+  if(!RAW_DATA.length){ status('Encontré la columna de cliente pero todas las filas están vacías en ese campo.','err'); return; }
+
+  buildColSelect();
+  applyPrecio();
+  buildMethodChips();
+  hideStatus();
+  if(!COL.metodopago){
+    status('⚠ No encontré una columna de <b>método de pago</b>. Se calcula la comisión sobre <b>todos</b> los pedidos con precio &gt; 0. Si tu Excel tiene la columna, elegí bien el archivo.','err');
+  }
+  setupDateFilter();
+  buildView();
+}
+
+// Llena los <select> de columnas (precio y método) y marca las detectadas.
+function buildColSelect(){
+  if(!COL.precio){ COL.precio=HEADERS[0]; }
+  $('#col-precio').innerHTML=HEADERS.map(h=>`<option value="${esc(h)}"${h===COL.precio?' selected':''}>${esc(h)}</option>`).join('');
+  const opts=['<option value="">— ninguna (todos los pedidos) —</option>']
+    .concat(HEADERS.map(h=>`<option value="${esc(h)}"${h===COL.metodopago?' selected':''}>${esc(h)}</option>`));
+  $('#col-metodo').innerHTML=opts.join('');
+}
+$('#col-precio').addEventListener('change',()=>{
+  COL.precio=$('#col-precio').value;
+  applyPrecio();
+  if(RAW_DATA.length) buildView();
+});
+$('#col-metodo').addEventListener('change',()=>{
+  COL.metodopago=$('#col-metodo').value||null;
+  applyMetodo();
+  buildMethodChips();
+  if(RAW_DATA.length) buildView();
+});
+
+// Recalcula el precio del paquete de cada fila según la columna seleccionada.
+function applyPrecio(){
+  RAW_DATA.forEach(r=>{ r.precio=parseMoney(r._txt[COL.precio]??r._raw[COL.precio]); });
+}
+// Recalcula el método de pago de cada fila según la columna seleccionada.
+function applyMetodo(){
+  RAW_DATA.forEach(r=>{ r.metodo=COL.metodopago?String(r._txt[COL.metodopago]??r._raw[COL.metodopago]??'').trim():''; });
+}
+
+// Lista los métodos de pago presentes y arma los chips seleccionables.
+function buildMethodChips(){
+  const bar=$('#methodbar'), cont=$('#method-chips');
+  if(!COL.metodopago){ bar.classList.remove('show'); METODOS=[]; METODOS_SEL=new Set(); return; }
+  const map=new Map();
+  RAW_DATA.forEach(r=>{
+    const m=r.metodo||'(sin método)'; const key=norm(m).trim();
+    if(!map.has(key)) map.set(key,{metodo:m,key,count:0});
+    map.get(key).count++;
+  });
+  METODOS=[...map.values()].sort((a,b)=>b.count-a.count);
+  METODOS_SEL=new Set(METODOS.filter(m=>metodoCobraDefault(m.metodo)).map(m=>m.key));
+  cont.innerHTML=METODOS.map(m=>`
+    <label class="chip${METODOS_SEL.has(m.key)?' on':''}" data-key="${esc(m.key)}">
+      <input type="checkbox" ${METODOS_SEL.has(m.key)?'checked':''}>
+      <span class="dot"></span>${esc(m.metodo)} <span class="cnt">${m.count}</span>
+    </label>`).join('');
+  cont.querySelectorAll('.chip').forEach(ch=>{
+    ch.querySelector('input').addEventListener('change',e=>{
+      const key=ch.dataset.key;
+      if(e.target.checked){ METODOS_SEL.add(key); ch.classList.add('on'); }
+      else { METODOS_SEL.delete(key); ch.classList.remove('on'); }
+      if(RAW_DATA.length) buildView();
+    });
+  });
+  bar.classList.add('show');
+}
+// ¿La fila genera comisión? precio>0 y (sin columna de método -> todos, o método seleccionado)
+function filaCobra(r){
+  if(!(r.precio>0)) return false;
+  if(!COL.metodopago) return true;
+  return METODOS_SEL.has(norm(r.metodo).trim());
+}
+
+/* ---------- filtro por período ---------- */
+function currentRange(){
+  const fv=$('#df-from').value, tv=$('#df-to').value;
+  return [ fv?new Date(fv+'T00:00:00'):null, tv?new Date(tv+'T23:59:59'):null ];
+}
+function inRange(v,from,to){
+  if(!from && !to) return true;
+  const d=toDate(v); if(!d) return false;
+  if(from && d<from) return false;
+  if(to && d>to) return false;
+  return true;
+}
+function setupDateFilter(){
+  const bar=$('#datefilter');
+  const dates=RAW_DATA.map(r=>toDate(r.fecha)).filter(d=>d&&d.getFullYear()>1971);
+  if(!dates.length){ bar.style.display='none'; return; }
+  const iso=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  const mn=new Date(Math.min(...dates)), mx=new Date(Math.max(...dates));
+  ['#df-from','#df-to'].forEach(s=>{ const el=$(s); el.min=iso(mn); el.max=iso(mx); el.value=''; });
+  bar.style.display='flex';
+}
+$('#df-apply').addEventListener('click',()=>{ if(RAW_DATA.length){ buildView(); allOn=true; $('#btn-toggle').textContent='Deseleccionar todos'; } });
+$('#df-clear').addEventListener('click',()=>{ $('#df-from').value=''; $('#df-to').value=''; if(RAW_DATA.length){ buildView(); allOn=true; $('#btn-toggle').textContent='Deseleccionar todos'; } });
+
+/* ---------- construir vista ---------- */
+function buildView(){
+  const [from,to]=currentRange();
+  // pedidos que cobra Dropper: precio>0, método seleccionado, dentro del período
+  const cod=RAW_DATA.filter(r=>filaCobra(r) && inRange(r.fecha,from,to));
+  const byClient=new Map();
+  cod.forEach(r=>{
+    if(!byClient.has(r.cliente)) byClient.set(r.cliente,[]);
+    byClient.get(r.cliente).push(r);
+  });
+  CLIENTES=[...byClient.entries()].map(([name,rows])=>({
+    name, rows,
+    pedidos:rows.length,
+    cobrado:rows.reduce((s,r)=>s+r.precio,0),
+  })).sort((a,b)=>b.cobrado-a.cobrado);
+  recompute();
+  render();
+}
+
+function pctFor(c){
+  const ov=OVERRIDES[c.name];
+  return (ov===undefined||ov===null||ov==='')?getPct():ov;
+}
+function recompute(){
+  CLIENTES.forEach(c=>{ c.pct=pctFor(c); c.comision=c.cobrado*c.pct/100; });
+}
+
+function getSelected(){
+  return [...document.querySelectorAll('.chk')].filter(x=>x.checked).map(x=>CLIENTES[+x.dataset.i]).filter(Boolean);
+}
+function totals(){
+  const sel=getSelected();
+  return {
+    clientes:sel.length,
+    pedidos:sel.reduce((s,c)=>s+c.pedidos,0),
+    cobrado:sel.reduce((s,c)=>s+c.cobrado,0),
+    comision:sel.reduce((s,c)=>s+c.comision,0),
+  };
+}
+function periodoTexto(){
+  const ds=CLIENTES.flatMap(c=>c.rows).map(r=>toDate(r.fecha)).filter(d=>d&&d.getFullYear()>1971);
+  if(!ds.length) return '—';
+  const mn=new Date(Math.min(...ds)), mx=new Date(Math.max(...ds));
+  return `${fmtDate(mn)} al ${fmtDate(mx)}`;
+}
+
+/* ---------- render ---------- */
+function stat(k,v){ return `<div class="stat"><div class="k">${k}</div><div class="v">${v}</div></div>`; }
+function renderSummary(){
+  const t=totals();
+  $('#summary').innerHTML =
+    stat('Clientes',t.clientes) +
+    stat('Pedidos con comisión',nf(t.pedidos)) +
+    stat('Precio de paquetes',fmtQ(t.cobrado)) +
+    stat('Comisión total',fmtQ(t.comision));
+  $('#summary').classList.add('show');
+}
+function render(){
+  if(!CLIENTES.length){
+    $('#ratebar').classList.remove('show'); $('#summary').classList.remove('show');
+    $('#toolbar').classList.remove('show'); $('#grid').innerHTML='';
+    status('No hay pedidos con comisión en este archivo o período. Revisá que la columna de <b>precio</b> sea la correcta y que haya <b>métodos de pago</b> marcados.','err');
+    return;
+  }
+  $('#ratebar').classList.add('show'); $('#toolbar').classList.add('show');
+  $('#grid').innerHTML=CLIENTES.map((c,i)=>`
+    <div class="card">
+      <div class="top">
+        <div>
+          <div class="name">${esc(c.name)}</div>
+          <div class="meta">
+            <div>Pedidos<b>${nf(c.pedidos)}</b></div>
+            <div>Precio<b>${fmtQ(c.cobrado)}</b></div>
+            <div>Comisión<b class="comi">${fmtQ(c.comision)}</b></div>
+          </div>
+        </div>
+        <input type="checkbox" class="chk" data-i="${i}" checked>
+      </div>
+      <div class="fields">
+        <div class="fld">
+          <label>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="5" x2="5" y2="19"/><circle cx="6.5" cy="6.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/></svg>
+            % de comisión de este cliente
+          </label>
+          <div class="inwrap">
+            <input type="number" class="ov" data-i="${i}" min="0" step="0.1" placeholder="${getPct()}" value="${OVERRIDES[c.name]??''}">
+            <span class="suf">%</span>
+          </div>
+        </div>
+      </div>
+      <div class="btns">
+        <button class="btn btn-ghost btn-det-xlsx" data-i="${i}">Excel</button>
+        <button class="btn btn-ghost btn-det-pdf" data-i="${i}">PDF</button>
+      </div>
+    </div>`).join('');
+
+  document.querySelectorAll('.chk').forEach(x=>x.addEventListener('change',renderSummary));
+  document.querySelectorAll('.ov').forEach(inp=>inp.addEventListener('input',()=>{
+    const i=+inp.dataset.i, v=inp.value.trim();
+    OVERRIDES[CLIENTES[i].name] = v===''?'':Math.max(0,parseFloat(v)||0);
+    recompute();
+    // actualiza solo los números sin re-renderizar (para no perder foco)
+    const card=inp.closest('.card');
+    card.querySelector('.comi').textContent=fmtQ(CLIENTES[i].comision);
+    renderSummary();
+  }));
+  document.querySelectorAll('.btn-det-xlsx').forEach(b=>b.addEventListener('click',()=>downloadDetailExcel(+b.dataset.i)));
+  document.querySelectorAll('.btn-det-pdf').forEach(b=>b.addEventListener('click',()=>downloadDetailPDF(+b.dataset.i)));
+  renderSummary();
+}
+
+let allOn=true;
+$('#btn-toggle').addEventListener('click',()=>{
+  allOn=!allOn;
+  document.querySelectorAll('.chk').forEach(x=>x.checked=allOn);
+  $('#btn-toggle').textContent=allOn?'Deseleccionar todos':'Seleccionar todos';
+  renderSummary();
+});
+$('#rate').addEventListener('input',()=>{ if(CLIENTES.length){ recompute(); render(); } });
+
+/* ============================================================
+   Excel consolidado
+   ============================================================ */
+function saveBlob(blob,name){
+  const url=URL.createObjectURL(blob); const a=document.createElement('a');
+  a.href=url; a.download=name; document.body.appendChild(a); a.click();
+  setTimeout(()=>{ URL.revokeObjectURL(url); a.remove(); },0);
+}
+async function buildConsolidadoWorkbook(sel,periodo){
+  const wb=new ExcelJS.Workbook();
+  const ws=wb.addWorksheet('Comisiones',{views:[{showGridLines:false}]});
+  const G='FF1F7A3D',GD='FF14572A',LIME='FFDDF0E2',WHITE='FFFFFFFF',TXT='FF1A1A1A',BLACK='FF0C0F0D';
+  const fill=c=>({type:'pattern',pattern:'solid',fgColor:{argb:c}});
+  const bd={top:{style:'thin',color:{argb:'FFD5DADE'}},bottom:{style:'thin',color:{argb:'FFD5DADE'}},left:{style:'thin',color:{argb:'FFD5DADE'}},right:{style:'thin',color:{argb:'FFD5DADE'}}};
+  [34,14,18,10,18].forEach((w,i)=>ws.getColumn(i+1).width=w);
+
+  ws.mergeCells('A1:E1'); ws.getRow(1).height=28;
+  let t=ws.getCell('A1'); t.value='Dropper · Comisiones de Cobro Contra Entrega';
+  t.font={name:'Arial',bold:true,size:13,color:{argb:WHITE}}; t.fill=fill(BLACK);
+  t.alignment={vertical:'middle',horizontal:'left',indent:1};
+  ws.mergeCells('A2:E2'); const sub=ws.getCell('A2'); sub.value='Período: '+periodo;
+  sub.font={name:'Arial',size:10,color:{argb:TXT}}; sub.alignment={horizontal:'left',indent:1};
+
+  const hr=4;
+  ['Cliente','Pedidos','Precio paquetes','% Comisión','Comisión'].forEach((x,j)=>{
+    const cell=ws.getCell(hr,j+1); cell.value=x;
+    cell.font={name:'Arial',bold:true,size:10,color:{argb:WHITE}}; cell.fill=fill(G); cell.border=bd;
+    cell.alignment={horizontal:j===0?'left':'center',vertical:'middle'};
+  });
+  const fd=hr+1; let r=fd;
+  sel.forEach((c,i)=>{
+    const even=i%2===0;
+    const c1=ws.getCell(r,1); c1.value=c.name; c1.alignment={horizontal:'left'};
+    const c2=ws.getCell(r,2); c2.value=c.pedidos; c2.alignment={horizontal:'center'};
+    const c3=ws.getCell(r,3); c3.value=c.cobrado; c3.numFmt=TARIFA_FMT; c3.alignment={horizontal:'center'};
+    const c4=ws.getCell(r,4); c4.value=c.pct/100; c4.numFmt='0.0%'; c4.alignment={horizontal:'center'};
+    const c5=ws.getCell(r,5); c5.value=c.comision; c5.numFmt=TARIFA_FMT; c5.alignment={horizontal:'center'};
+    [1,2,3,4,5].forEach(col=>{const x=ws.getCell(r,col); x.fill=fill(even?WHITE:LIME); x.border=bd; x.font={name:'Arial',size:10,color:{argb:TXT}};});
+    r++;
+  });
+  const ld=r-1;
+  ws.getCell(r,1).value='TOTAL'; ws.getCell(r,1).font={name:'Arial',bold:true,size:11,color:{argb:WHITE}};
+  const colTot=(col,letra,res,fmt)=>{ const c=ws.getCell(r,col); c.value={formula:`SUM(${letra}${fd}:${letra}${ld})`,result:res}; if(fmt) c.numFmt=fmt; c.font={name:'Arial',bold:true,size:11,color:{argb:WHITE}}; c.alignment={horizontal:'center'}; };
+  colTot(2,'B',sel.reduce((s,c)=>s+c.pedidos,0));
+  colTot(3,'C',sel.reduce((s,c)=>s+c.cobrado,0),TARIFA_FMT);
+  colTot(5,'E',sel.reduce((s,c)=>s+c.comision,0),TARIFA_FMT);
+  [1,2,3,4,5].forEach(col=>{ws.getCell(r,col).fill=fill(GD); ws.getCell(r,col).border=bd;});
+  ws.views=[{state:'frozen',ySplit:hr,showGridLines:false}];
+  return wb;
+}
+function buildConsolidadoPDF(sel,periodo){
+  const { jsPDF }=window.jspdf;
+  const doc=new jsPDF({unit:'pt',format:'a4'});
+  const PW=doc.internal.pageSize.getWidth(), M=40;
+  const green=[31,122,61], greenDk=[20,87,42], txt=[26,26,26], lime=[221,240,226], black=[12,15,13];
+  const totPed=sel.reduce((s,c)=>s+c.pedidos,0), totCob=sel.reduce((s,c)=>s+c.cobrado,0), totCom=sel.reduce((s,c)=>s+c.comision,0);
+
+  doc.setFillColor(...black); doc.rect(0,0,PW,70,'F');
+  doc.setFont('helvetica','bold'); doc.setFontSize(15); doc.setTextColor(255,255,255);
+  doc.text('Dropper · Comisiones de Cobro Contra Entrega',M,32);
+  doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(207,230,211);
+  doc.text(`Período: ${periodo}   ·   Comisión general: ${getPct()}%`,M,52);
+
+  let y=92;
+  doc.setFont('helvetica','normal'); doc.setFontSize(10); doc.setTextColor(...txt);
+  doc.text(`Clientes: ${sel.length}    Pedidos con comisión: ${totPed}    Precio de paquetes: ${fmtQ(totCob)}`,M,y);
+  doc.setFont('helvetica','bold'); doc.setTextColor(...greenDk);
+  doc.text(`Comisión total: ${fmtQ(totCom)}`,M,y+16);
+
+  doc.autoTable({
+    startY:y+30,
+    head:[['Cliente','Pedidos','Precio paquetes','% Comisión','Comisión']],
+    body:sel.map(c=>[c.name,c.pedidos,fmtQ(c.cobrado),c.pct+'%',fmtQ(c.comision)]),
+    foot:[['TOTAL',totPed,fmtQ(totCob),'',fmtQ(totCom)]],
+    styles:{font:'helvetica',fontSize:8.5,cellPadding:4,textColor:txt,lineColor:[213,218,222],lineWidth:0.5},
+    headStyles:{fillColor:green,textColor:[255,255,255],fontStyle:'bold'},
+    footStyles:{fillColor:greenDk,textColor:[255,255,255],fontStyle:'bold'},
+    alternateRowStyles:{fillColor:lime},
+    columnStyles:{0:{cellWidth:'auto'},1:{cellWidth:60,halign:'center'},2:{cellWidth:96,halign:'right'},3:{cellWidth:74,halign:'center'},4:{cellWidth:96,halign:'right'}},
+    margin:{left:M,right:M},
+    didDrawPage:()=>{
+      const ph=doc.internal.pageSize.getHeight();
+      doc.setFont('helvetica','normal'); doc.setFontSize(7.5); doc.setTextColor(150,160,150);
+      doc.text('Dropper · Smart Delivery',M,ph-20);
+      doc.text('Página '+doc.internal.getCurrentPageInfo().pageNumber,PW-M,ph-20,{align:'right'});
+    }
+  });
+  return doc;
+}
+$('#btn-xlsx').addEventListener('click',async()=>{
+  const sel=getSelected(); if(!sel.length){ status('Seleccioná al menos un cliente.','err'); return; }
+  status('Generando Excel…','work');
+  try{
+    const wb=await buildConsolidadoWorkbook(sel,periodoTexto());
+    const buf=await wb.xlsx.writeBuffer();
+    saveBlob(new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}),'Comisiones_Dropper.xlsx');
+    hideStatus();
+  }catch(err){ console.error(err); status('No se pudo generar el Excel: '+err.message,'err'); }
+});
+$('#btn-pdf').addEventListener('click',()=>{
+  const sel=getSelected(); if(!sel.length){ status('Seleccioná al menos un cliente.','err'); return; }
+  try{ buildConsolidadoPDF(sel,periodoTexto()).save('Comisiones_Dropper.pdf'); hideStatus(); }
+  catch(err){ console.error(err); status('No se pudo generar el PDF: '+err.message,'err'); }
+});
+
+/* ============================================================
+   Detalle por cliente
+   ============================================================ */
+function sortRows(rows){
+  return rows.slice().sort((a,b)=>{ const da=toDate(a.fecha)||new Date(0), db=toDate(b.fecha)||new Date(0); return da-db; });
+}
+async function buildDetailWorkbook(c,periodo){
+  const wb=new ExcelJS.Workbook();
+  const ws=wb.addWorksheet('Detalle',{views:[{showGridLines:false}]});
+  const G='FF1F7A3D',GD='FF14572A',LIME='FFDDF0E2',GREY='FFF2F4F5',WHITE='FFFFFFFF',TXT='FF1A1A1A',BLACK='FF0C0F0D';
+  const fill=k=>({type:'pattern',pattern:'solid',fgColor:{argb:k}});
+  const bd={top:{style:'thin',color:{argb:'FFD5DADE'}},bottom:{style:'thin',color:{argb:'FFD5DADE'}},left:{style:'thin',color:{argb:'FFD5DADE'}},right:{style:'thin',color:{argb:'FFD5DADE'}}};
+  [14,16,26,16,16].forEach((w,i)=>ws.getColumn(i+1).width=w);
+
+  ws.mergeCells('A1:E1'); ws.getRow(1).height=28;
+  let t=ws.getCell('A1'); t.value='Dropper · Comisión de Cobro Contra Entrega';
+  t.font={name:'Arial',bold:true,size:13,color:{argb:WHITE}}; t.fill=fill(BLACK);
+  t.alignment={vertical:'middle',horizontal:'left',indent:1};
+
+  const rows=sortRows(c.rows);
+  const info=[['Cliente:',c.name],['Período:',periodo],['Pedidos con comisión:',c.pedidos],['Precio de paquetes:',fmtQ(c.cobrado)],['% de comisión:',c.pct+'%']];
+  info.forEach((p,i)=>{
+    const r=3+i;
+    ws.getCell(`A${r}`).value=p[0]; ws.getCell(`A${r}`).font={name:'Arial',bold:true,size:10,color:{argb:TXT}};
+    ws.getCell(`B${r}`).value=p[1]; ws.getCell(`B${r}`).font={name:'Arial',size:10,color:{argb:TXT}};
+  });
+  const totRow=3+info.length;
+  ws.getCell(`A${totRow}`).value='Comisión a cobrar:'; ws.getCell(`A${totRow}`).font={name:'Arial',bold:true,size:11,color:{argb:GD}};
+  const tc=ws.getCell(`B${totRow}`); tc.value=c.comision; tc.numFmt=TARIFA_FMT; tc.font={name:'Arial',bold:true,size:11,color:{argb:GD}};
+
+  let ds=totRow+2;
+  ws.mergeCells(`A${ds}:E${ds}`); let h=ws.getCell(`A${ds}`); h.value='Pedidos con comisión';
+  h.font={name:'Arial',bold:true,size:11,color:{argb:WHITE}}; h.fill=fill(G);
+  h.alignment={vertical:'middle',horizontal:'left',indent:1}; ws.getRow(ds).height=22;
+  const dh=ds+1;
+  ['Fecha','No. de Orden','Método de pago','Municipio','Precio paquete'].forEach((x,j)=>{
+    const cell=ws.getCell(dh,j+1); cell.value=x;
+    cell.font={name:'Arial',bold:true,size:9,color:{argb:TXT}}; cell.fill=fill(GREY); cell.border=bd;
+    cell.alignment={horizontal:j===4?'center':'left',vertical:'middle'};
+  });
+  const rstart=dh+1;
+  rows.forEach((r,i)=>{
+    const rr=rstart+i, even=i%2===0;
+    const cells=[r.fecha?fmtDate(r.fecha):'',r.norden||r.idorden,r.metodo,r.ciudad,r.precio];
+    cells.forEach((v,j)=>{
+      const cell=ws.getCell(rr,j+1); cell.value=v;
+      cell.fill=fill(even?WHITE:LIME); cell.border=bd; cell.font={name:'Arial',size:9,color:{argb:TXT}};
+      cell.alignment={horizontal:j===4?'center':'left',vertical:'middle'};
+      if(j===4) cell.numFmt=TARIFA_FMT;
+    });
+  });
+  ws.views=[{state:'frozen',ySplit:rstart-1,showGridLines:false}];
+  return wb;
+}
+function buildDetailPDF(c,periodo){
+  const { jsPDF }=window.jspdf;
+  const doc=new jsPDF({unit:'pt',format:'a4'});
+  const PW=doc.internal.pageSize.getWidth(), M=40;
+  const green=[31,122,61], greenDk=[20,87,42], txt=[26,26,26], lime=[221,240,226], black=[12,15,13];
+  const rows=sortRows(c.rows);
+
+  doc.setFillColor(...black); doc.rect(0,0,PW,66,'F');
+  doc.setFont('helvetica','bold'); doc.setFontSize(15); doc.setTextColor(255,255,255);
+  doc.text('Dropper · Comisión de Cobro Contra Entrega',M,30);
+  doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(207,230,211);
+  doc.text(`Período: ${periodo}`,M,50);
+
+  doc.setFont('helvetica','bold'); doc.setFontSize(13); doc.setTextColor(18,38,26);
+  doc.text(String(c.name),M,90);
+  doc.setFont('helvetica','normal'); doc.setFontSize(9.5); doc.setTextColor(...txt);
+  doc.text(`Pedidos con comisión: ${c.pedidos}    Precio de paquetes: ${fmtQ(c.cobrado)}    Comisión: ${c.pct}%`,M,106);
+  doc.setFont('helvetica','bold'); doc.setTextColor(...greenDk);
+  doc.text(`Comisión a cobrar: ${fmtQ(c.comision)}`,M,122);
+
+  doc.autoTable({
+    startY:138,
+    head:[['Fecha','No. de Orden','Método de pago','Municipio','Precio paquete']],
+    body:rows.map(r=>[r.fecha?fmtDate(r.fecha):'',r.norden||r.idorden,r.metodo,r.ciudad,fmtQ(r.precio)]),
+    foot:[['','','','Precio de paquetes',fmtQ(c.cobrado)]],
+    styles:{font:'helvetica',fontSize:8,cellPadding:3.5,textColor:txt,lineColor:[213,218,222],lineWidth:0.5},
+    headStyles:{fillColor:green,textColor:[255,255,255],fontStyle:'bold'},
+    footStyles:{fillColor:greenDk,textColor:[255,255,255],fontStyle:'bold'},
+    alternateRowStyles:{fillColor:lime},
+    columnStyles:{0:{cellWidth:64},1:{cellWidth:'auto'},2:{cellWidth:'auto'},3:{cellWidth:'auto'},4:{cellWidth:92,halign:'right'}},
+    margin:{left:M,right:M},
+    didDrawPage:()=>{
+      const ph=doc.internal.pageSize.getHeight();
+      doc.setFont('helvetica','normal'); doc.setFontSize(7.5); doc.setTextColor(150,160,150);
+      doc.text('Dropper · Smart Delivery',M,ph-20);
+      doc.text('Página '+doc.internal.getCurrentPageInfo().pageNumber,PW-M,ph-20,{align:'right'});
+    }
+  });
+  return doc;
+}
+async function downloadDetailExcel(i){
+  const c=CLIENTES[i]; status('Generando Excel de '+esc(c.name)+'…','work');
+  try{
+    const wb=await buildDetailWorkbook(c,periodoTexto());
+    const buf=await wb.xlsx.writeBuffer();
+    saveBlob(new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}),`Comision_${safeName(c.name)}.xlsx`);
+    hideStatus();
+  }catch(err){ console.error(err); status('No se pudo generar el Excel: '+err.message,'err'); }
+}
+function downloadDetailPDF(i){
+  const c=CLIENTES[i];
+  try{ buildDetailPDF(c,periodoTexto()).save(`Comision_${safeName(c.name)}.pdf`); hideStatus(); }
+  catch(err){ console.error(err); status('No se pudo generar el PDF: '+err.message,'err'); }
+}
+
+/* ============================================================
+   Guardar en historial
+   ============================================================ */
+let SESSION_USER=null;
+$('#btn-save-hist').addEventListener('click',async()=>{
+  if(!window.sb || !SESSION_USER){ status('Iniciá sesión para guardar en el historial.','err'); return; }
+  const sel=getSelected();
+  if(!sel.length){ status('Seleccioná al menos un cliente.','err'); return; }
+  status('Guardando en el historial…','work');
+  try{
+    const t=totals();
+    const payload={
+      created_by: SESSION_USER.id,
+      created_by_email: SESSION_USER.email||null,
+      file_name: window.LAST_FILENAME||null,
+      period_text: periodoTexto(),
+      rate_percent: getPct(),
+      clients_count: t.clientes,
+      orders_count: t.pedidos,
+      collected_total: Number(t.cobrado.toFixed(2)),
+      commission_total: Number(t.comision.toFixed(2)),
+      clients: sel.map(c=>({
+        nombre:c.name, pedidos:c.pedidos,
+        cobrado:Number(c.cobrado.toFixed(2)), pct:c.pct,
+        comision:Number(c.comision.toFixed(2)),
+      })),
+    };
+    const { error }=await window.sb.from('commission_sessions').insert(payload);
+    if(error) throw error;
+    status('✓ Guardado en el historial. Lo ves en la pestaña <b style="margin:0 4px">Historial → Comisiones</b>.','');
+    setTimeout(hideStatus,3500);
+  }catch(err){ console.error(err); status('No se pudo guardar en el historial: '+err.message,'err'); }
+});
+
+/* ---------- sesión ---------- */
+$('#logout').addEventListener('click',e=>{ e.preventDefault(); window.dropperAuth.signOut(); });
+(async function init(){
+  const guard=await window.dropperAuth.requireSession();
+  if(guard===null) return;
+  if(guard.previewMode){ $('#notice').classList.add('show'); const b=$('#btn-save-hist'); if(b) b.style.display='none'; return; }
+  SESSION_USER=guard.user;
+  window.dropperNav.setUser(guard.user.email||'');
+})();
+</script>
+</body>
+</html>

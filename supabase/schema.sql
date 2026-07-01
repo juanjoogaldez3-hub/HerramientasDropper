@@ -132,6 +132,49 @@ create policy "team_update" on public.receipts for update to authenticated using
 drop policy if exists "owner_delete" on public.receipts;
 create policy "owner_delete" on public.receipts for delete to authenticated using (auth.uid() = created_by);
 
+-- ============================================================
+-- Tabla: cada fila = una sesión de comisiones de cobro contra entrega.
+-- Es la comisión (% del monto cobrado) que Dropper le cobra al cliente/tienda.
+-- ============================================================
+create table if not exists public.commission_sessions (
+  id                uuid primary key default gen_random_uuid(),
+  created_at        timestamptz not null default now(),
+  created_by        uuid references auth.users(id) on delete set null,
+  created_by_email  text,
+  file_name         text,
+  period_text       text,
+  rate_percent      numeric(6,2) not null default 0,
+  clients_count     integer not null default 0,
+  orders_count      integer not null default 0,
+  collected_total   numeric(14,2) not null default 0,
+  commission_total  numeric(14,2) not null default 0,
+  -- Desglose por cliente (nombre, pedidos, cobrado, pct, comision) como JSON.
+  clients           jsonb not null default '[]'::jsonb
+);
+
+create index if not exists commission_sessions_created_at_idx
+  on public.commission_sessions (created_at desc);
+
+alter table public.commission_sessions enable row level security;
+
+drop policy if exists "team_select" on public.commission_sessions;
+create policy "team_select"
+  on public.commission_sessions for select
+  to authenticated
+  using (true);
+
+drop policy if exists "team_insert" on public.commission_sessions;
+create policy "team_insert"
+  on public.commission_sessions for insert
+  to authenticated
+  with check (auth.uid() = created_by);
+
+drop policy if exists "owner_delete" on public.commission_sessions;
+create policy "owner_delete"
+  on public.commission_sessions for delete
+  to authenticated
+  using (auth.uid() = created_by);
+
 -- Envíos con recibo activo (por "ID de Orden"). Al anular un recibo,
 -- sus filas aquí se borran, liberando esos envíos.
 create table if not exists public.paid_deliveries (
