@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Historial · Herramientas Dropper</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/css/app.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="assets/js/config.js"></script>
+<script src="assets/js/supabaseClient.js"></script>
+<script src="assets/js/auth-guard.js"></script>
+<script src="assets/js/brand.js"></script>
+<script src="assets/js/nav.js"></script>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="topbar">
+    <a class="brand" href="inicio.html"><img id="brand-logo" alt="Dropper · Herramientas"></a>
+    <nav class="nav">
+      <div class="nav-links">
+        <a href="inicio.html">Inicio</a>
+        <a href="generador.html">Generador</a>
+        <a href="pagos.html">Pagos</a>
+        <a href="historial.html" class="active">Historial</a>
+      </div>
+      <span class="nav-sep"></span>
+      <span class="nav-av" id="nav-av"></span>
+      <a href="#" class="nav-logout" id="logout">Salir</a>
+    </nav>
+  </div>
+
+  <div class="notice" id="notice">
+    <b>Modo vista previa.</b> Supabase aún no está configurado, así que el historial no se carga.
+    Pegá tus llaves en <code>assets/js/config.js</code> (ver README) para activarlo.
+  </div>
+
+  <div class="page-head">
+    <div>
+      <h2 id="page-title">Historial de reportes</h2>
+      <div class="sub" id="page-sub">Cada vez que generás reportes desde el Generador, queda registrado aquí.</div>
+    </div>
+    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+      <div class="tabs">
+        <button id="tab-rep" class="active">Reportes</button>
+        <button id="tab-pay">Pagos</button>
+        <button id="tab-rec">Recibos</button>
+      </div>
+      <button class="btn btn-ghost" id="refresh">Actualizar</button>
+    </div>
+  </div>
+
+  <div class="datefilter" id="histfilter">
+    <span class="df-label">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+      Período
+    </span>
+    <label>Desde <input type="date" id="hf-from"></label>
+    <label>Hasta <input type="date" id="hf-to"></label>
+    <button class="btn btn-primary df-btn" id="hf-apply">Aplicar</button>
+    <button class="btn btn-ghost df-btn" id="hf-clear">Todo</button>
+    <span class="df-count" id="hf-count"></span>
+  </div>
+
+  <div class="summary" id="summary" style="display:none"></div>
+
+  <div class="panel" id="panel">
+    <div class="empty" id="loading">
+      <div class="ic">
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
+      </div>
+      <h3>Cargando…</h3>
+    </div>
+  </div>
+
+  <footer>Dropper · Smart Delivery — Reportería interna</footer>
+</div>
+
+<script>
+(function(){
+  const $ = s => document.querySelector(s);
+  let ALL_ROWS = [];
+  let TAB = "reportes"; // "reportes" | "pagos"
+  const fmtQ = n => "Q" + Number(n||0).toLocaleString("es-GT",{minimumFractionDigits:2,maximumFractionDigits:2});
+  const nf = n => Number(n||0).toLocaleString("es-GT");
+  const esc = s => String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c]));
+  function fmtDateTime(iso){
+    const d = new Date(iso);
+    if(isNaN(d)) return esc(iso);
+    const p = x => String(x).padStart(2,"0");
+    return `${p(d.getDate())}/${p(d.getMonth()+1)}/${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}`;
+  }
+  const TABS = {
+    reportes: {
+      table: "report_sessions", source: "Generador",
+      title: "Historial de reportes",
+      sub: "Cada vez que generás reportes desde el Generador, queda registrado aquí.",
+      empty: ["Todavía no hay reportes", "Generá tu primer reporte desde el Generador y aparecerá aquí."],
+    },
+    pagos: {
+      table: "payment_sessions", source: "Pagos a Mensajeros",
+      title: "Historial de pagos",
+      sub: "Cada vez que guardás un pago desde Pagos a Mensajeros, queda registrado aquí.",
+      empty: ["Todavía no hay pagos guardados", "Guardá tu primer pago desde Pagos a Mensajeros y aparecerá aquí."],
+    },
+    recibos: {
+      table: "receipts", source: "Pagos a Mensajeros",
+      title: "Recibos generados",
+      sub: "Cada recibo que generás marca sus envíos como pagados. Podés anular uno para liberar sus envíos.",
+      empty: ["Todavía no hay recibos", "Generá recibos desde Pagos a Mensajeros y aparecerán aquí."],
+    },
+  };
+
+  $("#logout").addEventListener("click", e=>{ e.preventDefault(); window.dropperAuth.signOut(); });
+
+  function showEmpty(title, sub){
+    $("#summary").style.display = "none";
+    $("#panel").innerHTML =
+      `<div class="empty">
+        <div class="ic"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></div>
+        <h3>${esc(title)}</h3>
+        <p>${esc(sub)}</p>
+      </div>`;
+  }
+  function stat(k,v){ return `<div class="stat"><div class="k">${k}</div><div class="v">${v}</div></div>`; }
+
+  function renderRows(rows){
+    if(TAB === "reportes"){
+      const deliv = rows.reduce((s,r)=>s+(r.deliveries_count||0),0);
+      const totalQ = rows.reduce((s,r)=>s+(Number(r.total_amount)||0),0);
+      $("#summary").innerHTML = stat("Sesiones",rows.length) + stat("Entregas acumuladas",nf(deliv)) + stat("Total acumulado",fmtQ(totalQ));
+      const body = rows.map(r=>`
+        <tr>
+          <td>${fmtDateTime(r.created_at)}</td>
+          <td>${esc(r.file_name||"—")}</td>
+          <td class="num">${r.clients_count||0}</td>
+          <td class="num">${nf(r.deliveries_count)}</td>
+          <td class="num total">${fmtQ(r.total_amount)}</td>
+          <td>${r.corrections_count ? `<span class="pill">✓ ${r.corrections_count}</span>` : "—"}</td>
+          <td>${esc((r.created_by_email||"").split("@")[0])}</td>
+        </tr>`).join("");
+      $("#panel").innerHTML =
+        `<table class="hist"><thead><tr>
+          <th>Fecha</th><th>Archivo</th><th>Clientes</th><th>Entregas</th><th>Total</th><th>Correcciones</th><th>Generado por</th>
+        </tr></thead><tbody>${body}</tbody></table>`;
+    } else if(TAB === "pagos"){
+      const deliv = rows.reduce((s,r)=>s+(r.deliveries_count||0),0);
+      const totalQ = rows.reduce((s,r)=>s+(Number(r.total_paid)||0),0);
+      $("#summary").innerHTML = stat("Sesiones",rows.length) + stat("Entregas acumuladas",nf(deliv)) + stat("Total pagado",fmtQ(totalQ));
+      const body = rows.map(r=>`
+        <tr>
+          <td>${fmtDateTime(r.created_at)}</td>
+          <td>${esc(r.file_name||"—")}</td>
+          <td>${esc(r.period_text||"—")}</td>
+          <td class="num">${r.messengers_count||0}</td>
+          <td class="num">${nf(r.deliveries_count)}</td>
+          <td class="num">${nf(r.pickups_count)}</td>
+          <td class="num">${fmtQ(r.discounts_total)}</td>
+          <td class="num total">${fmtQ(r.total_paid)}</td>
+          <td>${esc((r.created_by_email||"").split("@")[0])}</td>
+        </tr>`).join("");
+      $("#panel").innerHTML =
+        `<table class="hist"><thead><tr>
+          <th>Fecha</th><th>Archivo</th><th>Período</th><th>Mensajeros</th><th>Entregas</th><th>Recolectas</th><th>Descuentos</th><th>Total pagado</th><th>Generado por</th>
+        </tr></thead><tbody>${body}</tbody></table>`;
+    } else {
+      const active = rows.filter(r=>r.status!=="anulado");
+      const totalQ = active.reduce((s,r)=>s+(Number(r.total_paid)||0),0);
+      $("#summary").innerHTML = stat("Recibos",rows.length) + stat("Activos",active.length) + stat("Total pagado (activos)",fmtQ(totalQ));
+      const body = rows.map(r=>{
+        const anulado = r.status==="anulado";
+        return `<tr style="${anulado?'opacity:.55':''}">
+          <td>${fmtDateTime(r.created_at)}</td>
+          <td>${esc(r.folio||"—")}</td>
+          <td>${esc(r.messenger_name||"—")}</td>
+          <td>${esc(r.period_text||"—")}</td>
+          <td class="num">${r.deliveries_count||0}</td>
+          <td class="num total">${fmtQ(r.total_paid)}</td>
+          <td>${anulado
+            ? '<span class="pill" style="color:#a3261a;background:#fdecea;border-color:#f5c6c0">Anulado</span>'
+            : '<span class="pill" style="color:#14572A;background:#DDF0E2;border-color:#c4e3cd">Activo</span>'}</td>
+          <td>${anulado ? '—' : `<button class="btn btn-ghost btn-anular" data-id="${esc(r.id)}" style="width:auto;padding:6px 12px;font-size:.8rem">Anular</button>`}</td>
+        </tr>`;
+      }).join("");
+      $("#panel").innerHTML =
+        `<table class="hist"><thead><tr>
+          <th>Fecha</th><th>Folio</th><th>Mensajero</th><th>Período</th><th>Entregas</th><th>Total</th><th>Estado</th><th></th>
+        </tr></thead><tbody>${body}</tbody></table>`;
+      $("#panel").querySelectorAll(".btn-anular").forEach(b=>b.addEventListener("click",()=>anular(b.dataset.id)));
+    }
+    $("#summary").style.display = "flex";
+  }
+
+  async function anular(id){
+    if(!confirm("¿Anular este recibo? Sus envíos volverán a quedar como NO pagados y podrás incluirlos en otro pago.")) return;
+    try{
+      const { error:e1 } = await window.sb.from("receipts").update({ status:"anulado", voided_at:new Date().toISOString() }).eq("id", id);
+      if(e1) throw e1;
+      const { error:e2 } = await window.sb.from("paid_deliveries").delete().eq("receipt_id", id);
+      if(e2) throw e2;
+      load();
+    }catch(err){ console.error(err); alert("No se pudo anular el recibo: "+err.message); }
+  }
+
+  async function load(){
+    const session = await window.dropperAuth.requireSession();
+    if(session === null) return; // redirigiendo a login
+
+    if(session.previewMode){
+      $("#notice").classList.add("show");
+      $("#histfilter").style.display = "none";
+      showEmpty("Sin conexión a la base de datos", "Configurá Supabase para ver el historial.");
+      return;
+    }
+
+    window.dropperNav.setUser(session.user.email || "");
+    $("#panel").innerHTML = `<div class="empty"><div class="ic"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg></div><h3>Cargando…</h3></div>`;
+
+    const { data, error } = await window.sb
+      .from(TABS[TAB].table)
+      .select("*")
+      .order("created_at", { ascending:false })
+      .limit(500);
+
+    if(error){
+      showEmpty("No se pudo cargar el historial", error.message);
+      return;
+    }
+    if(!data || !data.length){
+      showEmpty(TABS[TAB].empty[0], TABS[TAB].empty[1]);
+      $("#histfilter").style.display = "none";
+      return;
+    }
+    ALL_ROWS = data;
+    setupHistFilter(data);
+    applyHistFilter();
+  }
+
+  function switchTab(tab){
+    if(TAB === tab) return;
+    TAB = tab;
+    $("#tab-rep").classList.toggle("active", tab==="reportes");
+    $("#tab-pay").classList.toggle("active", tab==="pagos");
+    $("#tab-rec").classList.toggle("active", tab==="recibos");
+    $("#page-title").textContent = TABS[tab].title;
+    $("#page-sub").textContent = TABS[tab].sub;
+    $("#hf-from").value = ""; $("#hf-to").value = "";
+    load();
+  }
+  $("#tab-rep").addEventListener("click", ()=>switchTab("reportes"));
+  $("#tab-pay").addEventListener("click", ()=>switchTab("pagos"));
+  $("#tab-rec").addEventListener("click", ()=>switchTab("recibos"));
+
+  function setupHistFilter(rows){
+    const bar = $("#histfilter");
+    const ds = rows.map(r=>new Date(r.created_at)).filter(d=>!isNaN(d));
+    if(!ds.length){ bar.style.display = "none"; return; }
+    const iso = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+    const mn = new Date(Math.min(...ds)), mx = new Date(Math.max(...ds));
+    ["#hf-from","#hf-to"].forEach(s=>{ const el=$(s); if(el){ el.min=iso(mn); el.max=iso(mx); } });
+    bar.style.display = "flex";
+  }
+
+  function applyHistFilter(){
+    const fv = $("#hf-from").value, tv = $("#hf-to").value;
+    const from = fv ? new Date(fv+"T00:00:00") : null;
+    const to   = tv ? new Date(tv+"T23:59:59") : null;
+    const subset = ALL_ROWS.filter(r=>{
+      const d = new Date(r.created_at);
+      if(from && d < from) return false;
+      if(to && d > to) return false;
+      return true;
+    });
+    const cnt = $("#hf-count");
+    if(cnt) cnt.textContent = (from||to)
+      ? `${subset.length} de ${ALL_ROWS.length} sesiones`
+      : `${ALL_ROWS.length} sesiones`;
+    if(!subset.length){
+      showEmpty("Sin registros en ese período", "Probá con otro rango o tocá «Todo».");
+      return;
+    }
+    renderRows(subset);
+  }
+
+  $("#hf-apply").addEventListener("click", applyHistFilter);
+  $("#hf-clear").addEventListener("click", ()=>{
+    $("#hf-from").value = ""; $("#hf-to").value = "";
+    applyHistFilter();
+  });
+  $("#refresh").addEventListener("click", load);
+  load();
+})();
+</script>
+</body>
+</html>

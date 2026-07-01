@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Herramientas Dropper</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/css/app.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="assets/js/config.js"></script>
+<script src="assets/js/supabaseClient.js"></script>
+<script src="assets/js/auth-guard.js"></script>
+<script src="assets/js/brand.js"></script>
+<script src="assets/js/nav.js"></script>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="topbar">
+    <a class="brand" href="inicio.html"><img id="brand-logo" alt="Dropper · Herramientas"></a>
+    <nav class="nav">
+      <div class="nav-links">
+        <a href="inicio.html" class="active">Inicio</a>
+        <a href="generador.html">Generador</a>
+        <a href="pagos.html">Pagos</a>
+        <a href="historial.html">Historial</a>
+      </div>
+      <span class="nav-sep"></span>
+      <span class="nav-av" id="nav-av"></span>
+      <a href="#" class="nav-logout" id="logout">Salir</a>
+    </nav>
+  </div>
+
+  <div class="notice" id="notice">
+    <b>Modo vista previa.</b> Supabase aún no está configurado, así que no hay login.
+    Pegá tus llaves en <code>assets/js/config.js</code> (ver README) para activarlo.
+  </div>
+
+  <div class="page-head">
+    <div>
+      <h2>Herramientas Dropper</h2>
+      <div class="sub">Elegí la herramienta que querés usar.</div>
+    </div>
+  </div>
+
+  <div class="tools-grid">
+
+    <a class="tool-card" href="generador.html">
+      <div class="tc-ic">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><line x1="10" y1="9" x2="8" y2="9"/></svg>
+      </div>
+      <h3>Generador de Reportes</h3>
+      <p>Subí tu Excel de entregas y generá reportes por cliente (Excel y PDF), con corrección automática de municipios y tarifas, reporte consolidado y filtro por período.</p>
+      <span class="tc-go">Abrir
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+      </span>
+    </a>
+
+    <a class="tool-card" href="pagos.html" id="card-pagos">
+      <div class="tc-ic">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/><circle cx="7" cy="15" r="1.4"/></svg>
+      </div>
+      <h3>Pagos a Mensajeros</h3>
+      <p>Calculá cuánto pagarle a cada mensajero según las entregas que realizó, con su detalle y total por persona.</p>
+      <span class="tc-go">Abrir
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+      </span>
+    </a>
+
+    <a class="tool-card" href="historial.html">
+      <div class="tc-ic">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v5h5"/><path d="M3.05 13A9 9 0 1 0 6 5.3L3 8"/><polyline points="12 7 12 12 15 15"/></svg>
+      </div>
+      <h3>Historial</h3>
+      <p>Revisá todas las sesiones de reportes que se han generado, con totales acumulados y filtro por período.</p>
+      <span class="tc-go">Abrir
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+      </span>
+    </a>
+
+  </div>
+
+  <footer>Dropper · Smart Delivery — Herramientas internas</footer>
+</div>
+
+<script>
+(function(){
+  const $ = s => document.querySelector(s);
+  $("#logout").addEventListener("click", e=>{ e.preventDefault(); window.dropperAuth.signOut(); });
+
+  (async function init(){
+    const guard = await window.dropperAuth.requireSession();
+    if(guard === null) return;            // redirigiendo al login
+    if(guard.previewMode){ $("#notice").classList.add("show"); return; }
+    window.dropperNav.setUser(guard.user.email || "");
+  })();
+})();
+</script>
+</body>
+</html>

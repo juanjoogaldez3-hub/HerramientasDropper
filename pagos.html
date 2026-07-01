@@ -1,0 +1,999 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pagos a Mensajeros · Herramientas Dropper</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/css/app.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="assets/js/config.js"></script>
+<script src="assets/js/supabaseClient.js"></script>
+<script src="assets/js/auth-guard.js"></script>
+<script src="assets/js/brand.js"></script>
+<script src="assets/js/nav.js"></script>
+<style>
+  .drop{padding:42px 28px;text-align:center;cursor:pointer;position:relative;border:2px dashed #cdd8cf;
+    border-radius:var(--radius);background:var(--white);transition:.22s ease;overflow:hidden}
+  .drop:hover{border-color:var(--green);background:#fbfdfb}
+  .drop.drag{border-color:var(--green);background:var(--lime-soft);transform:scale(.997)}
+  .drop .ic{width:58px;height:58px;border-radius:50%;margin:0 auto 14px;background:var(--lime-soft);
+    display:grid;place-items:center;color:var(--green-dk);transition:.25s ease}
+  .drop:hover .ic{transform:translateY(-3px)}
+  .drop h2{font-family:'Sora',sans-serif;font-weight:700;font-size:1.15rem;letter-spacing:-.01em}
+  .drop p{color:var(--muted);font-size:.92rem;margin-top:6px}
+  .drop .hint{margin-top:13px;font-size:.78rem;color:#8a988e}
+  input[type=file]{display:none}
+
+  .status{margin-top:16px;font-size:.9rem;display:none;align-items:center;gap:9px;padding:12px 16px;border-radius:12px}
+  .status.show{display:flex}
+  .status.err{background:#fdecea;color:#a3261a;border:1px solid #f5c6c0}
+  .status.work{background:var(--lime-soft);color:var(--green-dk);border:1px solid #c4e3cd}
+  .spin{width:15px;height:15px;border:2px solid #bcd9c4;border-top-color:var(--green-dk);border-radius:50%;animation:sp .7s linear infinite;flex:none}
+  @keyframes sp{to{transform:rotate(360deg)}}
+
+  .ratebar{display:none;align-items:center;gap:12px;flex-wrap:wrap;margin:18px 0 4px;
+    background:var(--white);border:1px solid var(--line);border-radius:14px;padding:14px 18px;box-shadow:var(--shadow)}
+  .ratebar.show{display:flex}
+  .ratebar .rb-label{display:inline-flex;align-items:center;gap:8px;font-family:'Sora',sans-serif;font-weight:700;color:var(--green-dk)}
+  .ratebar .rb-label svg{width:18px;height:18px}
+  .ratebar .rb-input{display:inline-flex;align-items:center;gap:6px;font-weight:700;font-size:1.05rem}
+  .ratebar .rb-input span{color:var(--green-dk)}
+  .ratebar input[type=number]{width:110px;font-family:'Sora',sans-serif;font-weight:700;font-size:1.05rem;color:var(--ink);
+    border:1px solid #cdd8cf;border-radius:10px;padding:8px 12px;background:#fcfdfc}
+  .ratebar input[type=number]:focus{outline:none;border-color:var(--green);box-shadow:0 0 0 3px rgba(31,122,61,.12)}
+  .ratebar .rb-note{margin-left:auto;font-size:.8rem;color:var(--muted)}
+
+  .summary{display:none}
+  .summary.show{display:flex;gap:14px;margin:22px 0 8px;flex-wrap:wrap;animation:rise .5s ease both}
+
+  .toolbar{display:none;justify-content:space-between;align-items:center;gap:12px;margin:24px 0 14px;flex-wrap:wrap}
+  .toolbar.show{display:flex}
+  .toolbar h3{font-family:'Sora',sans-serif;font-weight:700;font-size:1.05rem}
+  .toolbar .tb-btns{display:flex;gap:10px;flex-wrap:wrap}
+
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(248px,1fr));gap:14px}
+  .card{background:var(--white);border:1px solid var(--line);border-radius:14px;padding:18px;box-shadow:var(--shadow);
+    display:flex;flex-direction:column;gap:14px;transition:.2s ease;position:relative;animation:rise .45s ease both}
+  .card:hover{transform:translateY(-2px);border-color:#cdd8cf}
+  .card .top{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+  .card .name{font-family:'Sora',sans-serif;font-weight:700;font-size:1.02rem;letter-spacing:-.01em;word-break:break-word}
+  .card .meta{display:flex;gap:18px;margin-top:4px}
+  .card .meta div{font-size:.8rem;color:var(--muted)}
+  .card .meta b{display:block;font-family:'Sora',sans-serif;color:var(--ink);font-size:1.12rem;font-weight:700;margin-top:1px}
+  .card .pay{color:var(--green-dk)!important}
+  .card .typesplit{display:flex;gap:8px;margin-top:6px}
+  .card .typesplit span{font-size:.72rem;font-weight:600;border-radius:20px;padding:2px 9px}
+  .card .typesplit .t-std{color:#14572A;background:#DDF0E2;border:1px solid #c4e3cd}
+  .card .typesplit .t-exp{color:#8a4b00;background:#fdeede;border:1px solid #f3d9b6}
+  .card .paidbadge{display:inline-flex;align-items:center;gap:5px;font-size:.72rem;font-weight:600;
+    color:#b07d00;background:#fff7df;border:1px solid #f0e2b6;border-radius:20px;padding:3px 9px;margin-top:6px;width:fit-content}
+  .chk{width:20px;height:20px;flex:none;accent-color:var(--green-dk);cursor:pointer;margin-top:2px}
+  .card .fields{display:flex;gap:8px}
+  .card .fld{flex:1;display:flex;flex-direction:column;gap:5px;background:#f4fbf5;border:1px solid #d7ecdb;border-radius:11px;padding:8px 10px}
+  .card .fld.disc{background:#fdf3f2;border-color:#f1d6d2}
+  .card .fld label{font-size:.74rem;font-weight:600;color:var(--green-dk);display:inline-flex;align-items:center;gap:5px}
+  .card .fld.disc label{color:#a3261a}
+  .card .fld label svg{width:13px;height:13px}
+  .card .fld input{width:100%;font-family:'Sora',sans-serif;font-weight:700;font-size:.95rem;color:var(--ink);
+    text-align:center;border:1px solid #cdd8cf;border-radius:8px;padding:5px 6px;background:#fff}
+  .card .fld input:focus{outline:none;border-color:var(--green);box-shadow:0 0 0 3px rgba(31,122,61,.12)}
+  .card .descr{display:flex;flex-direction:column;gap:5px}
+  .card .descr label{font-size:.74rem;font-weight:600;color:var(--muted)}
+  .card .descr input{width:100%;font-family:inherit;font-size:.85rem;color:var(--ink);
+    border:1px solid #cdd8cf;border-radius:9px;padding:7px 10px;background:#fcfdfc}
+  .card .descr input:focus{outline:none;border-color:var(--green);box-shadow:0 0 0 3px rgba(31,122,61,.12)}
+  .card .btns{display:flex;gap:8px}
+  .card .btns .btn{flex:1;justify-content:center;padding:10px 8px;width:auto}
+  .btn svg{width:16px;height:16px}
+  .btn.btn-primary{width:auto}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="topbar">
+    <a class="brand" href="inicio.html"><img id="brand-logo" alt="Dropper · Herramientas"></a>
+    <nav class="nav">
+      <div class="nav-links">
+        <a href="inicio.html">Inicio</a>
+        <a href="generador.html">Generador</a>
+        <a href="pagos.html" class="active">Pagos</a>
+        <a href="historial.html">Historial</a>
+      </div>
+      <span class="nav-sep"></span>
+      <span class="nav-av" id="nav-av"></span>
+      <a href="#" class="nav-logout" id="logout">Salir</a>
+    </nav>
+  </div>
+
+  <div class="notice" id="notice">
+    <b>Modo vista previa.</b> Supabase aún no está configurado: la herramienta funciona, pero no hay login.
+    Pegá tus llaves en <code>assets/js/config.js</code> (ver README).
+  </div>
+
+  <div class="page-head">
+    <div>
+      <h2>Pagos a Mensajeros</h2>
+      <div class="sub">Subí tu Excel de entregas y calculá cuánto pagarle a cada mensajero.</div>
+    </div>
+  </div>
+
+  <div class="drop" id="drop">
+    <input type="file" id="file" accept=".xlsx,.xls">
+    <div class="ic">
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+    </div>
+    <h2>Subí tu Excel de entregas</h2>
+    <p>Debe incluir una columna con el <b>nombre del mensajero</b> (ej. «Mensajero», «Repartidor», «Motorista»).</p>
+    <div class="hint">Agrupa por mensajero y separa estándar / express (columna «Método de entrega»)</div>
+  </div>
+
+  <div class="status" id="status"></div>
+
+  <div class="ratebar" id="ratebar">
+    <span class="rb-label">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5l7 7-7 7"/></svg>
+      Entrega estándar
+    </span>
+    <span class="rb-input"><span>Q</span><input type="number" id="rate" min="0" step="0.50" value="5"></span>
+    <span class="rb-label" style="margin-left:6px">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+      Entrega express
+    </span>
+    <span class="rb-input"><span>Q</span><input type="number" id="rate-exp" min="0" step="0.50" value="7"></span>
+    <span class="rb-label" style="margin-left:6px">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="M3.27 6.96 12 12l8.73-5.04"/><line x1="12" y1="22" x2="12" y2="12"/></svg>
+      Recolecta
+    </span>
+    <span class="rb-input"><span>Q</span><input type="number" id="rate-rec" min="0" step="0.50" value="5"></span>
+    <span class="df-label" style="margin-left:8px">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+    </span>
+    <label style="font-size:.84rem;font-weight:600;color:var(--muted);display:inline-flex;gap:6px;align-items:center">Desde <input type="date" id="df-from" style="font-family:inherit;font-size:.88rem;border:1px solid #cdd8cf;border-radius:9px;padding:7px 10px;background:#fcfdfc"></label>
+    <label style="font-size:.84rem;font-weight:600;color:var(--muted);display:inline-flex;gap:6px;align-items:center">Hasta <input type="date" id="df-to" style="font-family:inherit;font-size:.88rem;border:1px solid #cdd8cf;border-radius:9px;padding:7px 10px;background:#fcfdfc"></label>
+    <button class="btn btn-primary" id="df-apply" style="width:auto;padding:9px 16px;font-size:.86rem">Aplicar</button>
+    <button class="btn btn-ghost" id="df-clear" style="width:auto;padding:9px 16px;font-size:.86rem">Todo</button>
+    <span class="rb-note" id="df-count"></span>
+  </div>
+
+  <div class="summary" id="summary">
+    <div class="stat"><div class="k">Mensajeros</div><div class="v" id="s-mens">0</div></div>
+    <div class="stat"><div class="k">Entregas</div><div class="v" id="s-deliv">0</div></div>
+    <div class="stat"><div class="k">Recolectas</div><div class="v" id="s-rec">0</div></div>
+    <div class="stat"><div class="k">Descuentos</div><div class="v" id="s-desc">Q0</div></div>
+    <div class="stat"><div class="k">Total a pagar</div><div class="v" id="s-total">Q0</div></div>
+  </div>
+
+  <div class="toolbar" id="toolbar">
+    <h3>Pago por mensajero</h3>
+    <div class="tb-btns">
+      <button class="btn btn-ghost" id="btn-toggle" style="width:auto">Deseleccionar todos</button>
+      <button class="btn btn-ghost" id="btn-recibos" style="width:auto">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1-2-1z"/><line x1="8" y1="8" x2="16" y2="8"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+        Recibos (PDF)
+      </button>
+      <button class="btn btn-ghost" id="btn-details-zip" style="width:auto">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        Detalles (ZIP)
+      </button>
+      <button class="btn btn-ghost" id="btn-planilla-pdf" style="width:auto">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+        Planilla (PDF)
+      </button>
+      <button class="btn btn-primary" id="btn-planilla-xlsx" style="width:auto">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+        Planilla (Excel)
+      </button>
+      <button class="btn btn-ghost" id="btn-save-hist" style="width:auto">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+        Guardar en historial
+      </button>
+    </div>
+  </div>
+
+  <div class="grid" id="grid"></div>
+
+  <footer>Dropper · Smart Delivery — Herramientas internas</footer>
+</div>
+
+<script>
+const $=s=>document.querySelector(s);
+const drop=$('#drop'), fileInput=$('#file');
+let RAW_DATA=[];     // filas crudas con mensajero
+let MENS=[];         // [{name, rows, entregas, recolectas, pago}]
+let RECOLECTAS={};   // recolectas ingresadas a mano, por nombre de mensajero
+let DESCUENTOS={};   // descuentos (Q) ingresados a mano, por nombre de mensajero
+let MOTIVOS={};      // motivo del descuento, por nombre de mensajero
+let DESCRIPCIONES={};// descripción del pago, por nombre de mensajero
+let PAID_KEYS=new Set(); // ID de Orden de envíos que YA tienen recibo activo
+const TARIFA_FMT='"Q"#,##0.00';
+
+// Consulta en la base qué envíos (por ID de Orden) ya tienen recibo activo.
+async function fetchPaidKeys(keys){
+  const uniq=[...new Set(keys.map(k=>String(k)).filter(k=>k && k!=='undefined'))];
+  const paid=new Set();
+  if(!window.sb || !uniq.length) return paid;
+  const CHUNK=200;
+  for(let i=0;i<uniq.length;i+=CHUNK){
+    const chunk=uniq.slice(i,i+CHUNK);
+    const { data, error }=await window.sb.from('paid_deliveries').select('order_key').in('order_key',chunk);
+    if(error){ console.error(error); continue; }
+    (data||[]).forEach(r=>paid.add(String(r.order_key)));
+  }
+  return paid;
+}
+async function refreshPaidKeys(){
+  PAID_KEYS = await fetchPaidKeys(RAW_DATA.map(r=>r.idorden).filter(Boolean));
+}
+
+drop.addEventListener('click',()=>fileInput.click());
+['dragover','dragenter'].forEach(e=>drop.addEventListener(e,ev=>{ev.preventDefault();drop.classList.add('drag')}));
+['dragleave','drop'].forEach(e=>drop.addEventListener(e,ev=>{ev.preventDefault();drop.classList.remove('drag')}));
+drop.addEventListener('drop',ev=>{ if(ev.dataTransfer.files.length) handleFile(ev.dataTransfer.files[0]); });
+fileInput.addEventListener('change',()=>{ if(fileInput.files.length) handleFile(fileInput.files[0]); });
+
+function status(msg,type){ const s=$('#status'); s.className='status show '+(type||''); s.innerHTML=(type==='work'?'<span class="spin"></span>':'')+msg; }
+function hideStatus(){ $('#status').className='status'; }
+function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+function norm(s){ return String(s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,''); }
+function fmtQ(n){ return 'Q'+Number(n||0).toLocaleString('es-GT',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+function fmtDate(v){
+  let d;
+  if(v instanceof Date) d=v;
+  else if(typeof v==='number') d=new Date(Math.round((v-25569)*86400*1000));
+  else { const t=Date.parse(v); if(isNaN(t)) return String(v); d=new Date(t); }
+  const p=x=>String(x).padStart(2,'0');
+  return `${p(d.getDate())}/${p(d.getMonth()+1)}/${d.getFullYear()}`;
+}
+function toDate(v){
+  if(v instanceof Date) return isNaN(v)?null:v;
+  if(typeof v==='number') return new Date(Math.round((v-25569)*86400*1000));
+  const t=Date.parse(v); return isNaN(t)?null:new Date(t);
+}
+function getRate(){ const r=parseFloat($('#rate').value); return isNaN(r)||r<0?0:r; }      // entrega estándar
+function getRateExp(){ const r=parseFloat($('#rate-exp').value); return isNaN(r)||r<0?0:r; } // entrega express
+function getRateRec(){ const r=parseFloat($('#rate-rec').value); return isNaN(r)||r<0?0:r; }
+function tipoEnvio(metodo){ return /expres/.test(norm(metodo)) ? 'express' : 'estandar'; }
+function safeName(s){ return String(s).replace(/[^\p{L}\p{N}]+/gu,'_').replace(/^_+|_+$/g,''); }
+
+function pickHeader(keys,cands){
+  const nk=keys.map(k=>({k,n:norm(k).trim()}));
+  for(const c of cands){ const h=nk.find(o=>o.n===c); if(h) return h.k; }
+  for(const c of cands){ const h=nk.find(o=>o.n.includes(c)); if(h) return h.k; }
+  return null;
+}
+
+function handleFile(file){
+  window.LAST_FILENAME=file.name;
+  status('Leyendo <b style="margin:0 4px">'+esc(file.name)+'</b>…','work');
+  const reader=new FileReader();
+  reader.onload=async e=>{ try{ await parseWorkbook(e.target.result); }catch(err){ console.error(err); status('No se pudo leer el archivo. ¿Es un Excel válido? '+err.message,'err'); } };
+  reader.onerror=()=>status('Error al abrir el archivo.','err');
+  reader.readAsArrayBuffer(file);
+}
+
+async function parseWorkbook(buf){
+  const wb=XLSX.read(buf,{type:'array',cellDates:true});
+  const sheetName=wb.SheetNames.find(n=>/entrega/i.test(n))||wb.SheetNames[0];
+  const ws=wb.Sheets[sheetName];
+  const rowsRaw=XLSX.utils.sheet_to_json(ws,{raw:true,defval:''});
+  const rowsTxt=XLSX.utils.sheet_to_json(ws,{raw:false,defval:''});
+  if(!rowsRaw.length){ status('La hoja "'+esc(sheetName)+'" está vacía.','err'); return; }
+
+  const keys=Object.keys(rowsRaw[0]);
+  const C={
+    mensajero:pickHeader(keys,['nombre del mensajero','mensajero','nombre del repartidor','repartidor','motorista','piloto','courier','rider','mensajero asignado','repartidor asignado']),
+    cliente:pickHeader(keys,['nombre del cliente','cliente']),
+    fecha:pickHeader(keys,['fecha de entrega','fecha']),
+    idorden:pickHeader(keys,['id de orden','id']),
+    norden:pickHeader(keys,['numero de orden','no. de orden','orden']),
+    ciudad:pickHeader(keys,['ciudad','municipio']),
+    zona:pickHeader(keys,['localidad','zona']),
+    estado:pickHeader(keys,['estado del envio','estado de entrega','estado']),
+    metodo:pickHeader(keys,['metodo de entrega','metodo','tipo de envio','tipo','envio']),
+  };
+  if(!C.mensajero){
+    status('No encontré la columna del <b>mensajero</b>. Asegurate de que el Excel tenga una columna con el nombre del mensajero (ej. «Mensajero», «Repartidor», «Motorista»).','err');
+    return;
+  }
+
+  RECOLECTAS={}; DESCUENTOS={}; MOTIVOS={}; DESCRIPCIONES={}; // archivo nuevo: limpiamos lo ingresado a mano
+  RAW_DATA=rowsRaw.map((r,i)=>{
+    const t=rowsTxt[i]||{};
+    return {
+      mensajero:String((t[C.mensajero]??r[C.mensajero])||'').trim(),
+      cliente:C.cliente?String((t[C.cliente]??r[C.cliente])||'').trim():'',
+      fecha:C.fecha?r[C.fecha]:'',
+      idorden:C.idorden?String(t[C.idorden]??r[C.idorden]??''):'',
+      norden:C.norden?String(t[C.norden]??r[C.norden]??''):'',
+      ciudad:C.ciudad?String((t[C.ciudad]??r[C.ciudad])||'').trim():'',
+      zona:C.zona?String((t[C.zona]??r[C.zona])||'').trim():'',
+      estado:C.estado?String((t[C.estado]??r[C.estado])||'').trim():'',
+      metodo:C.metodo?String((t[C.metodo]??r[C.metodo])||'').trim():'',
+      tipo:tipoEnvio(C.metodo?(t[C.metodo]??r[C.metodo]):''),
+    };
+  }).filter(r=>r.mensajero);
+
+  if(!RAW_DATA.length){ status('Encontré la columna de mensajero pero todas las filas están vacías en ese campo.','err'); return; }
+
+  hideStatus();
+  setupDateFilter();
+  status('Revisando envíos ya pagados…','work');
+  await refreshPaidKeys();
+  hideStatus();
+  buildView();
+}
+
+/* ---------- filtro por período ---------- */
+function currentRange(){
+  const fv=$('#df-from').value, tv=$('#df-to').value;
+  return [ fv?new Date(fv+'T00:00:00'):null, tv?new Date(tv+'T23:59:59'):null ];
+}
+function inRange(v,from,to){
+  if(!from && !to) return true;
+  const d=toDate(v); if(!d) return false;
+  if(from && d<from) return false;
+  if(to && d>to) return false;
+  return true;
+}
+function setupDateFilter(){
+  const dates=RAW_DATA.map(r=>toDate(r.fecha)).filter(d=>d&&d.getFullYear()>1971);
+  if(!dates.length){ $('#df-from').style.display='none'; $('#df-to').style.display='none'; return; }
+  const iso=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  const mn=new Date(Math.min(...dates)), mx=new Date(Math.max(...dates));
+  ['#df-from','#df-to'].forEach(s=>{ const el=$(s); el.min=iso(mn); el.max=iso(mx); el.value=''; });
+}
+function buildView(){
+  const [from,to]=currentRange();
+  const filtered=RAW_DATA.filter(r=>inRange(r.fecha,from,to));
+  const map=new Map();
+  filtered.forEach(r=>{ if(!map.has(r.mensajero)) map.set(r.mensajero,[]); map.get(r.mensajero).push(r); });
+  MENS=[...map.entries()].map(([name,rows])=>({name,rows,entregas:rows.length,recolectas:RECOLECTAS[name]||0,descuento:DESCUENTOS[name]||0,motivo:MOTIVOS[name]||'',descripcion:DESCRIPCIONES[name]||'',pago:0}));
+  recompute();
+  const active=!!(from||to);
+  $('#df-count').textContent=active
+    ? `Mostrando ${filtered.length} de ${RAW_DATA.length} entregas`
+    : `${RAW_DATA.length} entregas (todo el archivo)`;
+  render();
+}
+function recompute(){
+  const rStd=getRate(), rExp=getRateExp(), rr=getRateRec();
+  MENS.forEach(m=>{
+    m.entregasStd=m.rows.filter(r=>r.tipo==='estandar').length;
+    m.entregasExp=m.rows.filter(r=>r.tipo==='express').length;
+    m.recolectas=RECOLECTAS[m.name]||0;
+    m.descuento=DESCUENTOS[m.name]||0;
+    m.motivo=MOTIVOS[m.name]||'';
+    m.descripcion=DESCRIPCIONES[m.name]||'';
+    m.pago=m.entregasStd*rStd + m.entregasExp*rExp + m.recolectas*rr - m.descuento;
+  });
+  MENS.sort((a,b)=>b.pago-a.pago || b.entregas-a.entregas);
+}
+function totals(){
+  return {
+    mens: MENS.length,
+    entregas: MENS.reduce((s,m)=>s+m.entregas,0),
+    recolectas: MENS.reduce((s,m)=>s+(m.recolectas||0),0),
+    descuentos: MENS.reduce((s,m)=>s+(m.descuento||0),0),
+    pago: MENS.reduce((s,m)=>s+m.pago,0),
+  };
+}
+function updateSummary(){
+  const t=totals();
+  $('#s-mens').textContent=t.mens;
+  $('#s-deliv').textContent=t.entregas.toLocaleString('es-GT');
+  $('#s-rec').textContent=t.recolectas.toLocaleString('es-GT');
+  $('#s-desc').textContent=fmtQ(t.descuentos);
+  $('#s-total').textContent=fmtQ(t.pago);
+}
+
+/* ---------- render ---------- */
+function render(){
+  updateSummary();
+  $('#ratebar').classList.add('show');
+  $('#summary').classList.add('show');
+  $('#toolbar').classList.add('show');
+
+  const grid=$('#grid'); grid.innerHTML='';
+  MENS.forEach((m,i)=>{
+    const pagadas=m.rows.filter(r=>r.idorden && PAID_KEYS.has(String(r.idorden))).length;
+    const el=document.createElement('div');
+    el.className='card'; el.style.animationDelay=(i*0.04)+'s';
+    el.innerHTML=`
+      <div class="top">
+        <div>
+          <div class="name">${esc(m.name)}</div>
+          <div class="meta">
+            <div>Entregas<b>${m.entregas}</b></div>
+            <div>A pagar<b class="pay">${fmtQ(m.pago)}</b></div>
+          </div>
+          <div class="typesplit"><span class="t-std">Estándar ${m.entregasStd||0}</span><span class="t-exp">Express ${m.entregasExp||0}</span></div>
+          ${pagadas>0?`<span class="paidbadge">⚠ ${pagadas} ${pagadas===1?'envío ya con recibo':'envíos ya con recibo'}</span>`:''}
+        </div>
+        <input type="checkbox" class="chk" data-i="${i}" checked>
+      </div>
+      <div class="fields">
+        <div class="fld">
+          <label>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="M3.27 6.96 12 12l8.73-5.04"/><line x1="12" y1="22" x2="12" y2="12"/></svg>
+            Recolectas
+          </label>
+          <input type="number" class="rec-input" data-i="${i}" min="0" step="1" value="${m.recolectas||0}">
+        </div>
+        <div class="fld disc">
+          <label>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+            Descuento Q
+          </label>
+          <input type="number" class="disc-input" data-i="${i}" min="0" step="0.01" value="${m.descuento||0}">
+        </div>
+      </div>
+      <div class="descr">
+        <label>Motivo del descuento</label>
+        <input type="text" class="motivo-input" data-i="${i}" maxlength="120" placeholder="Por qué se descuenta (opcional)" value="${esc(m.motivo||'')}">
+      </div>
+      <div class="descr">
+        <label>Descripción del pago</label>
+        <input type="text" class="descr-input" data-i="${i}" maxlength="120" placeholder="Opcional — aparece en el recibo" value="${esc(m.descripcion||'')}">
+      </div>
+      <div class="btns">
+        <button class="btn btn-ghost" data-dl="${i}">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Excel
+        </button>
+        <button class="btn btn-primary" data-pdf="${i}">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+          PDF
+        </button>
+      </div>`;
+    grid.appendChild(el);
+  });
+  grid.querySelectorAll('[data-dl]').forEach(b=>b.addEventListener('click',()=>downloadDetailExcel(+b.dataset.dl)));
+  grid.querySelectorAll('[data-pdf]').forEach(b=>b.addEventListener('click',()=>downloadDetailPDF(+b.dataset.pdf)));
+  grid.querySelectorAll('.rec-input').forEach(inp=>inp.addEventListener('input',()=>{
+    const m=MENS[+inp.dataset.i];
+    const v=parseInt(inp.value,10); const rec=isNaN(v)||v<0?0:v;
+    RECOLECTAS[m.name]=rec; m.recolectas=rec; refreshOne(m,inp);
+  }));
+  grid.querySelectorAll('.disc-input').forEach(inp=>inp.addEventListener('input',()=>{
+    const m=MENS[+inp.dataset.i];
+    const v=parseFloat(inp.value); const d=isNaN(v)||v<0?0:v;
+    DESCUENTOS[m.name]=d; m.descuento=d; refreshOne(m,inp);
+  }));
+  grid.querySelectorAll('.motivo-input').forEach(inp=>inp.addEventListener('input',()=>{
+    const m=MENS[+inp.dataset.i];
+    MOTIVOS[m.name]=inp.value; m.motivo=inp.value;
+  }));
+  grid.querySelectorAll('.descr-input').forEach(inp=>inp.addEventListener('input',()=>{
+    const m=MENS[+inp.dataset.i];
+    DESCRIPCIONES[m.name]=inp.value; m.descripcion=inp.value;
+  }));
+}
+function refreshOne(m, inp){
+  m.pago=(m.entregasStd||0)*getRate() + (m.entregasExp||0)*getRateExp() + (m.recolectas||0)*getRateRec() - (m.descuento||0);
+  const payEl=inp.closest('.card').querySelector('.pay'); if(payEl) payEl.textContent=fmtQ(m.pago);
+  updateSummary();
+}
+
+function periodoTexto(){
+  const ds=MENS.flatMap(m=>m.rows).map(r=>toDate(r.fecha)).filter(d=>d&&d.getFullYear()>1971);
+  if(!ds.length) return '—';
+  const mn=new Date(Math.min(...ds)), mx=new Date(Math.max(...ds));
+  return `${fmtDate(mn)} al ${fmtDate(mx)}`;
+}
+function getSelected(){
+  return [...document.querySelectorAll('.chk')].filter(x=>x.checked).map(x=>MENS[+x.dataset.i]);
+}
+
+/* ============================================================
+   Planilla consolidada (todos los mensajeros seleccionados)
+   ============================================================ */
+async function buildPlanillaWorkbook(sel,rStd,rExp,rr,periodo){
+  const wb=new ExcelJS.Workbook();
+  const ws=wb.addWorksheet('Planilla',{views:[{showGridLines:false}]});
+  const G='FF1F7A3D',GD='FF14572A',LIME='FFDDF0E2',GREY='FFF2F4F5',WHITE='FFFFFFFF',TXT='FF1A1A1A',BLACK='FF0C0F0D';
+  const fill=c=>({type:'pattern',pattern:'solid',fgColor:{argb:c}});
+  const bd={top:{style:'thin',color:{argb:'FFD5DADE'}},bottom:{style:'thin',color:{argb:'FFD5DADE'}},left:{style:'thin',color:{argb:'FFD5DADE'}},right:{style:'thin',color:{argb:'FFD5DADE'}}};
+  ws.getColumn(1).width=32; ws.getColumn(2).width=10; ws.getColumn(3).width=10; ws.getColumn(4).width=11; ws.getColumn(5).width=13; ws.getColumn(6).width=15;
+
+  ws.mergeCells('A1:F1'); ws.getRow(1).height=30;
+  let t=ws.getCell('A1'); t.value='Dropper · Planilla de Pagos a Mensajeros';
+  t.font={name:'Arial',bold:true,size:14,color:{argb:WHITE}}; t.fill=fill(BLACK);
+  t.alignment={vertical:'middle',horizontal:'left',indent:1};
+
+  const totStd=sel.reduce((s,m)=>s+(m.entregasStd||0),0), totExp=sel.reduce((s,m)=>s+(m.entregasExp||0),0),
+        totRec=sel.reduce((s,m)=>s+(m.recolectas||0),0), totDesc=sel.reduce((s,m)=>s+(m.descuento||0),0),
+        totalPago=sel.reduce((s,m)=>s+m.pago,0);
+  [['Período:',periodo],['Pago entrega estándar:',fmtQ(rStd)],['Pago entrega express:',fmtQ(rExp)],['Pago recolecta:',fmtQ(rr)]].forEach((p,i)=>{
+    const r=3+i;
+    ws.getCell(`A${r}`).value=p[0]; ws.getCell(`A${r}`).font={name:'Arial',bold:true,size:10,color:{argb:TXT}};
+    ws.getCell(`B${r}`).value=p[1]; ws.getCell(`B${r}`).font={name:'Arial',size:10,color:{argb:TXT}};
+  });
+  ws.getCell('A7').value='Total a pagar:'; ws.getCell('A7').font={name:'Arial',bold:true,size:11,color:{argb:GD}};
+  const tc=ws.getCell('B7'); tc.value=totalPago; tc.numFmt=TARIFA_FMT; tc.font={name:'Arial',bold:true,size:11,color:{argb:GD}};
+
+  let r=9;
+  ws.mergeCells(`A${r}:F${r}`); let h=ws.getCell(`A${r}`); h.value='Detalle por mensajero';
+  h.font={name:'Arial',bold:true,size:11,color:{argb:WHITE}}; h.fill=fill(G);
+  h.alignment={vertical:'middle',horizontal:'left',indent:1}; ws.getRow(r).height=22; r++;
+  ['Mensajero','Estándar','Express','Recolectas','Descuento','Total a pagar'].forEach((x,j)=>{
+    const cell=ws.getCell(r,j+1); cell.value=x;
+    cell.font={name:'Arial',bold:true,size:10,color:{argb:TXT}}; cell.fill=fill(GREY); cell.border=bd;
+    cell.alignment={horizontal:j===0?'left':'center'};
+  });
+  r++;
+  const fd=r;
+  sel.forEach((m,i)=>{
+    const even=i%2===0;
+    ws.getCell(r,1).value=m.name; ws.getCell(r,1).alignment={horizontal:'left'};
+    ws.getCell(r,2).value=m.entregasStd||0; ws.getCell(r,2).alignment={horizontal:'center'};
+    ws.getCell(r,3).value=m.entregasExp||0; ws.getCell(r,3).alignment={horizontal:'center'};
+    ws.getCell(r,4).value=m.recolectas||0; ws.getCell(r,4).alignment={horizontal:'center'};
+    const c5=ws.getCell(r,5); c5.value=m.descuento||0; c5.numFmt=TARIFA_FMT; c5.alignment={horizontal:'center'};
+    const c6=ws.getCell(r,6); c6.value=m.pago; c6.numFmt=TARIFA_FMT; c6.alignment={horizontal:'center'};
+    [1,2,3,4,5,6].forEach(col=>{const x=ws.getCell(r,col); x.fill=fill(even?WHITE:LIME); x.border=bd; x.font={name:'Arial',size:10,color:{argb:TXT}};});
+    r++;
+  });
+  const ld=r-1;
+  ws.getCell(r,1).value='TOTAL'; ws.getCell(r,1).font={name:'Arial',bold:true,size:11,color:{argb:WHITE}};
+  const colTot=(col,letra,res,fmt)=>{ const c=ws.getCell(r,col); c.value={formula:`SUM(${letra}${fd}:${letra}${ld})`,result:res}; if(fmt) c.numFmt=fmt; c.font={name:'Arial',bold:true,size:11,color:{argb:WHITE}}; c.alignment={horizontal:'center'}; };
+  colTot(2,'B',totStd); colTot(3,'C',totExp); colTot(4,'D',totRec); colTot(5,'E',totDesc,TARIFA_FMT); colTot(6,'F',totalPago,TARIFA_FMT);
+  [1,2,3,4,5,6].forEach(col=>{ws.getCell(r,col).fill=fill(GD); ws.getCell(r,col).border=bd;});
+
+  return wb;
+}
+
+function buildPlanillaPDF(sel,rStd,rExp,rr,periodo){
+  const { jsPDF }=window.jspdf;
+  const doc=new jsPDF({unit:'pt',format:'a4'});
+  const PW=doc.internal.pageSize.getWidth(), M=40;
+  const green=[31,122,61], greenDk=[20,87,42], txt=[26,26,26], lime=[221,240,226], black=[12,15,13];
+  const totStd=sel.reduce((s,m)=>s+(m.entregasStd||0),0), totExp=sel.reduce((s,m)=>s+(m.entregasExp||0),0),
+        totRec=sel.reduce((s,m)=>s+(m.recolectas||0),0), totDesc=sel.reduce((s,m)=>s+(m.descuento||0),0),
+        totalPago=sel.reduce((s,m)=>s+m.pago,0);
+
+  doc.setFillColor(...black); doc.rect(0,0,PW,70,'F');
+  doc.setFont('helvetica','bold'); doc.setFontSize(15); doc.setTextColor(255,255,255);
+  doc.text('Dropper · Planilla de Pagos a Mensajeros',M,32);
+  doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(207,230,211);
+  doc.text(`Período: ${periodo}   ·   Estándar: ${fmtQ(rStd)}   ·   Express: ${fmtQ(rExp)}   ·   Recolecta: ${fmtQ(rr)}`,M,52);
+
+  let y=92;
+  doc.setFont('helvetica','normal'); doc.setFontSize(10); doc.setTextColor(...txt);
+  doc.text(`Mensajeros: ${sel.length}    Estándar: ${totStd}    Express: ${totExp}    Recolectas: ${totRec}    Descuentos: ${fmtQ(totDesc)}`,M,y);
+  doc.setFont('helvetica','bold'); doc.setTextColor(...greenDk);
+  doc.text(`Total a pagar: ${fmtQ(totalPago)}`,M,y+16);
+
+  doc.autoTable({
+    startY:y+30,
+    head:[['Mensajero','Estándar','Express','Recolectas','Descuento','Total a pagar']],
+    body:sel.map(m=>[m.name,m.entregasStd||0,m.entregasExp||0,m.recolectas||0,fmtQ(m.descuento||0),fmtQ(m.pago)]),
+    foot:[['TOTAL',totStd,totExp,totRec,fmtQ(totDesc),fmtQ(totalPago)]],
+    styles:{font:'helvetica',fontSize:8.5,cellPadding:4,textColor:txt,lineColor:[213,218,222],lineWidth:0.5},
+    headStyles:{fillColor:green,textColor:[255,255,255],fontStyle:'bold'},
+    footStyles:{fillColor:greenDk,textColor:[255,255,255],fontStyle:'bold'},
+    alternateRowStyles:{fillColor:lime},
+    columnStyles:{0:{cellWidth:'auto'},1:{cellWidth:56,halign:'center'},2:{cellWidth:56,halign:'center'},3:{cellWidth:64,halign:'center'},4:{cellWidth:74,halign:'right'},5:{cellWidth:86,halign:'right'}},
+    margin:{left:M,right:M},
+    didDrawPage:()=>{
+      const ph=doc.internal.pageSize.getHeight();
+      doc.setFont('helvetica','normal'); doc.setFontSize(7.5); doc.setTextColor(150,160,150);
+      doc.text('Dropper · Smart Delivery',M,ph-20);
+      doc.text('Página '+doc.internal.getCurrentPageInfo().pageNumber,PW-M,ph-20,{align:'right'});
+    }
+  });
+  return doc;
+}
+
+/* ============================================================
+   Detalle por mensajero (sus entregas)
+   ============================================================ */
+function sortRows(rows){
+  return rows.slice().sort((a,b)=>{
+    const da=toDate(a.fecha)||new Date(0), db=toDate(b.fecha)||new Date(0);
+    return da-db;
+  });
+}
+async function buildDetailWorkbook(m,rStd,rExp,rr,periodo){
+  const wb=new ExcelJS.Workbook();
+  const ws=wb.addWorksheet('Detalle',{views:[{showGridLines:false}]});
+  const G='FF1F7A3D',GD='FF14572A',LIME='FFDDF0E2',GREY='FFF2F4F5',WHITE='FFFFFFFF',TXT='FF1A1A1A',BLACK='FF0C0F0D';
+  const fill=c=>({type:'pattern',pattern:'solid',fgColor:{argb:c}});
+  const bd={top:{style:'thin',color:{argb:'FFD5DADE'}},bottom:{style:'thin',color:{argb:'FFD5DADE'}},left:{style:'thin',color:{argb:'FFD5DADE'}},right:{style:'thin',color:{argb:'FFD5DADE'}}};
+  [12,14,26,16,12,14].forEach((w,i)=>ws.getColumn(i+1).width=w);
+
+  ws.mergeCells('A1:F1'); ws.getRow(1).height=28;
+  let t=ws.getCell('A1'); t.value='Dropper · Pago a Mensajero';
+  t.font={name:'Arial',bold:true,size:13,color:{argb:WHITE}}; t.fill=fill(BLACK);
+  t.alignment={vertical:'middle',horizontal:'left',indent:1};
+
+  const rows=sortRows(m.rows);
+  const info=[['Mensajero:',m.name],['Período:',periodo],['Entregas estándar:',m.entregasStd||0],['Entregas express:',m.entregasExp||0],['Recolectas:',m.recolectas||0],['Pago estándar:',fmtQ(rStd)],['Pago express:',fmtQ(rExp)],['Pago recolecta:',fmtQ(rr)],['Descuento:',fmtQ(m.descuento||0)]];
+  if(m.descuento>0 && m.motivo) info.push(['Motivo del descuento:',m.motivo]);
+  if(m.descripcion) info.push(['Descripción:',m.descripcion]);
+  info.forEach((p,i)=>{
+    const r=3+i;
+    ws.getCell(`A${r}`).value=p[0]; ws.getCell(`A${r}`).font={name:'Arial',bold:true,size:10,color:{argb:TXT}};
+    ws.getCell(`B${r}`).value=p[1]; ws.getCell(`B${r}`).font={name:'Arial',size:10,color:{argb:TXT}};
+  });
+  const totRow=3+info.length;
+  ws.getCell(`A${totRow}`).value='Total a pagar:'; ws.getCell(`A${totRow}`).font={name:'Arial',bold:true,size:11,color:{argb:GD}};
+  const tc=ws.getCell(`B${totRow}`); tc.value=m.pago; tc.numFmt=TARIFA_FMT; tc.font={name:'Arial',bold:true,size:11,color:{argb:GD}};
+
+  let ds=totRow+2;
+  ws.mergeCells(`A${ds}:F${ds}`); let h=ws.getCell(`A${ds}`); h.value='Entregas realizadas';
+  h.font={name:'Arial',bold:true,size:11,color:{argb:WHITE}}; h.fill=fill(G);
+  h.alignment={vertical:'middle',horizontal:'left',indent:1}; ws.getRow(ds).height=22;
+  const dh=ds+1;
+  ['Fecha','No. de Orden','Cliente','Municipio','Tipo','Estado'].forEach((x,j)=>{
+    const cell=ws.getCell(dh,j+1); cell.value=x;
+    cell.font={name:'Arial',bold:true,size:9,color:{argb:TXT}}; cell.fill=fill(GREY); cell.border=bd;
+    cell.alignment={horizontal:'left',vertical:'middle'};
+  });
+  const rstart=dh+1;
+  rows.forEach((r,i)=>{
+    const rr=rstart+i, even=i%2===0;
+    const vals=[r.fecha?fmtDate(r.fecha):'',r.norden,r.cliente,r.ciudad,r.tipo==='express'?'Express':'Estándar',r.estado];
+    vals.forEach((v,j)=>{
+      const cell=ws.getCell(rr,j+1); cell.value=v;
+      cell.fill=fill(even?WHITE:LIME); cell.border=bd; cell.font={name:'Arial',size:9,color:{argb:TXT}};
+      cell.alignment={horizontal:'left',vertical:'middle'};
+    });
+  });
+  ws.views=[{state:'frozen',ySplit:rstart-1,showGridLines:false}];
+  return wb;
+}
+function buildDetailPDF(m,rStd,rExp,rr,periodo){
+  const { jsPDF }=window.jspdf;
+  const doc=new jsPDF({unit:'pt',format:'a4'});
+  const PW=doc.internal.pageSize.getWidth(), M=40;
+  const green=[31,122,61], greenDk=[20,87,42], txt=[26,26,26], lime=[221,240,226], black=[12,15,13];
+  const rows=sortRows(m.rows);
+
+  doc.setFillColor(...black); doc.rect(0,0,PW,66,'F');
+  doc.setFont('helvetica','bold'); doc.setFontSize(15); doc.setTextColor(255,255,255);
+  doc.text('Dropper · Pago a Mensajero',M,30);
+  doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(207,230,211);
+  doc.text(`Período: ${periodo}   ·   Estándar: ${fmtQ(rStd)}   ·   Express: ${fmtQ(rExp)}   ·   Recolecta: ${fmtQ(rr)}`,M,50);
+
+  doc.setFont('helvetica','bold'); doc.setFontSize(13); doc.setTextColor(18,38,26);
+  doc.text(String(m.name),M,90);
+  doc.setFont('helvetica','normal'); doc.setFontSize(9.5); doc.setTextColor(...txt);
+  doc.text(`Estándar: ${m.entregasStd||0}    Express: ${m.entregasExp||0}    Recolectas: ${m.recolectas||0}    Descuento: ${fmtQ(m.descuento||0)}`,M,106);
+  doc.setFont('helvetica','bold'); doc.setTextColor(...greenDk);
+  doc.text(`Total a pagar: ${fmtQ(m.pago)}`,M,122);
+  let startY=134, infoY=137;
+  doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(...txt);
+  if(m.descuento>0 && m.motivo){
+    const ml=doc.splitTextToSize(`Motivo del descuento: ${m.motivo}`, PW-2*M);
+    doc.text(ml, M, infoY); infoY+=ml.length*12+3; startY=infoY+3;
+  }
+  if(m.descripcion){
+    const dl=doc.splitTextToSize(`Descripción: ${m.descripcion}`, PW-2*M);
+    doc.text(dl, M, infoY); infoY+=dl.length*12+3; startY=infoY+3;
+  }
+
+  doc.autoTable({
+    startY,
+    head:[['Fecha','No. de Orden','Cliente','Municipio','Tipo','Estado']],
+    body:rows.map(r=>[ r.fecha?fmtDate(r.fecha):'', r.norden, r.cliente, r.ciudad, r.tipo==='express'?'Express':'Estándar', r.estado ]),
+    foot:[['','','','','Entregas:',String(rows.length)]],
+    styles:{font:'helvetica',fontSize:8,cellPadding:4,textColor:txt,lineColor:[213,218,222],lineWidth:0.5,overflow:'linebreak'},
+    headStyles:{fillColor:green,textColor:[255,255,255],fontStyle:'bold'},
+    footStyles:{fillColor:[242,244,245],textColor:txt,fontStyle:'bold'},
+    alternateRowStyles:{fillColor:lime},
+    columnStyles:{0:{cellWidth:54},1:{cellWidth:74},2:{cellWidth:'auto'},3:{cellWidth:78},4:{cellWidth:56},5:{cellWidth:60}},
+    margin:{left:M,right:M},
+    didDrawPage:()=>{
+      const ph=doc.internal.pageSize.getHeight();
+      doc.setFont('helvetica','normal'); doc.setFontSize(7.5); doc.setTextColor(150,160,150);
+      doc.text('Dropper · Smart Delivery',M,ph-20);
+      doc.text('Página '+doc.internal.getCurrentPageInfo().pageNumber,PW-M,ph-20,{align:'right'});
+    }
+  });
+  return doc;
+}
+
+/* ============================================================
+   Recibos de pago (PDF) — monto en números y en letras + firma
+   ============================================================ */
+const _UNI=['','uno','dos','tres','cuatro','cinco','seis','siete','ocho','nueve','diez','once','doce','trece','catorce','quince','dieciséis','diecisiete','dieciocho','diecinueve','veinte','veintiuno','veintidós','veintitrés','veinticuatro','veinticinco','veintiséis','veintisiete','veintiocho','veintinueve'];
+const _DEC=['','','','treinta','cuarenta','cincuenta','sesenta','setenta','ochenta','noventa'];
+const _CEN=['','ciento','doscientos','trescientos','cuatrocientos','quinientos','seiscientos','setecientos','ochocientos','novecientos'];
+function _tresCifras(n){
+  if(n===0) return '';
+  if(n===100) return 'cien';
+  const c=Math.floor(n/100), resto=n%100; let txt='';
+  if(c>0) txt+=_CEN[c]+(resto?' ':'');
+  if(resto>0){
+    if(resto<30) txt+=_UNI[resto];
+    else { const d=Math.floor(resto/10), u=resto%10; txt+=_DEC[d]; if(u>0) txt+=' y '+_UNI[u]; }
+  }
+  return txt.trim();
+}
+function _enteroALetras(n){
+  if(n===0) return 'cero';
+  let txt='';
+  const millones=Math.floor(n/1000000), miles=Math.floor((n%1000000)/1000), cientos=n%1000;
+  if(millones>0) txt+=(millones===1?'un millón':_tresCifras(millones).replace(/uno$/,'ún')+' millones')+' ';
+  if(miles>0) txt+=(miles===1?'mil':_tresCifras(miles).replace(/uno$/,'ún')+' mil')+' ';
+  if(cientos>0) txt+=_tresCifras(cientos);
+  return txt.trim();
+}
+function numeroALetras(num){
+  const ent=Math.floor(num), cent=Math.round((num-ent)*100);
+  let letras=_enteroALetras(ent).replace(/veintiuno$/,'veintiún').replace(/uno$/,'un');
+  const q=ent===1?'quetzal':'quetzales';
+  let s=`${letras} ${q} con ${String(cent).padStart(2,'0')}/100`;
+  return s.charAt(0).toUpperCase()+s.slice(1);
+}
+
+function drawRecibo(doc, m, periodo, y0, h, folio, fechaHoy){
+  const PW=doc.internal.pageSize.getWidth(), M=40;
+  const x=M, w=PW-M*2, total=m.pago, rec=m.recolectas||0, desc=m.descuento||0;
+  const ink=[16,38,26], greenDk=[20,87,42], green=[31,122,61], lime=[65,172,58],
+        limeSoft=[223,240,226], muted=[110,124,112], line=[225,231,226];
+  const L=x+26, R=x+w-24;
+
+  // tarjeta + barra de acento lateral
+  doc.setFillColor(255,255,255); doc.setDrawColor(...line); doc.setLineWidth(1);
+  doc.roundedRect(x, y0, w, h, 10, 10, 'FD');
+  doc.setFillColor(...green); doc.rect(x+1, y0+1, 7, h-2, 'F');
+  doc.setFillColor(...lime); doc.rect(x+1, y0+1, 7, Math.min(72, h-2), 'F');
+
+  // wordmark
+  doc.setFont('helvetica','bold'); doc.setFontSize(21); doc.setTextColor(...ink);
+  doc.text('Dropper', L, y0+34);
+  const wmW=doc.getTextWidth('Dropper');
+  doc.setFillColor(...lime); doc.circle(L+wmW+6, y0+32, 2.6, 'F');
+  doc.setFont('helvetica','normal'); doc.setFontSize(7); doc.setTextColor(...muted);
+  doc.text('SMART DELIVERY', L+1, y0+46, {charSpace:2});
+
+  // tipo de documento (derecha)
+  doc.setFont('helvetica','bold'); doc.setFontSize(10); doc.setTextColor(...greenDk);
+  doc.text('RECIBO DE PAGO', R, y0+28, {align:'right', charSpace:1.2});
+  doc.setFont('helvetica','normal'); doc.setFontSize(8.5); doc.setTextColor(...muted);
+  doc.text(`No. ${folio}`, R, y0+42, {align:'right'});
+  doc.text(`Fecha: ${fechaHoy}`, R, y0+54, {align:'right'});
+
+  // regla
+  doc.setDrawColor(...line); doc.setLineWidth(0.8); doc.line(L, y0+64, R, y0+64);
+
+  // recibido por
+  doc.setFont('helvetica','normal'); doc.setFontSize(8); doc.setTextColor(...muted);
+  doc.text('RECIBIDO POR', L, y0+80, {charSpace:1});
+  doc.setFont('helvetica','bold'); doc.setFontSize(13); doc.setTextColor(...ink);
+  doc.text(String(m.name), L, y0+96);
+
+  // panel de monto
+  const py=y0+108, ph=56;
+  doc.setFillColor(...limeSoft); doc.roundedRect(L, py, R-L, ph, 8, 8, 'F');
+  doc.setFont('helvetica','normal'); doc.setFontSize(8); doc.setTextColor(...greenDk);
+  doc.text('TOTAL A PAGAR', L+16, py+19, {charSpace:1});
+  doc.setFont('helvetica','bold'); doc.setFontSize(23); doc.setTextColor(...greenDk);
+  doc.text(fmtQ(total), L+16, py+44);
+  doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(...green);
+  const parts=[];
+  if(m.entregasStd) parts.push(`${m.entregasStd} estándar`);
+  if(m.entregasExp) parts.push(`${m.entregasExp} express`);
+  if(rec) parts.push(`${rec} ${rec===1?'recolecta':'recolectas'}`);
+  doc.text(parts.join('  ·  ') || `${m.entregas} entregas`, R-16, py+35, {align:'right'});
+
+  // monto en letras
+  let yy=py+ph+18;
+  doc.setFont('helvetica','italic'); doc.setFontSize(9.5); doc.setTextColor(...ink);
+  const letras=doc.splitTextToSize(numeroALetras(total)+'.', R-L);
+  doc.text(letras, L, yy); yy+=letras.length*13+8;
+
+  // concepto
+  doc.setFont('helvetica','normal'); doc.setFontSize(9.5); doc.setTextColor(...muted);
+  let cuerpo;
+  if(m.descripcion){
+    cuerpo=m.descripcion;
+  } else {
+    const dp=[];
+    if(m.entregasStd) dp.push(`${m.entregasStd} ${m.entregasStd===1?'entrega estándar':'entregas estándar'}`);
+    if(m.entregasExp) dp.push(`${m.entregasExp} ${m.entregasExp===1?'entrega express':'entregas express'}`);
+    if(rec) dp.push(`${rec} ${rec===1?'recolecta':'recolectas'}`);
+    const detalle = dp.join(' y ') || `${m.entregas} entregas`;
+    cuerpo=`En concepto de pago por servicios de mensajería (${detalle}) durante el período ${periodo}.`;
+  }
+  if(desc>0) cuerpo += ` Incluye un descuento de ${fmtQ(desc)}${m.motivo?` por ${m.motivo}`:''}.`;
+  const lc=doc.splitTextToSize(cuerpo, R-L);
+  doc.text(lc, L, yy);
+
+  // firma
+  const fy=y0+h-32;
+  doc.setDrawColor(150,162,152); doc.setLineWidth(0.8); doc.line(R-210, fy, R, fy);
+  doc.setFont('helvetica','normal'); doc.setFontSize(8); doc.setTextColor(...muted);
+  doc.text('Firma de quien recibe', R-105, fy+13, {align:'center'});
+  doc.setFont('helvetica','bold'); doc.setFontSize(9.5); doc.setTextColor(...greenDk);
+  doc.text('Recibí conforme', L, fy+2);
+  doc.setFont('helvetica','normal'); doc.setFontSize(7.5); doc.setTextColor(...muted);
+  doc.text('Dropper · Smart Delivery', L, fy+14);
+}
+function buildRecibosPDF(sel, periodo){
+  const { jsPDF }=window.jspdf;
+  const doc=new jsPDF({unit:'pt',format:'letter'}); // carta: 2 recibos = media carta c/u
+  const PW=doc.internal.pageSize.getWidth(), PH=doc.internal.pageSize.getHeight(), M=40;
+  const today=new Date(), p=x=>String(x).padStart(2,'0');
+  const fechaHoy=`${p(today.getDate())}/${p(today.getMonth()+1)}/${today.getFullYear()}`;
+  const folioBase=`${today.getFullYear()}${p(today.getMonth()+1)}${p(today.getDate())}`;
+  const gap=24;
+  const blockH=(PH-M*2-gap)/2; // dos recibos por página
+  sel.forEach((m,i)=>{
+    const slot=i%2;
+    if(i>0 && slot===0) doc.addPage();
+    const y0=M+slot*(blockH+gap);
+    drawRecibo(doc, m, periodo, y0, blockH, `${folioBase}-${p(i+1)}`, fechaHoy);
+    if(slot===0 && i!==sel.length-1){ // línea de corte entre los dos recibos
+      const ly=M+blockH+gap/2;
+      doc.setDrawColor(190,200,192); doc.setLineWidth(0.6); doc.setLineDashPattern([3,3],0);
+      doc.line(M+18, ly, PW-M-18, ly);
+      doc.setLineDashPattern([],0);
+    }
+  });
+  return doc;
+}
+
+/* ---------- descargas ---------- */
+function saveBlob(blob,name){
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a'); a.href=url; a.download=name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),1500);
+}
+async function downloadDetailExcel(i){
+  const m=MENS[i]; status('Generando detalle de <b style="margin:0 4px">'+esc(m.name)+'</b>…','work');
+  try{
+    const wb=await buildDetailWorkbook(m,getRate(),getRateExp(),getRateRec(),periodoTexto());
+    const buf=await wb.xlsx.writeBuffer();
+    saveBlob(new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}),`Pago_${safeName(m.name)}.xlsx`);
+    hideStatus();
+  }catch(err){ console.error(err); status('Error generando el detalle: '+err.message,'err'); }
+}
+function downloadDetailPDF(i){
+  const m=MENS[i]; status('Generando PDF de <b style="margin:0 4px">'+esc(m.name)+'</b>…','work');
+  try{ buildDetailPDF(m,getRate(),getRateExp(),getRateRec(),periodoTexto()).save(`Pago_${safeName(m.name)}.pdf`); hideStatus(); }
+  catch(err){ console.error(err); status('Error generando el PDF: '+err.message,'err'); }
+}
+
+$('#btn-planilla-xlsx').addEventListener('click',async()=>{
+  const sel=getSelected(); if(!sel.length){ status('Seleccioná al menos un mensajero.','err'); return; }
+  status('Generando planilla (Excel)…','work');
+  try{
+    const wb=await buildPlanillaWorkbook(sel,getRate(),getRateExp(),getRateRec(),periodoTexto());
+    const buf=await wb.xlsx.writeBuffer();
+    saveBlob(new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}),'Planilla_Pagos_Dropper.xlsx');
+    hideStatus();
+  }catch(err){ console.error(err); status('Error generando la planilla: '+err.message,'err'); }
+});
+$('#btn-planilla-pdf').addEventListener('click',()=>{
+  const sel=getSelected(); if(!sel.length){ status('Seleccioná al menos un mensajero.','err'); return; }
+  status('Generando planilla (PDF)…','work');
+  try{ buildPlanillaPDF(sel,getRate(),getRateExp(),getRateRec(),periodoTexto()).save('Planilla_Pagos_Dropper.pdf'); hideStatus(); }
+  catch(err){ console.error(err); status('Error generando la planilla: '+err.message,'err'); }
+});
+async function registrarRecibos(sel){
+  const periodo=periodoTexto(), today=new Date(), p=x=>String(x).padStart(2,'0');
+  const folioBase=`${today.getFullYear()}${p(today.getMonth()+1)}${p(today.getDate())}`;
+  let marcados=0, reimpresos=0, recibos=0;
+  for(let i=0;i<sel.length;i++){
+    const m=sel[i];
+    const trackable=[...new Set(m.rows.map(r=>r.idorden).filter(Boolean).map(k=>String(k)))];
+    const newKeys=trackable.filter(k=>!PAID_KEYS.has(k));
+    // Si todos sus envíos ya tienen recibo, es una reimpresión: no duplicamos.
+    if(trackable.length>0 && newKeys.length===0){ reimpresos++; continue; }
+    const { data, error }=await window.sb.from('receipts').insert({
+      created_by:PAGO_USER.id, created_by_email:PAGO_USER.email||null,
+      folio:`${folioBase}-${p(i+1)}`, messenger_name:m.name, period_text:periodo,
+      deliveries_count:m.entregas, pickups_count:m.recolectas||0,
+      discount:Number((m.descuento||0).toFixed(2)), discount_reason:m.motivo||null,
+      description:m.descripcion||null, total_paid:Number(m.pago.toFixed(2)), status:'activo',
+    }).select('id').single();
+    if(error) throw error;
+    recibos++;
+    if(newKeys.length){
+      const rows=newKeys.map(k=>({created_by:PAGO_USER.id, order_key:k, receipt_id:data.id, messenger_name:m.name}));
+      const { error:e2 }=await window.sb.from('paid_deliveries').insert(rows);
+      if(e2) throw e2;
+      marcados+=newKeys.length;
+    }
+  }
+  return {marcados, reimpresos, recibos};
+}
+$('#btn-recibos').addEventListener('click',async()=>{
+  const sel=getSelected(); if(!sel.length){ status('Seleccioná al menos un mensajero.','err'); return; }
+  status('Generando '+sel.length+' recibo'+(sel.length>1?'s':'')+'…','work');
+  try{
+    buildRecibosPDF(sel,periodoTexto()).save('Recibos_Pagos_Dropper.pdf');
+    if(window.sb && PAGO_USER){
+      const r=await registrarRecibos(sel);
+      await refreshPaidKeys();
+      render();
+      let msg='✓ Recibos generados.';
+      if(r.marcados) msg+=` ${r.marcados} envío${r.marcados>1?'s':''} marcado${r.marcados>1?'s':''} como pagado${r.marcados>1?'s':''}.`;
+      if(r.reimpresos) msg+=` ${r.reimpresos} ya tenía${r.reimpresos>1?'n':''} recibo (reimpresión, no se registró de nuevo).`;
+      status(msg,'');
+      setTimeout(hideStatus,5000);
+    } else { hideStatus(); }
+  }catch(err){ console.error(err); status('Error generando/registrando los recibos: '+err.message,'err'); }
+});
+$('#btn-details-zip').addEventListener('click',async()=>{
+  const sel=getSelected(); if(!sel.length){ status('Seleccioná al menos un mensajero.','err'); return; }
+  status('Generando '+sel.length+' detalles…','work');
+  try{
+    const zip=new JSZip(), re=getRate(), rExp=getRateExp(), rr=getRateRec(), periodo=periodoTexto();
+    for(const m of sel){ const wb=await buildDetailWorkbook(m,re,rExp,rr,periodo); const buf=await wb.xlsx.writeBuffer(); zip.file(`Pago_${safeName(m.name)}.xlsx`,buf); }
+    const blob=await zip.generateAsync({type:'blob'});
+    saveBlob(blob,'Detalles_Pagos_Dropper.zip'); hideStatus();
+  }catch(err){ console.error(err); status('Error generando el ZIP: '+err.message,'err'); }
+});
+
+let allOn=true;
+$('#btn-toggle').addEventListener('click',()=>{
+  allOn=!allOn;
+  document.querySelectorAll('.chk').forEach(x=>x.checked=allOn);
+  $('#btn-toggle').textContent=allOn?'Deseleccionar todos':'Seleccionar todos';
+});
+
+/* rate en vivo + filtro */
+$('#rate').addEventListener('input',()=>{ if(MENS.length){ recompute(); render(); } });
+$('#rate-exp').addEventListener('input',()=>{ if(MENS.length){ recompute(); render(); } });
+$('#rate-rec').addEventListener('input',()=>{ if(MENS.length){ recompute(); render(); } });
+$('#df-apply').addEventListener('click',()=>{ if(RAW_DATA.length){ buildView(); allOn=true; $('#btn-toggle').textContent='Deseleccionar todos'; } });
+$('#df-clear').addEventListener('click',()=>{ $('#df-from').value=''; $('#df-to').value=''; if(RAW_DATA.length){ buildView(); allOn=true; $('#btn-toggle').textContent='Deseleccionar todos'; } });
+
+/* guardar en historial */
+let PAGO_USER=null;
+$('#btn-save-hist').addEventListener('click',async()=>{
+  if(!window.sb || !PAGO_USER){ status('Iniciá sesión para guardar en el historial.','err'); return; }
+  if(!MENS.length){ status('Primero cargá un Excel.','err'); return; }
+  status('Guardando en el historial…','work');
+  try{
+    const t=totals();
+    const payload={
+      created_by: PAGO_USER.id,
+      created_by_email: PAGO_USER.email||null,
+      file_name: window.LAST_FILENAME||null,
+      period_text: periodoTexto(),
+      rate_entrega: getRate(),
+      rate_recolecta: getRateRec(),
+      messengers_count: t.mens,
+      deliveries_count: t.entregas,
+      pickups_count: t.recolectas,
+      discounts_total: Number(t.descuentos.toFixed(2)),
+      total_paid: Number(t.pago.toFixed(2)),
+      messengers: MENS.map(m=>({
+        nombre:m.name, entregas:m.entregas, estandar:m.entregasStd||0, express:m.entregasExp||0,
+        recolectas:m.recolectas||0, descuento:Number((m.descuento||0).toFixed(2)), motivo:m.motivo||'',
+        descripcion:m.descripcion||'', pago:Number(m.pago.toFixed(2)),
+      })),
+    };
+    const { error }=await window.sb.from('payment_sessions').insert(payload);
+    if(error) throw error;
+    status('✓ Guardado en el historial. Lo ves en la pestaña <b style="margin:0 4px">Historial → Pagos</b>.','');
+    setTimeout(hideStatus,3500);
+  }catch(err){ console.error(err); status('No se pudo guardar en el historial: '+err.message,'err'); }
+});
+
+/* sesión */
+$('#logout').addEventListener('click',e=>{ e.preventDefault(); window.dropperAuth.signOut(); });
+(async function init(){
+  const guard=await window.dropperAuth.requireSession();
+  if(guard===null) return;
+  if(guard.previewMode){ $('#notice').classList.add('show'); const b=$('#btn-save-hist'); if(b) b.style.display='none'; return; }
+  PAGO_USER=guard.user;
+  window.dropperNav.setUser(guard.user.email||'');
+})();
+</script>
+</body>
+</html>
