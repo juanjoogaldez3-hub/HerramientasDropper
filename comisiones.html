@@ -159,21 +159,14 @@
     <button class="btn btn-ghost df-btn" id="df-clear">Todo</button>
   </div>
 
-  <!-- Barra de % de comisión + columna de precio -->
+  <!-- Barra de % de comisión -->
   <div class="ratebar" id="ratebar">
     <span class="rb-label">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="5" x2="5" y2="19"/><circle cx="6.5" cy="6.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/></svg>
       Comisión general
     </span>
     <span class="rb-input"><input type="number" id="rate" min="0" step="0.1" value="3"> <span>%</span></span>
-    <span class="rb-col">
-      Precio del paquete en la columna:
-      <select id="col-precio" title="Columna del Excel con el precio del paquete"></select>
-    </span>
-    <span class="rb-col">
-      Método de pago en la columna:
-      <select id="col-metodo" title="Columna del Excel con el método de pago"></select>
-    </span>
+    <span class="rb-col" id="col-info"></span>
     <span class="rb-note">Podés ajustar el % individual por cliente en cada tarjeta.</span>
   </div>
 
@@ -244,7 +237,13 @@ function hideStatus(){ $('#status').className='status'; }
 function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
 function norm(s){ return String(s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,''); }
 function fmtQ(n){ return 'Q'+Number(n||0).toLocaleString('es-GT',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+// Comisión como descuento: "-Q30.00" (para PDF)
+function fmtQneg(n){ n=Number(n||0); return (n>0?'-':'')+'Q'+Math.abs(n).toLocaleString('es-GT',{minimumFractionDigits:2,maximumFractionDigits:2}); }
 function nf(n){ return Number(n||0).toLocaleString('es-GT'); }
+// Formato de número Excel: comisión negativa en rojo
+const COMI_FMT='"Q"#,##0.00;[Red]-"Q"#,##0.00';
+const RED_ARGB='FFC81E14';       // rojo para Excel
+const PDF_RED=[200,30,20];       // rojo para PDF
 function fmtDate(v){
   let d;
   if(v instanceof Date) d=v;
@@ -332,6 +331,10 @@ async function parseWorkbook(buf){
     status('No encontré la columna del <b>cliente</b>. Asegurate de que el Excel tenga una columna con el nombre del cliente/tienda.','err');
     return;
   }
+  if(!COL.precio){
+    status('No encontré la columna <b>"Precio del paquete"</b>. Revisá que el Excel la tenga con ese nombre.','err');
+    return;
+  }
 
   // guardamos todas las filas con el precio parseado desde la columna elegida
   RAW_DATA=rowsRaw.map((r,i)=>{
@@ -352,44 +355,26 @@ async function parseWorkbook(buf){
 
   if(!RAW_DATA.length){ status('Encontré la columna de cliente pero todas las filas están vacías en ese campo.','err'); return; }
 
-  buildColSelect();
+  showColInfo();
   applyPrecio();
   buildMethodChips();
   hideStatus();
   if(!COL.metodopago){
-    status('⚠ No encontré una columna de <b>método de pago</b>. Se calcula la comisión sobre <b>todos</b> los pedidos con precio &gt; 0. Si tu Excel tiene la columna, elegí bien el archivo.','err');
+    status('⚠ No encontré la columna <b>"Método de pago real"</b>. Se calcula la comisión sobre <b>todos</b> los pedidos con precio &gt; 0.','err');
   }
   setupDateFilter();
   buildView();
 }
 
-// Llena los <select> de columnas (precio y método) y marca las detectadas.
-function buildColSelect(){
-  if(!COL.precio){ COL.precio=HEADERS[0]; }
-  $('#col-precio').innerHTML=HEADERS.map(h=>`<option value="${esc(h)}"${h===COL.precio?' selected':''}>${esc(h)}</option>`).join('');
-  const opts=['<option value="">— ninguna (todos los pedidos) —</option>']
-    .concat(HEADERS.map(h=>`<option value="${esc(h)}"${h===COL.metodopago?' selected':''}>${esc(h)}</option>`));
-  $('#col-metodo').innerHTML=opts.join('');
+// Muestra (solo informativo) qué columnas del Excel se están usando.
+function showColInfo(){
+  const el=$('#col-info'); if(!el) return;
+  el.innerHTML=`Precio: <b>${esc(COL.precio||'—')}</b> · Método de pago: <b>${esc(COL.metodopago||'no encontrada')}</b>`;
 }
-$('#col-precio').addEventListener('change',()=>{
-  COL.precio=$('#col-precio').value;
-  applyPrecio();
-  if(RAW_DATA.length) buildView();
-});
-$('#col-metodo').addEventListener('change',()=>{
-  COL.metodopago=$('#col-metodo').value||null;
-  applyMetodo();
-  buildMethodChips();
-  if(RAW_DATA.length) buildView();
-});
 
 // Recalcula el precio del paquete de cada fila según la columna seleccionada.
 function applyPrecio(){
   RAW_DATA.forEach(r=>{ r.precio=parseMoney(r._txt[COL.precio]??r._raw[COL.precio]); });
-}
-// Recalcula el método de pago de cada fila según la columna seleccionada.
-function applyMetodo(){
-  RAW_DATA.forEach(r=>{ r.metodo=COL.metodopago?String(r._txt[COL.metodopago]??r._raw[COL.metodopago]??'').trim():''; });
 }
 
 // Lista los métodos de pago presentes y arma los chips seleccionables.
@@ -606,7 +591,7 @@ async function buildConsolidadoWorkbook(sel,periodo){
     const c2=ws.getCell(r,2); c2.value=c.pedidos; c2.alignment={horizontal:'center'};
     const c3=ws.getCell(r,3); c3.value=c.cobrado; c3.numFmt=TARIFA_FMT; c3.alignment={horizontal:'center'};
     const c4=ws.getCell(r,4); c4.value=c.pct/100; c4.numFmt='0.0%'; c4.alignment={horizontal:'center'};
-    const c5=ws.getCell(r,5); c5.value=c.comision; c5.numFmt=TARIFA_FMT; c5.alignment={horizontal:'center'};
+    const c5=ws.getCell(r,5); c5.value=-c.comision; c5.numFmt=COMI_FMT; c5.alignment={horizontal:'center'};
     [1,2,3,4,5].forEach(col=>{const x=ws.getCell(r,col); x.fill=fill(even?WHITE:LIME); x.border=bd; x.font={name:'Arial',size:10,color:{argb:TXT}};});
     r++;
   });
@@ -615,7 +600,7 @@ async function buildConsolidadoWorkbook(sel,periodo){
   const colTot=(col,letra,res,fmt)=>{ const c=ws.getCell(r,col); c.value={formula:`SUM(${letra}${fd}:${letra}${ld})`,result:res}; if(fmt) c.numFmt=fmt; c.font={name:'Arial',bold:true,size:11,color:{argb:WHITE}}; c.alignment={horizontal:'center'}; };
   colTot(2,'B',sel.reduce((s,c)=>s+c.pedidos,0));
   colTot(3,'C',sel.reduce((s,c)=>s+c.cobrado,0),TARIFA_FMT);
-  colTot(5,'E',sel.reduce((s,c)=>s+c.comision,0),TARIFA_FMT);
+  colTot(5,'E',-sel.reduce((s,c)=>s+c.comision,0),TARIFA_FMT);
   [1,2,3,4,5].forEach(col=>{ws.getCell(r,col).fill=fill(GD); ws.getCell(r,col).border=bd;});
   ws.views=[{state:'frozen',ySplit:hr,showGridLines:false}];
   return wb;
@@ -636,19 +621,20 @@ function buildConsolidadoPDF(sel,periodo){
   let y=92;
   doc.setFont('helvetica','normal'); doc.setFontSize(10); doc.setTextColor(...txt);
   doc.text(`Clientes: ${sel.length}    Pedidos con comisión: ${totPed}    Precio de paquetes: ${fmtQ(totCob)}`,M,y);
-  doc.setFont('helvetica','bold'); doc.setTextColor(...greenDk);
-  doc.text(`Comisión total: ${fmtQ(totCom)}`,M,y+16);
+  doc.setFont('helvetica','bold'); doc.setTextColor(...PDF_RED);
+  doc.text(`Comisión total: ${fmtQneg(totCom)}`,M,y+16);
 
   doc.autoTable({
     startY:y+30,
     head:[['Cliente','Pedidos','Precio paquetes','% Comisión','Comisión']],
-    body:sel.map(c=>[c.name,c.pedidos,fmtQ(c.cobrado),c.pct+'%',fmtQ(c.comision)]),
-    foot:[['TOTAL',totPed,fmtQ(totCob),'',fmtQ(totCom)]],
+    body:sel.map(c=>[c.name,c.pedidos,fmtQ(c.cobrado),c.pct+'%',fmtQneg(c.comision)]),
+    foot:[['TOTAL',totPed,fmtQ(totCob),'',fmtQneg(totCom)]],
     styles:{font:'helvetica',fontSize:8.5,cellPadding:4,textColor:txt,lineColor:[213,218,222],lineWidth:0.5},
     headStyles:{fillColor:green,textColor:[255,255,255],fontStyle:'bold'},
     footStyles:{fillColor:greenDk,textColor:[255,255,255],fontStyle:'bold'},
     alternateRowStyles:{fillColor:lime},
     columnStyles:{0:{cellWidth:'auto'},1:{cellWidth:60,halign:'center'},2:{cellWidth:96,halign:'right'},3:{cellWidth:74,halign:'center'},4:{cellWidth:96,halign:'right'}},
+    didParseCell:(d)=>{ if(d.section==='body' && d.column.index===4) d.cell.styles.textColor=PDF_RED; },
     margin:{left:M,right:M},
     didDrawPage:()=>{
       const ph=doc.internal.pageSize.getHeight();
@@ -687,44 +673,54 @@ async function buildDetailWorkbook(c,periodo){
   const G='FF1F7A3D',GD='FF14572A',LIME='FFDDF0E2',GREY='FFF2F4F5',WHITE='FFFFFFFF',TXT='FF1A1A1A',BLACK='FF0C0F0D';
   const fill=k=>({type:'pattern',pattern:'solid',fgColor:{argb:k}});
   const bd={top:{style:'thin',color:{argb:'FFD5DADE'}},bottom:{style:'thin',color:{argb:'FFD5DADE'}},left:{style:'thin',color:{argb:'FFD5DADE'}},right:{style:'thin',color:{argb:'FFD5DADE'}}};
-  [14,16,26,16,16].forEach((w,i)=>ws.getColumn(i+1).width=w);
+  [14,18,24,16,14,16].forEach((w,i)=>ws.getColumn(i+1).width=w);
 
-  ws.mergeCells('A1:E1'); ws.getRow(1).height=28;
+  ws.mergeCells('A1:F1'); ws.getRow(1).height=28;
   let t=ws.getCell('A1'); t.value='Dropper · Comisión de Cobro Contra Entrega';
   t.font={name:'Arial',bold:true,size:13,color:{argb:WHITE}}; t.fill=fill(BLACK);
   t.alignment={vertical:'middle',horizontal:'left',indent:1};
 
   const rows=sortRows(c.rows);
-  const info=[['Cliente:',c.name],['Período:',periodo],['Pedidos con comisión:',c.pedidos],['Precio de paquetes:',fmtQ(c.cobrado)],['% de comisión:',c.pct+'%']];
+  const info=[['Cliente:',c.name],['Período:',periodo],['Pedidos con comisión:',c.pedidos],['Precio de paquetes:',fmtQ(c.cobrado)],['% de comisión:',c.pct+'%'],['Comisión a cobrar:',fmtQneg(c.comision)]];
   info.forEach((p,i)=>{
     const r=3+i;
     ws.getCell(`A${r}`).value=p[0]; ws.getCell(`A${r}`).font={name:'Arial',bold:true,size:10,color:{argb:TXT}};
-    ws.getCell(`B${r}`).value=p[1]; ws.getCell(`B${r}`).font={name:'Arial',size:10,color:{argb:TXT}};
+    const red=/Comisión a cobrar/.test(p[0]);
+    ws.getCell(`B${r}`).value=p[1]; ws.getCell(`B${r}`).font={name:'Arial',bold:red,size:10,color:{argb:red?RED_ARGB:TXT}};
   });
   const totRow=3+info.length;
-  ws.getCell(`A${totRow}`).value='Comisión a cobrar:'; ws.getCell(`A${totRow}`).font={name:'Arial',bold:true,size:11,color:{argb:GD}};
-  const tc=ws.getCell(`B${totRow}`); tc.value=c.comision; tc.numFmt=TARIFA_FMT; tc.font={name:'Arial',bold:true,size:11,color:{argb:GD}};
+  ws.getCell(`A${totRow}`).value='Total a recibir el cliente:'; ws.getCell(`A${totRow}`).font={name:'Arial',bold:true,size:11,color:{argb:GD}};
+  const tc=ws.getCell(`B${totRow}`); tc.value=c.cobrado-c.comision; tc.numFmt=TARIFA_FMT; tc.font={name:'Arial',bold:true,size:11,color:{argb:GD}};
 
   let ds=totRow+2;
-  ws.mergeCells(`A${ds}:E${ds}`); let h=ws.getCell(`A${ds}`); h.value='Pedidos con comisión';
+  ws.mergeCells(`A${ds}:F${ds}`); let h=ws.getCell(`A${ds}`); h.value='Pedidos con comisión';
   h.font={name:'Arial',bold:true,size:11,color:{argb:WHITE}}; h.fill=fill(G);
   h.alignment={vertical:'middle',horizontal:'left',indent:1}; ws.getRow(ds).height=22;
   const dh=ds+1;
-  ['Fecha','No. de Orden','Método de pago','Municipio','Precio paquete'].forEach((x,j)=>{
+  ['Fecha','No. de Orden','Método de pago','Precio del paquete','Comisión','Total a recibir'].forEach((x,j)=>{
     const cell=ws.getCell(dh,j+1); cell.value=x;
     cell.font={name:'Arial',bold:true,size:9,color:{argb:TXT}}; cell.fill=fill(GREY); cell.border=bd;
-    cell.alignment={horizontal:j===4?'center':'left',vertical:'middle'};
+    cell.alignment={horizontal:j>=3?'center':'left',vertical:'middle'};
   });
   const rstart=dh+1;
   rows.forEach((r,i)=>{
-    const rr=rstart+i, even=i%2===0;
-    const cells=[r.fecha?fmtDate(r.fecha):'',r.norden||r.idorden,r.metodo,r.ciudad,r.precio];
+    const rr=rstart+i, even=i%2===0, com=r.precio*c.pct/100;
+    const cells=[r.fecha?fmtDate(r.fecha):'',r.norden||r.idorden,r.metodo,r.precio,-com,r.precio-com];
     cells.forEach((v,j)=>{
       const cell=ws.getCell(rr,j+1); cell.value=v;
       cell.fill=fill(even?WHITE:LIME); cell.border=bd; cell.font={name:'Arial',size:9,color:{argb:TXT}};
-      cell.alignment={horizontal:j===4?'center':'left',vertical:'middle'};
-      if(j===4) cell.numFmt=TARIFA_FMT;
+      cell.alignment={horizontal:j>=3?'center':'left',vertical:'middle'};
+      if(j===4) cell.numFmt=COMI_FMT; else if(j>=3) cell.numFmt=TARIFA_FMT;
     });
+  });
+  // Fila de totales
+  const rtot=rstart+rows.length;
+  const totCells=['','','Totales',c.cobrado,-c.comision,c.cobrado-c.comision];
+  totCells.forEach((v,j)=>{
+    const cell=ws.getCell(rtot,j+1); cell.value=v;
+    cell.fill=fill(GD); cell.border=bd; cell.font={name:'Arial',bold:true,size:9,color:{argb:WHITE}};
+    cell.alignment={horizontal:j>=3?'center':'left',vertical:'middle'};
+    if(j>=3) cell.numFmt=TARIFA_FMT;
   });
   ws.views=[{state:'frozen',ySplit:rstart-1,showGridLines:false}];
   return wb;
@@ -746,19 +742,22 @@ function buildDetailPDF(c,periodo){
   doc.text(String(c.name),M,90);
   doc.setFont('helvetica','normal'); doc.setFontSize(9.5); doc.setTextColor(...txt);
   doc.text(`Pedidos con comisión: ${c.pedidos}    Precio de paquetes: ${fmtQ(c.cobrado)}    Comisión: ${c.pct}%`,M,106);
-  doc.setFont('helvetica','bold'); doc.setTextColor(...greenDk);
-  doc.text(`Comisión a cobrar: ${fmtQ(c.comision)}`,M,122);
+  doc.setFont('helvetica','bold');
+  const s1=`Comisión a cobrar: ${fmtQneg(c.comision)}`;
+  doc.setTextColor(...PDF_RED); doc.text(s1,M,122);
+  doc.setTextColor(...greenDk); doc.text(`    Total a recibir el cliente: ${fmtQ(c.cobrado-c.comision)}`,M+doc.getTextWidth(s1),122);
 
   doc.autoTable({
     startY:138,
-    head:[['Fecha','No. de Orden','Método de pago','Municipio','Precio paquete']],
-    body:rows.map(r=>[r.fecha?fmtDate(r.fecha):'',r.norden||r.idorden,r.metodo,r.ciudad,fmtQ(r.precio)]),
-    foot:[['','','','Precio de paquetes',fmtQ(c.cobrado)]],
+    head:[['Fecha','No. de Orden','Método de pago','Precio del paquete','Comisión','Total a recibir']],
+    body:rows.map(r=>{ const com=r.precio*c.pct/100; return [r.fecha?fmtDate(r.fecha):'',r.norden||r.idorden,r.metodo,fmtQ(r.precio),fmtQneg(com),fmtQ(r.precio-com)]; }),
+    foot:[['','','Totales',fmtQ(c.cobrado),fmtQneg(c.comision),fmtQ(c.cobrado-c.comision)]],
     styles:{font:'helvetica',fontSize:8,cellPadding:3.5,textColor:txt,lineColor:[213,218,222],lineWidth:0.5},
     headStyles:{fillColor:green,textColor:[255,255,255],fontStyle:'bold'},
     footStyles:{fillColor:greenDk,textColor:[255,255,255],fontStyle:'bold'},
     alternateRowStyles:{fillColor:lime},
-    columnStyles:{0:{cellWidth:64},1:{cellWidth:'auto'},2:{cellWidth:'auto'},3:{cellWidth:'auto'},4:{cellWidth:92,halign:'right'}},
+    columnStyles:{0:{cellWidth:56},1:{cellWidth:'auto'},2:{cellWidth:'auto'},3:{cellWidth:80,halign:'right'},4:{cellWidth:66,halign:'right'},5:{cellWidth:80,halign:'right'}},
+    didParseCell:(d)=>{ if(d.section==='body' && d.column.index===4) d.cell.styles.textColor=PDF_RED; },
     margin:{left:M,right:M},
     didDrawPage:()=>{
       const ph=doc.internal.pageSize.getHeight();
