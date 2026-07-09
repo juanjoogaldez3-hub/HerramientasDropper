@@ -163,6 +163,44 @@
   .topbar .nav-logout{font-size:.8rem;font-weight:600;color:#cfe6d3;border:1px solid rgba(255,255,255,.22);
     border-radius:9px;padding:6px 12px;text-decoration:none;transition:.15s ease;white-space:nowrap}
   .topbar .nav-logout:hover{background:rgba(255,255,255,.08);color:#fff;border-color:rgba(255,255,255,.4)}
+
+  /* Reporte de rutas (distribución por municipio) */
+  .routes{display:none;margin-top:34px}
+  .routes.show{display:block;animation:rise .5s ease both}
+  .routes .rhead{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14px}
+  .routes .rhead h3{font-family:'Sora',sans-serif;font-weight:700;font-size:1.05rem}
+  .routes .rhead h3 small{display:block;font-family:'Plus Jakarta Sans',sans-serif;font-weight:500;font-size:.8rem;color:var(--muted);margin-top:2px}
+  .rctrl{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .rctrl label{font-size:.82rem;color:var(--muted);font-weight:600}
+  .rctrl input{width:64px;padding:8px 10px;border:1px solid #cdd8cf;border-radius:9px;font-family:inherit;font-size:.9rem;text-align:center;color:var(--ink)}
+  .rctrl input:focus{outline:none;border-color:var(--green)}
+  .rstats{display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap}
+  .rstats .s{flex:1;min-width:120px;background:var(--white);border:1px solid var(--line);border-radius:12px;padding:12px 15px;box-shadow:var(--shadow)}
+  .rstats .s .k{font-size:.72rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:600}
+  .rstats .s .v{font-family:'Sora',sans-serif;font-weight:800;font-size:1.3rem;color:var(--green-dk);margin-top:2px}
+  .rmuni{background:var(--white);border:1px solid var(--line);border-radius:12px;margin-bottom:9px;overflow:hidden;box-shadow:var(--shadow)}
+  .rmuni-head{display:grid;grid-template-columns:auto 1.4fr 1.1fr auto auto;gap:12px;align-items:center;padding:13px 16px;cursor:pointer;transition:.15s}
+  .rmuni-head:hover{background:#fbfdfb}
+  .caret{color:var(--green);font-size:.8rem;transition:transform .18s;display:inline-block}
+  .rmuni.open .caret{transform:rotate(90deg)}
+  .rmuni-name{font-family:'Sora',sans-serif;font-weight:700;font-size:.98rem;letter-spacing:-.01em}
+  .rmuni-bar{height:9px;background:var(--grey);border-radius:6px;overflow:hidden}
+  .rmuni-bar span{display:block;height:100%;background:linear-gradient(90deg,var(--lime),var(--green));border-radius:6px}
+  .rmuni-num{font-family:'Sora',sans-serif;font-weight:700;font-size:1rem;color:var(--green-dk);text-align:right;white-space:nowrap}
+  .rmuni-num small{color:var(--muted);font-weight:600;font-size:.72rem;margin-left:3px}
+  .rmuni-tags{display:flex;gap:6px;white-space:nowrap}
+  .rmuni-tags span{font-size:.72rem;font-weight:600;color:var(--muted);background:var(--grey);border-radius:20px;padding:3px 9px}
+  .rmuni-tags .moto{color:#fff;background:var(--green)}
+  .rlocs{display:none;padding:4px 16px 12px 40px;border-top:1px solid var(--line);background:#fbfdfb}
+  .rmuni.open .rlocs{display:block}
+  .rloc{display:flex;justify-content:space-between;align-items:center;padding:6px 0;font-size:.86rem;border-bottom:1px dashed #e8ede9}
+  .rloc:last-child{border-bottom:none}
+  .rloc span{color:var(--ink)}
+  .rloc b{font-family:'Sora',sans-serif;color:var(--green-dk)}
+  @media(max-width:560px){
+    .rmuni-head{grid-template-columns:auto 1fr auto;}
+    .rmuni-bar,.rmuni-tags{display:none}
+  }
 </style>
 </head>
 <body>
@@ -254,6 +292,26 @@
     <div class="head"><span class="dot"></span><h3>Correcciones aplicadas (municipio y tarifa)</h3></div>
     <div id="alert-list"></div>
     <div class="note">Estas direcciones estaban como "Ciudad de Guatemala" pero la colonia/sector indica un municipio aledaño. Se reclasificó el municipio y se ajustó la tarifa a la que <b>ese cliente</b> cobra en ese municipio (tomada de sus propios envíos). Los reportes ya salen corregidos.</div>
+  </div>
+
+  <div class="routes" id="routes">
+    <div class="rhead">
+      <h3>Distribución por municipio<small>Para planear motoristas y separar rutas</small></h3>
+      <div class="rctrl">
+        <label>Envíos por motorista:</label>
+        <input type="number" id="r-cap" value="25" min="1">
+        <button class="btn btn-ghost" id="btn-routes-xlsx">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Descargar Excel
+        </button>
+      </div>
+    </div>
+    <div class="rstats">
+      <div class="s"><div class="k">Municipios cubiertos</div><div class="v" id="r-muni">0</div></div>
+      <div class="s"><div class="k">Localidades</div><div class="v" id="r-loc">0</div></div>
+      <div class="s"><div class="k">Envíos totales</div><div class="v" id="r-env">0</div></div>
+    </div>
+    <div id="routes-list"></div>
   </div>
 
   <footer>Dropper · Smart Delivery — procesa todo en tu navegador, ningún archivo se sube a internet.</footer>
@@ -498,6 +556,8 @@ function render(changes){
   grid.querySelectorAll('[data-dl]').forEach(b=>b.addEventListener('click',()=>downloadOne(+b.dataset.dl)));
   grid.querySelectorAll('[data-pdf]').forEach(b=>b.addEventListener('click',()=>downloadPdfOne(+b.dataset.pdf)));
 
+  renderRoutes();
+
   const box=$('#alerts'), list=$('#alert-list');
   if(!changes.length){ box.classList.remove('show'); return; }
   list.innerHTML=changes.map(ch=>{
@@ -633,6 +693,125 @@ async function buildWorkbook(c){
 }
 
 function safeName(s){ return String(s).replace(/[^\p{L}\p{N}]+/gu,'_').replace(/^_+|_+$/g,''); }
+
+/* ============================================================
+   Reporte de rutas — Distribución por municipio / localidad
+   (para planear motoristas y separar rutas)
+   ============================================================ */
+let ROUTE_CAP=25;
+function allRows(){ return CLIENTS.flatMap(c=>c.rows); }
+function routeAgg(){
+  const rows=allRows();
+  const muni=new Map();
+  rows.forEach(r=>{
+    const m=(r.ciudad||'').trim()||'(sin municipio)';
+    const l=(r.zona||'').trim()||'(sin localidad)';
+    if(!muni.has(m)) muni.set(m,{count:0,locs:new Map()});
+    const o=muni.get(m); o.count++; o.locs.set(l,(o.locs.get(l)||0)+1);
+  });
+  const total=rows.length;
+  const list=[...muni.entries()].map(([m,o])=>({
+    muni:m, count:o.count,
+    locs:[...o.locs.entries()].map(([loc,n])=>({loc,n})).sort((a,b)=>b.n-a.n||a.loc.localeCompare(b.loc))
+  })).sort((a,b)=>b.count-a.count);
+  return {list,total};
+}
+function renderRoutes(){
+  const {list,total}=routeAgg();
+  const box=$('#routes');
+  if(!total){ box.classList.remove('show'); return; }
+  const totLoc=list.reduce((s,m)=>s+m.locs.length,0);
+  $('#r-muni').textContent=list.length;
+  $('#r-loc').textContent=totLoc;
+  $('#r-env').textContent=total;
+  const maxC=list[0].count;
+  const cont=$('#routes-list'); cont.innerHTML='';
+  list.forEach((m,i)=>{
+    const moto=Math.max(1,Math.ceil(m.count/ROUTE_CAP));
+    const pct=Math.round(m.count/total*100);
+    const el=document.createElement('div'); el.className='rmuni';
+    el.innerHTML=`
+      <div class="rmuni-head">
+        <span class="caret">▸</span>
+        <div class="rmuni-name">${esc(m.muni)}</div>
+        <div class="rmuni-bar"><span style="width:${Math.max(6,Math.round(m.count/maxC*100))}%"></span></div>
+        <div class="rmuni-num">${m.count}<small>${pct}%</small></div>
+        <div class="rmuni-tags"><span>${m.locs.length} loc.</span><span class="moto">${moto} motorista${moto>1?'s':''}</span></div>
+      </div>
+      <div class="rlocs">${m.locs.map(l=>`<div class="rloc"><span>${esc(l.loc)}</span><b>${l.n}</b></div>`).join('')}</div>`;
+    el.querySelector('.rmuni-head').addEventListener('click',()=>el.classList.toggle('open'));
+    cont.appendChild(el);
+  });
+  box.classList.add('show');
+}
+async function buildRoutesWorkbook(){
+  const {list,total}=routeAgg();
+  const wb=new ExcelJS.Workbook();
+  const ws=wb.addWorksheet('Rutas',{views:[{showGridLines:false}]});
+  const G='FF1F7A3D',GD='FF14572A',LIME='FFDDF0E2',GREY='FFF2F4F5',WHITE='FFFFFFFF',TXT='FF1A1A1A';
+  const fill=c=>({type:'pattern',pattern:'solid',fgColor:{argb:c}});
+  const bd={top:{style:'thin',color:{argb:'FFD5DADE'}},bottom:{style:'thin',color:{argb:'FFD5DADE'}},left:{style:'thin',color:{argb:'FFD5DADE'}},right:{style:'thin',color:{argb:'FFD5DADE'}}};
+  [38,12,12,16].forEach((w,i)=>ws.getColumn(i+1).width=w);
+
+  ws.mergeCells('A1:D1'); ws.getRow(1).height=46;
+  const imgId=wb.addImage({base64:LOGO_B64,extension:'png'});
+  ws.addImage(imgId,{tl:{col:0.12,row:0.18},ext:{width:180,height:40}});
+  ws.mergeCells('A2:D2');
+  let t=ws.getCell('A2'); t.value='Distribución por Municipio · Planeación de Rutas';
+  t.font={name:'Arial',bold:true,size:13,color:{argb:WHITE}};
+  t.alignment={vertical:'middle',horizontal:'left',indent:1}; t.fill=fill(G); ws.getRow(2).height=26;
+
+  ws.getCell('A4').value='Envíos totales:'; ws.getCell('A4').font={name:'Arial',bold:true,size:10,color:{argb:TXT}};
+  ws.getCell('B4').value=total; ws.getCell('B4').font={name:'Arial',size:10,color:{argb:TXT}};
+  ws.getCell('A5').value='Envíos por motorista (capacidad):'; ws.getCell('A5').font={name:'Arial',bold:true,size:10,color:{argb:TXT}};
+  ws.getCell('B5').value=ROUTE_CAP; ws.getCell('B5').font={name:'Arial',size:10,color:{argb:TXT}};
+
+  let r=7;
+  ['Municipio / Localidad','Envíos','% total','Motoristas'].forEach((x,j)=>{
+    const cell=ws.getCell(r,j+1); cell.value=x;
+    cell.font={name:'Arial',bold:true,size:10,color:{argb:TXT}}; cell.fill=fill(GREY); cell.border=bd;
+    cell.alignment={horizontal:j===0?'left':'center'};
+  });
+  r++;
+  list.forEach(m=>{
+    const moto=Math.max(1,Math.ceil(m.count/ROUTE_CAP));
+    const pct=Math.round(m.count/total*100);
+    ws.getCell(r,1).value=m.muni; ws.getCell(r,1).font={name:'Arial',bold:true,size:10,color:{argb:WHITE}}; ws.getCell(r,1).alignment={horizontal:'left',indent:1};
+    ws.getCell(r,2).value=m.count; ws.getCell(r,2).font={name:'Arial',bold:true,size:10,color:{argb:WHITE}}; ws.getCell(r,2).alignment={horizontal:'center'};
+    ws.getCell(r,3).value=pct/100; ws.getCell(r,3).numFmt='0%'; ws.getCell(r,3).font={name:'Arial',bold:true,size:10,color:{argb:WHITE}}; ws.getCell(r,3).alignment={horizontal:'center'};
+    ws.getCell(r,4).value=moto; ws.getCell(r,4).font={name:'Arial',bold:true,size:10,color:{argb:WHITE}}; ws.getCell(r,4).alignment={horizontal:'center'};
+    [1,2,3,4].forEach(c=>{ws.getCell(r,c).fill=fill(G); ws.getCell(r,c).border=bd;});
+    r++;
+    m.locs.forEach((l,k)=>{
+      const even=k%2===0;
+      ws.getCell(r,1).value='     '+l.loc; ws.getCell(r,1).font={name:'Arial',size:9,color:{argb:TXT}}; ws.getCell(r,1).alignment={horizontal:'left'};
+      ws.getCell(r,2).value=l.n; ws.getCell(r,2).font={name:'Arial',size:9,color:{argb:TXT}}; ws.getCell(r,2).alignment={horizontal:'center'};
+      ws.getCell(r,3).value=l.n/total; ws.getCell(r,3).numFmt='0%'; ws.getCell(r,3).font={name:'Arial',size:9,color:{argb:TXT}}; ws.getCell(r,3).alignment={horizontal:'center'};
+      ws.getCell(r,4).value='';
+      [1,2,3,4].forEach(c=>{ws.getCell(r,c).fill=fill(even?WHITE:LIME); ws.getCell(r,c).border=bd;});
+      r++;
+    });
+  });
+  ws.getCell(r,1).value='TOTAL'; ws.getCell(r,1).font={name:'Arial',bold:true,size:11,color:{argb:WHITE}}; ws.getCell(r,1).alignment={horizontal:'left',indent:1};
+  ws.getCell(r,2).value=total; ws.getCell(r,2).font={name:'Arial',bold:true,size:11,color:{argb:WHITE}}; ws.getCell(r,2).alignment={horizontal:'center'};
+  ws.getCell(r,3).value=1; ws.getCell(r,3).numFmt='0%'; ws.getCell(r,3).font={name:'Arial',bold:true,size:11,color:{argb:WHITE}}; ws.getCell(r,3).alignment={horizontal:'center'};
+  ws.getCell(r,4).value=Math.max(1,Math.ceil(total/ROUTE_CAP)); ws.getCell(r,4).font={name:'Arial',bold:true,size:11,color:{argb:WHITE}}; ws.getCell(r,4).alignment={horizontal:'center'};
+  [1,2,3,4].forEach(c=>{ws.getCell(r,c).fill=fill(GD); ws.getCell(r,c).border=bd;});
+
+  ws.views=[{state:'frozen',ySplit:7,showGridLines:false}];
+  return wb;
+}
+async function downloadRoutes(){
+  status('Generando reporte de rutas…','work');
+  try{
+    const wb=await buildRoutesWorkbook();
+    const buf=await wb.xlsx.writeBuffer();
+    saveBlob(new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}),'Dropper_Distribucion_Rutas.xlsx');
+    hideStatus();
+  }catch(err){ console.error(err); status('Error generando el reporte de rutas: '+err.message,'err'); }
+}
+$('#r-cap').addEventListener('input',()=>{ ROUTE_CAP=Math.max(1,parseInt($('#r-cap').value,10)||25); if(CLIENTS.length) renderRoutes(); });
+$('#btn-routes-xlsx').addEventListener('click',downloadRoutes);
 
 /* ============================================================
    Dropper: Reporte CONSOLIDADO (todos los clientes seleccionados)
