@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Distribución por Área · Herramientas Dropper</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/css/app.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="assets/js/config.js"></script>
+<script src="assets/js/supabaseClient.js"></script>
+<script src="assets/js/auth-guard.js"></script>
+<script src="assets/js/brand.js"></script>
+<script src="assets/js/nav.js"></script>
+<style>
+  .drop{padding:42px 28px;text-align:center;cursor:pointer;position:relative;border:2px dashed #cdd8cf;
+    border-radius:var(--radius);background:var(--white);transition:.22s ease;overflow:hidden}
+  .drop:hover{border-color:var(--green);background:#fbfdfb}
+  .drop.drag{border-color:var(--green);background:var(--lime-soft);transform:scale(.997)}
+  .drop .ic{width:58px;height:58px;border-radius:50%;margin:0 auto 14px;background:var(--lime-soft);
+    display:grid;place-items:center;color:var(--green-dk)}
+  .drop h2{font-family:'Sora',sans-serif;font-weight:700;font-size:1.15rem;letter-spacing:-.01em}
+  .drop p{color:var(--muted);font-size:.92rem;margin-top:6px}
+  .drop .hint{margin-top:13px;font-size:.78rem;color:#8a988e}
+  input[type=file]{display:none}
+  .status{margin-top:16px;font-size:.9rem;display:none;align-items:center;gap:9px;padding:12px 16px;border-radius:12px}
+  .status.show{display:flex}
+  .status.err{background:#fdecea;color:#a3261a;border:1px solid #f5c6c0}
+  .status.work{background:var(--lime-soft);color:var(--green-dk);border:1px solid #c4e3cd}
+  .spin{width:15px;height:15px;border:2px solid #bcd9c4;border-top-color:var(--green-dk);border-radius:50%;animation:sp .7s linear infinite;flex:none}
+  @keyframes sp{to{transform:rotate(360deg)}}
+
+  .ctrlbar{display:none;align-items:center;gap:12px;flex-wrap:wrap;margin:18px 0 4px;
+    background:var(--white);border:1px solid var(--line);border-radius:14px;padding:12px 16px;box-shadow:var(--shadow)}
+  .ctrlbar.show{display:flex}
+  .ctrlbar .cb-label{display:inline-flex;align-items:center;gap:7px;font-size:.84rem;font-weight:600;color:var(--muted)}
+  .ctrlbar input[type=number]{width:66px;padding:8px 10px;border:1px solid #cdd8cf;border-radius:9px;font-family:'Sora',sans-serif;font-weight:700;font-size:.95rem;text-align:center;color:var(--ink)}
+  .ctrlbar input[type=date]{font-family:inherit;font-size:.88rem;color:var(--ink);border:1px solid #cdd8cf;border-radius:9px;padding:7px 10px;background:#fcfdfc}
+  .ctrlbar input:focus{outline:none;border-color:var(--green);box-shadow:0 0 0 3px rgba(31,122,61,.12)}
+  .ctrlbar .cb-date{display:inline-flex;align-items:center;gap:6px;font-size:.84rem;font-weight:600;color:var(--muted)}
+  .ctrlbar .cb-count{margin-left:auto;font-size:.82rem;color:var(--muted);font-weight:600}
+  .ctrlbar .sep{width:1px;height:24px;background:var(--line)}
+
+  .rstats{display:none;gap:14px;margin:20px 0 14px;flex-wrap:wrap}
+  .rstats.show{display:flex}
+  .rstats .s{flex:1;min-width:130px;background:var(--white);border:1px solid var(--line);border-radius:14px;padding:14px 18px;box-shadow:var(--shadow)}
+  .rstats .s .k{font-size:.72rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:600}
+  .rstats .s .v{font-family:'Sora',sans-serif;font-weight:800;font-size:1.4rem;color:var(--green-dk);margin-top:2px}
+  .rmuni{background:var(--white);border:1px solid var(--line);border-radius:12px;margin-bottom:9px;overflow:hidden;box-shadow:var(--shadow)}
+  .rmuni-head{display:grid;grid-template-columns:auto 1.4fr 1.1fr auto auto;gap:12px;align-items:center;padding:13px 16px;cursor:pointer;transition:.15s}
+  .rmuni-head:hover{background:#fbfdfb}
+  .caret{color:var(--green);font-size:.8rem;transition:transform .18s;display:inline-block}
+  .rmuni.open .caret{transform:rotate(90deg)}
+  .rmuni-name{font-family:'Sora',sans-serif;font-weight:700;font-size:.98rem;letter-spacing:-.01em}
+  .rmuni-bar{height:9px;background:var(--grey);border-radius:6px;overflow:hidden}
+  .rmuni-bar span{display:block;height:100%;background:linear-gradient(90deg,var(--lime),var(--green));border-radius:6px}
+  .rmuni-num{font-family:'Sora',sans-serif;font-weight:700;font-size:1rem;color:var(--green-dk);text-align:right;white-space:nowrap}
+  .rmuni-num small{color:var(--muted);font-weight:600;font-size:.72rem;margin-left:3px}
+  .rmuni-tags{display:flex;gap:6px;white-space:nowrap}
+  .rmuni-tags span{font-size:.72rem;font-weight:600;color:var(--muted);background:var(--grey);border-radius:20px;padding:3px 9px}
+  .rmuni-tags .moto{color:#fff;background:var(--green)}
+  .rlocs{display:none;padding:4px 16px 12px 40px;border-top:1px solid var(--line);background:#fbfdfb}
+  .rmuni.open .rlocs{display:block}
+  .rloc{display:flex;justify-content:space-between;align-items:center;padding:6px 0;font-size:.86rem;border-bottom:1px dashed #e8ede9}
+  .rloc:last-child{border-bottom:none}
+  .rloc span{color:var(--ink)}
+  .rloc .rec{font-size:.68rem;color:#b07d00;background:#fff7df;border:1px solid #f0e2b6;border-radius:20px;padding:1px 7px;margin-left:7px}
+  .rloc b{font-family:'Sora',sans-serif;color:var(--green-dk)}
+  @media(max-width:560px){ .rmuni-head{grid-template-columns:auto 1fr auto} .rmuni-bar,.rmuni-tags{display:none} }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="topbar">
+    <a class="brand" href="inicio.html"><img id="brand-logo" alt="Dropper · Herramientas"></a>
+    <nav class="nav">
+      <div class="nav-links">
+        <a href="inicio.html">Inicio</a>
+        <a href="generador.html">Generador</a>
+        <a href="pagos.html">Pagos</a>
+        <a href="comisiones.html">Comisiones</a>
+        <a href="productividad.html">Productividad</a>
+        <a href="distribucion.html" class="active">Distribución</a>
+        <a href="historial.html">Historial</a>
+      </div>
+      <span class="nav-sep"></span>
+      <span class="nav-av" id="nav-av"></span>
+      <a href="#" class="nav-logout" id="logout">Salir</a>
+    </nav>
+  </div>
+
+  <div class="notice" id="notice">
+    <b>Modo vista previa.</b> Supabase aún no está configurado: la herramienta funciona, pero no hay login.
+    Pegá tus llaves en <code>assets/js/config.js</code> (ver README).
+  </div>
+
+  <div class="page-head">
+    <div>
+      <h2>Distribución por Área</h2>
+      <div class="sub">Cuántos envíos tenés por municipio y localidad, para planear motoristas y separar rutas.</div>
+    </div>
+  </div>
+
+  <div class="drop" id="drop">
+    <input type="file" id="file" accept=".xlsx,.xls">
+    <div class="ic">
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 12-9 12s-9-5-9-12a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+    </div>
+    <h2>Subí tu Excel de entregas</h2>
+    <p>Agrupa por <b>Ciudad</b> (municipio) y <b>Localidad</b>. Si falta la localidad, la deduce de la <b>Dirección</b>.</p>
+    <div class="hint">Ideal para ver cuántos envíos hay por área y estimar motoristas por ruta</div>
+  </div>
+
+  <div class="status" id="status"></div>
+
+  <div class="ctrlbar" id="ctrlbar">
+    <span class="cb-label">
+      <svg viewBox="0 0 20 20" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="7" r="3"/><path d="M4 17c0-3 3-5 6-5s6 2 6 5"/></svg>
+      Envíos por motorista
+    </span>
+    <input type="number" id="cap" value="25" min="1">
+    <span class="sep"></span>
+    <span class="cb-date">Desde <input type="date" id="df-from"></span>
+    <span class="cb-date">Hasta <input type="date" id="df-to"></span>
+    <button class="btn btn-ghost df-btn" id="df-apply" style="width:auto;padding:8px 14px;font-size:.85rem">Aplicar</button>
+    <button class="btn btn-ghost df-btn" id="df-clear" style="width:auto;padding:8px 14px;font-size:.85rem">Todo</button>
+    <span class="sep"></span>
+    <button class="btn btn-primary" id="btn-xlsx" style="width:auto;padding:8px 14px;font-size:.85rem">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      Descargar Excel
+    </button>
+    <span class="cb-count" id="cb-count"></span>
+  </div>
+
+  <div class="rstats" id="rstats">
+    <div class="s"><div class="k">Municipios</div><div class="v" id="r-muni">0</div></div>
+    <div class="s"><div class="k">Localidades</div><div class="v" id="r-loc">0</div></div>
+    <div class="s"><div class="k">Envíos</div><div class="v" id="r-env">0</div></div>
+    <div class="s"><div class="k">Motoristas (aprox.)</div><div class="v" id="r-moto">0</div></div>
+  </div>
+
+  <div id="list"></div>
+
+  <footer>Dropper · Smart Delivery — procesa todo en tu navegador, ningún archivo se sube a internet.</footer>
+</div>
+
+<script>
+const $=s=>document.querySelector(s);
+const drop=$('#drop'), fileInput=$('#file');
+let RAW=[];   // {municipio, loc, recuperada(bool), fecha}
+let AGG={list:[],total:0};
+let CAP=25;
+
+function status(msg,type){ const s=$('#status'); s.className='status show '+(type||''); s.innerHTML=(type==='work'?'<span class="spin"></span>':'')+msg; }
+function hideStatus(){ $('#status').className='status'; }
+function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+function norm(s){ return String(s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,''); }
+function nf(n){ return Number(n||0).toLocaleString('es-GT'); }
+function fmtDate(v){ const d=toDate(v); if(!d) return String(v); const p=x=>String(x).padStart(2,'0'); return `${p(d.getDate())}/${p(d.getMonth()+1)}/${d.getFullYear()}`; }
+function toDate(v){
+  if(v instanceof Date) return isNaN(v)?null:v;
+  if(typeof v==='number') return new Date(Math.round((v-25569)*86400*1000));
+  let s=String(v==null?'':v).trim(); if(!s) return null;
+  let d=new Date(s.replace(' ','T')); if(!isNaN(d)) return d;
+  d=new Date(s); return isNaN(d)?null:d;
+}
+
+// Deduce "Zona X" de la dirección (acepta "zona 10", "z 15", "z.15", "z11", "Z10").
+function zonaDeDir(dir){
+  const m=norm(dir).match(/\bz(?:ona)?\.?\s*0*(\d{1,2})(?!\d)/);
+  if(!m) return null;
+  const n=parseInt(m[1],10);
+  return (n>=1 && n<=25) ? 'Zona '+n : null;
+}
+
+drop.addEventListener('click',()=>fileInput.click());
+['dragover','dragenter'].forEach(e=>drop.addEventListener(e,ev=>{ev.preventDefault();drop.classList.add('drag')}));
+['dragleave','drop'].forEach(e=>drop.addEventListener(e,ev=>{ev.preventDefault();drop.classList.remove('drag')}));
+drop.addEventListener('drop',ev=>{ if(ev.dataTransfer.files.length) handleFile(ev.dataTransfer.files[0]); });
+fileInput.addEventListener('change',()=>{ if(fileInput.files.length) handleFile(fileInput.files[0]); });
+
+function handleFile(file){
+  window.LAST_FILENAME=file.name;
+  status('Leyendo <b style="margin:0 4px">'+esc(file.name)+'</b>…','work');
+  const reader=new FileReader();
+  reader.onload=e=>{ try{ parseWorkbook(e.target.result); }catch(err){ console.error(err); status('No se pudo leer el archivo. ¿Es un Excel válido? '+err.message,'err'); } };
+  reader.onerror=()=>status('Error al abrir el archivo.','err');
+  reader.readAsArrayBuffer(file);
+}
+function pickHeader(keys,cands){
+  const nk=keys.map(k=>({k,n:norm(k).trim()}));
+  for(const c of cands){ const h=nk.find(o=>o.n===c); if(h) return h.k; }
+  for(const c of cands){ const h=nk.find(o=>o.n.includes(c)); if(h) return h.k; }
+  return null;
+}
+function parseWorkbook(buf){
+  const wb=XLSX.read(buf,{type:'array',cellDates:true});
+  const sheetName=wb.SheetNames.find(n=>/entrega/i.test(n))||wb.SheetNames[0];
+  const ws=wb.Sheets[sheetName];
+  const rowsRaw=XLSX.utils.sheet_to_json(ws,{raw:true,defval:''});
+  const rowsTxt=XLSX.utils.sheet_to_json(ws,{raw:false,defval:''});
+  if(!rowsRaw.length){ status('La hoja "'+esc(sheetName)+'" está vacía.','err'); return; }
+
+  const keys=Object.keys(rowsRaw[0]);
+  const C={
+    ciudad:pickHeader(keys,['ciudad','municipio']),
+    localidad:pickHeader(keys,['localidad','zona']),
+    direccion:pickHeader(keys,['direccion de entrega','direccion','direccion completa']),
+    fecha:pickHeader(keys,['fecha de entrega','fecha']),
+    cliente:pickHeader(keys,['nombre del cliente','cliente']),
+  };
+  if(!C.ciudad){ status('No encontré la columna de <b>Ciudad / Municipio</b>.','err'); return; }
+
+  RAW=rowsRaw.map((r,i)=>{
+    const t=rowsTxt[i]||{};
+    const g=k=>k?String((t[k]??r[k])||'').trim():'';
+    const muni=g(C.ciudad)||'(sin municipio)';
+    let loc=g(C.localidad), recuperada=false;
+    if(!loc){ const z=zonaDeDir(g(C.direccion)); if(z){ loc=z; recuperada=true; } else loc='(sin localidad)'; }
+    return { municipio:muni, loc, recuperada, fecha:C.fecha?(t[C.fecha]??r[C.fecha]):'', cliente:g(C.cliente) };
+  }).filter(r=> r.cliente!=='' || r.municipio!=='(sin municipio)' || r.loc!=='(sin localidad)'); // descarta filas vacías
+
+  hideStatus();
+  setupDateFilter();
+  buildView();
+}
+
+/* ---------- filtro por período ---------- */
+function currentRange(){
+  const fv=$('#df-from').value, tv=$('#df-to').value;
+  return [ fv?new Date(fv+'T00:00:00'):null, tv?new Date(tv+'T23:59:59'):null ];
+}
+function inRange(v,from,to){ if(!from&&!to) return true; const d=toDate(v); if(!d) return false; if(from&&d<from) return false; if(to&&d>to) return false; return true; }
+function setupDateFilter(){
+  const dates=RAW.map(r=>toDate(r.fecha)).filter(d=>d&&d.getFullYear()>1971);
+  const has=dates.length>0;
+  ['#df-from','#df-to'].forEach(s=>{ const el=$(s); el.style.display=has?'':'none'; });
+  $$('.cb-date').forEach(el=>el.style.display=has?'':'none');
+  if(!has) return;
+  const iso=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  const mn=new Date(Math.min(...dates)), mx=new Date(Math.max(...dates));
+  ['#df-from','#df-to'].forEach(s=>{ const el=$(s); el.min=iso(mn); el.max=iso(mx); el.value=''; });
+}
+function $$(s){ return [...document.querySelectorAll(s)]; }
+$('#df-apply').addEventListener('click',()=>{ if(RAW.length) buildView(); });
+$('#df-clear').addEventListener('click',()=>{ $('#df-from').value=''; $('#df-to').value=''; if(RAW.length) buildView(); });
+$('#cap').addEventListener('input',()=>{ CAP=Math.max(1,parseInt($('#cap').value,10)||25); render(); });
+
+/* ---------- agregación ---------- */
+function buildView(){
+  const [from,to]=currentRange();
+  const rows=RAW.filter(r=>inRange(r.fecha,from,to));
+  const muni=new Map();
+  rows.forEach(r=>{
+    if(!muni.has(r.municipio)) muni.set(r.municipio,{count:0,locs:new Map(),rec:0});
+    const o=muni.get(r.municipio); o.count++;
+    const cur=o.locs.get(r.loc)||{n:0,rec:0}; cur.n++; if(r.recuperada) cur.rec++;
+    o.locs.set(r.loc,cur);
+    if(r.recuperada) o.rec++;
+  });
+  const total=rows.length;
+  const list=[...muni.entries()].map(([m,o])=>({
+    muni:m, count:o.count, rec:o.rec,
+    locs:[...o.locs.entries()].map(([loc,v])=>({loc,n:v.n,rec:v.rec})).sort((a,b)=>b.n-a.n||a.loc.localeCompare(b.loc))
+  })).sort((a,b)=>b.count-a.count);
+  AGG={list,total};
+  const active=!!(from||to);
+  $('#cb-count').textContent = active ? `Mostrando ${total} de ${RAW.length} envíos` : `${RAW.length} envíos`;
+  render();
+}
+function render(){
+  const {list,total}=AGG;
+  $('#ctrlbar').classList.add('show');
+  if(!total){ $('#rstats').classList.remove('show'); $('#list').innerHTML=''; return; }
+  const totLoc=list.reduce((s,m)=>s+m.locs.length,0);
+  $('#r-muni').textContent=list.length;
+  $('#r-loc').textContent=totLoc;
+  $('#r-env').textContent=nf(total);
+  $('#r-moto').textContent=Math.max(1,Math.ceil(total/CAP));
+  $('#rstats').classList.add('show');
+  const maxC=list[0].count;
+  const cont=$('#list'); cont.innerHTML='';
+  list.forEach(m=>{
+    const moto=Math.max(1,Math.ceil(m.count/CAP));
+    const pct=Math.round(m.count/total*100);
+    const el=document.createElement('div'); el.className='rmuni';
+    el.innerHTML=`
+      <div class="rmuni-head">
+        <span class="caret">▸</span>
+        <div class="rmuni-name">${esc(m.muni)}</div>
+        <div class="rmuni-bar"><span style="width:${Math.max(6,Math.round(m.count/maxC*100))}%"></span></div>
+        <div class="rmuni-num">${nf(m.count)}<small>${pct}%</small></div>
+        <div class="rmuni-tags"><span>${m.locs.length} loc.</span><span class="moto">${moto} motorista${moto>1?'s':''}</span></div>
+      </div>
+      <div class="rlocs">${m.locs.map(l=>`<div class="rloc"><span>${esc(l.loc)}${l.rec?`<span class="rec">↳ de dirección: ${l.rec}</span>`:''}</span><b>${nf(l.n)}</b></div>`).join('')}</div>`;
+    el.querySelector('.rmuni-head').addEventListener('click',()=>el.classList.toggle('open'));
+    cont.appendChild(el);
+  });
+}
+
+/* ---------- Excel ---------- */
+function periodoTexto(){
+  const [from,to]=currentRange();
+  const ds=RAW.map(r=>toDate(r.fecha)).filter(d=>d&&d.getFullYear()>1971).filter(d=>(!from||d>=from)&&(!to||d<=to));
+  if(!ds.length) return '—';
+  const mn=new Date(Math.min(...ds)), mx=new Date(Math.max(...ds));
+  return `${fmtDate(mn)} al ${fmtDate(mx)}`;
+}
+async function buildWorkbook(){
+  const {list,total}=AGG;
+  const wb=new ExcelJS.Workbook();
+  const ws=wb.addWorksheet('Distribución',{views:[{showGridLines:false}]});
+  const G='FF1F7A3D',GD='FF14572A',LIME='FFDDF0E2',GREY='FFF2F4F5',WHITE='FFFFFFFF',TXT='FF1A1A1A',BLACK='FF0C0F0D';
+  const fill=c=>({type:'pattern',pattern:'solid',fgColor:{argb:c}});
+  const bd={top:{style:'thin',color:{argb:'FFD5DADE'}},bottom:{style:'thin',color:{argb:'FFD5DADE'}},left:{style:'thin',color:{argb:'FFD5DADE'}},right:{style:'thin',color:{argb:'FFD5DADE'}}};
+  [38,12,12,16].forEach((w,i)=>ws.getColumn(i+1).width=w);
+
+  ws.mergeCells('A1:D1'); ws.getRow(1).height=30;
+  let t=ws.getCell('A1'); t.value='Dropper · Distribución por Área';
+  t.font={name:'Arial',bold:true,size:14,color:{argb:WHITE}}; t.fill=fill(BLACK);
+  t.alignment={vertical:'middle',horizontal:'left',indent:1};
+
+  ws.getCell('A3').value='Período:'; ws.getCell('A3').font={name:'Arial',bold:true,size:10,color:{argb:TXT}};
+  ws.getCell('B3').value=periodoTexto(); ws.getCell('B3').font={name:'Arial',size:10,color:{argb:TXT}};
+  ws.getCell('A4').value='Envíos totales:'; ws.getCell('A4').font={name:'Arial',bold:true,size:10,color:{argb:TXT}};
+  ws.getCell('B4').value=total; ws.getCell('B4').font={name:'Arial',size:10,color:{argb:TXT}};
+  ws.getCell('A5').value='Envíos por motorista (capacidad):'; ws.getCell('A5').font={name:'Arial',bold:true,size:10,color:{argb:TXT}};
+  ws.getCell('B5').value=CAP; ws.getCell('B5').font={name:'Arial',size:10,color:{argb:TXT}};
+
+  let r=7;
+  ['Municipio / Localidad','Envíos','% total','Motoristas'].forEach((x,j)=>{
+    const cell=ws.getCell(r,j+1); cell.value=x;
+    cell.font={name:'Arial',bold:true,size:10,color:{argb:TXT}}; cell.fill=fill(GREY); cell.border=bd;
+    cell.alignment={horizontal:j===0?'left':'center'};
+  });
+  r++;
+  list.forEach(m=>{
+    const moto=Math.max(1,Math.ceil(m.count/CAP)), pct=Math.round(m.count/total*100);
+    ws.getCell(r,1).value=m.muni; ws.getCell(r,1).font={name:'Arial',bold:true,size:10,color:{argb:WHITE}}; ws.getCell(r,1).alignment={horizontal:'left',indent:1};
+    ws.getCell(r,2).value=m.count; ws.getCell(r,2).font={name:'Arial',bold:true,size:10,color:{argb:WHITE}}; ws.getCell(r,2).alignment={horizontal:'center'};
+    ws.getCell(r,3).value=pct/100; ws.getCell(r,3).numFmt='0%'; ws.getCell(r,3).font={name:'Arial',bold:true,size:10,color:{argb:WHITE}}; ws.getCell(r,3).alignment={horizontal:'center'};
+    ws.getCell(r,4).value=moto; ws.getCell(r,4).font={name:'Arial',bold:true,size:10,color:{argb:WHITE}}; ws.getCell(r,4).alignment={horizontal:'center'};
+    [1,2,3,4].forEach(c=>{ws.getCell(r,c).fill=fill(G); ws.getCell(r,c).border=bd;});
+    r++;
+    m.locs.forEach((l,k)=>{
+      const even=k%2===0;
+      ws.getCell(r,1).value='     '+l.loc+(l.rec?`  (${l.rec} de dirección)`:''); ws.getCell(r,1).font={name:'Arial',size:9,color:{argb:TXT}}; ws.getCell(r,1).alignment={horizontal:'left'};
+      ws.getCell(r,2).value=l.n; ws.getCell(r,2).font={name:'Arial',size:9,color:{argb:TXT}}; ws.getCell(r,2).alignment={horizontal:'center'};
+      ws.getCell(r,3).value=l.n/total; ws.getCell(r,3).numFmt='0%'; ws.getCell(r,3).font={name:'Arial',size:9,color:{argb:TXT}}; ws.getCell(r,3).alignment={horizontal:'center'};
+      ws.getCell(r,4).value='';
+      [1,2,3,4].forEach(c=>{ws.getCell(r,c).fill=fill(even?WHITE:LIME); ws.getCell(r,c).border=bd;});
+      r++;
+    });
+  });
+  ws.getCell(r,1).value='TOTAL'; ws.getCell(r,1).font={name:'Arial',bold:true,size:11,color:{argb:WHITE}}; ws.getCell(r,1).alignment={horizontal:'left',indent:1};
+  ws.getCell(r,2).value=total; ws.getCell(r,2).font={name:'Arial',bold:true,size:11,color:{argb:WHITE}}; ws.getCell(r,2).alignment={horizontal:'center'};
+  ws.getCell(r,3).value=1; ws.getCell(r,3).numFmt='0%'; ws.getCell(r,3).font={name:'Arial',bold:true,size:11,color:{argb:WHITE}}; ws.getCell(r,3).alignment={horizontal:'center'};
+  ws.getCell(r,4).value=Math.max(1,Math.ceil(total/CAP)); ws.getCell(r,4).font={name:'Arial',bold:true,size:11,color:{argb:WHITE}}; ws.getCell(r,4).alignment={horizontal:'center'};
+  [1,2,3,4].forEach(c=>{ws.getCell(r,c).fill=fill(GD); ws.getCell(r,c).border=bd;});
+
+  ws.views=[{state:'frozen',ySplit:7,showGridLines:false}];
+  return wb;
+}
+function saveBlob(blob,name){
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a'); a.href=url; a.download=name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),1500);
+}
+$('#btn-xlsx').addEventListener('click',async()=>{
+  if(!AGG.total){ status('Primero cargá un Excel.','err'); return; }
+  status('Generando reporte de distribución…','work');
+  try{
+    const wb=await buildWorkbook();
+    const buf=await wb.xlsx.writeBuffer();
+    saveBlob(new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}),'Dropper_Distribucion_por_Area.xlsx');
+    hideStatus();
+  }catch(err){ console.error(err); status('Error generando el reporte: '+err.message,'err'); }
+});
+
+/* sesión */
+$('#logout').addEventListener('click',e=>{ e.preventDefault(); window.dropperAuth.signOut(); });
+(async function init(){
+  const guard=await window.dropperAuth.requireSession();
+  if(guard===null) return;
+  if(guard.previewMode){ $('#notice').classList.add('show'); return; }
+  window.dropperNav.setUser(guard.user.email||'');
+})();
+</script>
+</body>
+</html>
