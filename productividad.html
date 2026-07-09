@@ -83,7 +83,7 @@
       <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>
     </div>
     <h2>Subí tu Excel de entregas</h2>
-    <p>Debe incluir <b>Nombre del Mensajero</b>, <b>Fecha de Entrega</b> y <b>Hora</b>.</p>
+    <p>Debe incluir <b>Nombre del Mensajero</b> y <b>Fecha de Entrega</b> (con la hora).</p>
     <div class="hint">Ritmo = entregas ÷ horas activas (entre la primera y la última entrega de cada día)</div>
   </div>
 
@@ -146,6 +146,17 @@ function toDate(v){
   if(typeof v==='number') return new Date(Math.round((v-25569)*86400*1000));
   const t=Date.parse(v); return isNaN(t)?null:new Date(t);
 }
+// Fecha+hora completa (ej. "2026-07-09 13:15:15"). Devuelve Date (con hora) o null.
+function parseDateTime(v){
+  if(v instanceof Date) return isNaN(v)?null:v;
+  if(typeof v==='number'){ const d=new Date(Math.round((v-25569)*86400*1000)); return isNaN(d)?null:d; }
+  let s=String(v==null?'':v).trim();
+  if(!s) return null;
+  let d=new Date(s.replace(' ','T'));   // "YYYY-MM-DD HH:MM:SS" -> ISO local
+  if(!isNaN(d)) return d;
+  d=new Date(s);
+  return isNaN(d)?null:d;
+}
 function dayKey(v){ const d=toDate(v); if(!d) return ''; const p=x=>String(x).padStart(2,'0'); return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}`; }
 function safeName(s){ return String(s).replace(/[^\p{L}\p{N}]+/gu,'_').replace(/^_+|_+$/g,''); }
 
@@ -201,18 +212,18 @@ function parseWorkbook(buf){
     hora:pickHeader(keys,['hora de entrega','hora','hora entrega']),
   };
   if(!C.mensajero){ status('No encontré la columna del <b>mensajero</b>.','err'); return; }
-  if(!C.hora){ status('No encontré la columna <b>Hora</b>. Es necesaria para calcular el ritmo.','err'); return; }
+  if(!C.fecha){ status('No encontré la columna <b>Fecha de Entrega</b>. Es necesaria para calcular el ritmo.','err'); return; }
 
   RAW=rowsRaw.map((r,i)=>{
     const t=rowsTxt[i]||{};
-    return {
-      mensajero:String((t[C.mensajero]??r[C.mensajero])||'').trim(),
-      fecha:C.fecha?r[C.fecha]:'',
-      hmin:horaToMin(t[C.hora], r[C.hora]),
-    };
-  }).filter(r=>r.mensajero && r.hmin!=null);
+    const fdt=parseDateTime(t[C.fecha]??r[C.fecha]);          // fecha con hora (o solo fecha)
+    let hmin=null;
+    if(C.hora) hmin=horaToMin(t[C.hora], r[C.hora]);          // columna Hora separada (formato de rutas diarias)
+    if(hmin==null && fdt) hmin=fdt.getHours()*60+fdt.getMinutes()+fdt.getSeconds()/60; // hora dentro de Fecha de Entrega
+    return { mensajero:String((t[C.mensajero]??r[C.mensajero])||'').trim(), fecha:fdt, hmin };
+  }).filter(r=>r.mensajero && r.fecha && r.hmin!=null);
 
-  if(!RAW.length){ status('No encontré filas con mensajero y hora válidos.','err'); return; }
+  if(!RAW.length){ status('No encontré filas con mensajero y fecha/hora válidos.','err'); return; }
 
   hideStatus();
   setupDateFilter();
