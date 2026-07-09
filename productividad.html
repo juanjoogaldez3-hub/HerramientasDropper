@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Productividad de Mensajeros · Herramientas Dropper</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/css/app.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="assets/js/config.js"></script>
+<script src="assets/js/supabaseClient.js"></script>
+<script src="assets/js/auth-guard.js"></script>
+<script src="assets/js/brand.js"></script>
+<script src="assets/js/nav.js"></script>
+<style>
+  .drop{padding:42px 28px;text-align:center;cursor:pointer;position:relative;border:2px dashed #cdd8cf;
+    border-radius:var(--radius);background:var(--white);transition:.22s ease;overflow:hidden}
+  .drop:hover{border-color:var(--green);background:#fbfdfb}
+  .drop.drag{border-color:var(--green);background:var(--lime-soft);transform:scale(.997)}
+  .drop .ic{width:58px;height:58px;border-radius:50%;margin:0 auto 14px;background:var(--lime-soft);
+    display:grid;place-items:center;color:var(--green-dk);transition:.25s ease}
+  .drop:hover .ic{transform:translateY(-3px)}
+  .drop h2{font-family:'Sora',sans-serif;font-weight:700;font-size:1.15rem;letter-spacing:-.01em}
+  .drop p{color:var(--muted);font-size:.92rem;margin-top:6px}
+  .drop .hint{margin-top:13px;font-size:.78rem;color:#8a988e}
+  input[type=file]{display:none}
+  .status{margin-top:16px;font-size:.9rem;display:none;align-items:center;gap:9px;padding:12px 16px;border-radius:12px}
+  .status.show{display:flex}
+  .status.err{background:#fdecea;color:#a3261a;border:1px solid #f5c6c0}
+  .status.work{background:var(--lime-soft);color:var(--green-dk);border:1px solid #c4e3cd}
+  .spin{width:15px;height:15px;border:2px solid #bcd9c4;border-top-color:var(--green-dk);border-radius:50%;animation:sp .7s linear infinite;flex:none}
+  @keyframes sp{to{transform:rotate(360deg)}}
+  .toolbar{display:none;justify-content:space-between;align-items:center;gap:12px;margin:22px 0 14px;flex-wrap:wrap}
+  .toolbar.show{display:flex}
+  .toolbar h3{font-family:'Sora',sans-serif;font-weight:700;font-size:1.05rem}
+  .summary{display:none}
+  .summary.show{display:flex;gap:14px;margin:22px 0 8px;flex-wrap:wrap}
+  table.hist .rk{font-family:'Sora',sans-serif;font-weight:800;color:var(--muted);width:34px;text-align:center}
+  table.hist .rk.top{color:var(--green-dk)}
+  table.hist .ritmo{font-family:'Sora',sans-serif;font-weight:800;color:var(--green-dk);font-size:1.02rem}
+  table.hist .bar{display:inline-block;height:7px;border-radius:5px;background:linear-gradient(90deg,var(--lime),var(--green));vertical-align:middle;margin-left:8px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="topbar">
+    <a class="brand" href="inicio.html"><img id="brand-logo" alt="Dropper · Herramientas"></a>
+    <nav class="nav">
+      <div class="nav-links">
+        <a href="inicio.html">Inicio</a>
+        <a href="generador.html">Generador</a>
+        <a href="pagos.html">Pagos</a>
+        <a href="comisiones.html">Comisiones</a>
+        <a href="productividad.html" class="active">Productividad</a>
+        <a href="historial.html">Historial</a>
+      </div>
+      <span class="nav-sep"></span>
+      <span class="nav-av" id="nav-av"></span>
+      <a href="#" class="nav-logout" id="logout">Salir</a>
+    </nav>
+  </div>
+
+  <div class="notice" id="notice">
+    <b>Modo vista previa.</b> Supabase aún no está configurado: la herramienta funciona, pero no hay login.
+    Pegá tus llaves en <code>assets/js/config.js</code> (ver README).
+  </div>
+
+  <div class="page-head">
+    <div>
+      <h2>Productividad de Mensajeros</h2>
+      <div class="sub">Subí tu Excel de entregas y calculá el ritmo de cada mensajero (entregas por hora activa).</div>
+    </div>
+  </div>
+
+  <div class="drop" id="drop">
+    <input type="file" id="file" accept=".xlsx,.xls">
+    <div class="ic">
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>
+    </div>
+    <h2>Subí tu Excel de entregas</h2>
+    <p>Debe incluir <b>Nombre del Mensajero</b>, <b>Fecha de Entrega</b> y <b>Hora</b>.</p>
+    <div class="hint">Ritmo = entregas ÷ horas activas (entre la primera y la última entrega de cada día)</div>
+  </div>
+
+  <div class="status" id="status"></div>
+
+  <div class="datefilter" id="datefilter" style="display:none">
+    <span class="df-label">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+      Período
+    </span>
+    <label>Desde <input type="date" id="df-from"></label>
+    <label>Hasta <input type="date" id="df-to"></label>
+    <button class="btn btn-primary df-btn" id="df-apply">Aplicar</button>
+    <button class="btn btn-ghost df-btn" id="df-clear">Todo</button>
+    <span class="df-count" id="df-count"></span>
+  </div>
+
+  <div class="summary" id="summary">
+    <div class="stat"><div class="k">Mensajeros</div><div class="v" id="s-mens">0</div></div>
+    <div class="stat"><div class="k">Entregas</div><div class="v" id="s-ent">0</div></div>
+    <div class="stat"><div class="k">Horas activas</div><div class="v" id="s-hrs">0</div></div>
+    <div class="stat"><div class="k">Ritmo promedio</div><div class="v" id="s-rit">0/h</div></div>
+  </div>
+
+  <div class="toolbar" id="toolbar">
+    <h3>Ranking por ritmo (entregas/hora)</h3>
+    <button class="btn btn-primary" id="btn-xlsx" style="width:auto">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      Descargar Excel
+    </button>
+  </div>
+
+  <div class="panel" id="panel"></div>
+
+  <footer>Dropper · Smart Delivery — procesa todo en tu navegador, ningún archivo se sube a internet.</footer>
+</div>
+
+<script>
+const $=s=>document.querySelector(s);
+const drop=$('#drop'), fileInput=$('#file');
+let RAW=[];   // {mensajero, fecha, hmin}
+let MENS=[];  // resumen por mensajero
+const TARIFA_FMT='#,##0.0';
+
+function status(msg,type){ const s=$('#status'); s.className='status show '+(type||''); s.innerHTML=(type==='work'?'<span class="spin"></span>':'')+msg; }
+function hideStatus(){ $('#status').className='status'; }
+function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+function norm(s){ return String(s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,''); }
+function nf(n){ return Number(n||0).toLocaleString('es-GT'); }
+function f1(n){ return Number(n||0).toLocaleString('es-GT',{minimumFractionDigits:1,maximumFractionDigits:1}); }
+function fmtDate(v){
+  let d; if(v instanceof Date) d=v;
+  else if(typeof v==='number') d=new Date(Math.round((v-25569)*86400*1000));
+  else { const t=Date.parse(v); if(isNaN(t)) return String(v); d=new Date(t); }
+  const p=x=>String(x).padStart(2,'0');
+  return `${p(d.getDate())}/${p(d.getMonth()+1)}/${d.getFullYear()}`;
+}
+function toDate(v){
+  if(v instanceof Date) return isNaN(v)?null:v;
+  if(typeof v==='number') return new Date(Math.round((v-25569)*86400*1000));
+  const t=Date.parse(v); return isNaN(t)?null:new Date(t);
+}
+function dayKey(v){ const d=toDate(v); if(!d) return ''; const p=x=>String(x).padStart(2,'0'); return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}`; }
+function safeName(s){ return String(s).replace(/[^\p{L}\p{N}]+/gu,'_').replace(/^_+|_+$/g,''); }
+
+// Convierte la hora a minutos desde medianoche. Acepta texto "HH:MM:SS", con AM/PM, o fracción de día.
+function horaToMin(txt, rawv){
+  let s=String(txt==null?'':txt).trim();
+  const pm=/p\.?\s*m\.?/i.test(s), am=/a\.?\s*m\.?/i.test(s);
+  s=s.replace(/[^0-9:]/g,'');
+  const p=s.split(':').map(x=>parseInt(x,10));
+  if(p.length>=2 && !isNaN(p[0]) && !isNaN(p[1])){
+    let hh=p[0], mm=p[1], ss=p[2]||0;
+    if(pm && hh<12) hh+=12;
+    if(am && hh===12) hh=0;
+    return hh*60+mm+ss/60;
+  }
+  const n=parseFloat(rawv);
+  if(!isNaN(n) && n>0 && n<1) return n*24*60;
+  return null;
+}
+
+drop.addEventListener('click',()=>fileInput.click());
+['dragover','dragenter'].forEach(e=>drop.addEventListener(e,ev=>{ev.preventDefault();drop.classList.add('drag')}));
+['dragleave','drop'].forEach(e=>drop.addEventListener(e,ev=>{ev.preventDefault();drop.classList.remove('drag')}));
+drop.addEventListener('drop',ev=>{ if(ev.dataTransfer.files.length) handleFile(ev.dataTransfer.files[0]); });
+fileInput.addEventListener('change',()=>{ if(fileInput.files.length) handleFile(fileInput.files[0]); });
+
+function handleFile(file){
+  window.LAST_FILENAME=file.name;
+  status('Leyendo <b style="margin:0 4px">'+esc(file.name)+'</b>…','work');
+  const reader=new FileReader();
+  reader.onload=e=>{ try{ parseWorkbook(e.target.result); }catch(err){ console.error(err); status('No se pudo leer el archivo. ¿Es un Excel válido? '+err.message,'err'); } };
+  reader.onerror=()=>status('Error al abrir el archivo.','err');
+  reader.readAsArrayBuffer(file);
+}
+function pickHeader(keys,cands){
+  const nk=keys.map(k=>({k,n:norm(k).trim()}));
+  for(const c of cands){ const h=nk.find(o=>o.n===c); if(h) return h.k; }
+  for(const c of cands){ const h=nk.find(o=>o.n.includes(c)); if(h) return h.k; }
+  return null;
+}
+function parseWorkbook(buf){
+  const wb=XLSX.read(buf,{type:'array',cellDates:true});
+  const sheetName=wb.SheetNames.find(n=>/entrega/i.test(n))||wb.SheetNames[0];
+  const ws=wb.Sheets[sheetName];
+  const rowsRaw=XLSX.utils.sheet_to_json(ws,{raw:true,defval:''});
+  const rowsTxt=XLSX.utils.sheet_to_json(ws,{raw:false,defval:''});
+  if(!rowsRaw.length){ status('La hoja "'+esc(sheetName)+'" está vacía.','err'); return; }
+
+  const keys=Object.keys(rowsRaw[0]);
+  const C={
+    mensajero:pickHeader(keys,['nombre del mensajero','mensajero','repartidor','motorista','piloto']),
+    fecha:pickHeader(keys,['fecha de entrega','fecha']),
+    hora:pickHeader(keys,['hora de entrega','hora','hora entrega']),
+  };
+  if(!C.mensajero){ status('No encontré la columna del <b>mensajero</b>.','err'); return; }
+  if(!C.hora){ status('No encontré la columna <b>Hora</b>. Es necesaria para calcular el ritmo.','err'); return; }
+
+  RAW=rowsRaw.map((r,i)=>{
+    const t=rowsTxt[i]||{};
+    return {
+      mensajero:String((t[C.mensajero]??r[C.mensajero])||'').trim(),
+      fecha:C.fecha?r[C.fecha]:'',
+      hmin:horaToMin(t[C.hora], r[C.hora]),
+    };
+  }).filter(r=>r.mensajero && r.hmin!=null);
+
+  if(!RAW.length){ status('No encontré filas con mensajero y hora válidos.','err'); return; }
+
+  hideStatus();
+  setupDateFilter();
+  buildView();
+}
+
+/* ---------- filtro por período ---------- */
+function currentRange(){
+  const fv=$('#df-from').value, tv=$('#df-to').value;
+  return [ fv?new Date(fv+'T00:00:00'):null, tv?new Date(tv+'T23:59:59'):null ];
+}
+function inRange(v,from,to){ if(!from&&!to) return true; const d=toDate(v); if(!d) return false; if(from&&d<from) return false; if(to&&d>to) return false; return true; }
+function setupDateFilter(){
+  const bar=$('#datefilter');
+  const dates=RAW.map(r=>toDate(r.fecha)).filter(d=>d&&d.getFullYear()>1971);
+  if(!dates.length){ bar.style.display='none'; return; }
+  const iso=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  const mn=new Date(Math.min(...dates)), mx=new Date(Math.max(...dates));
+  ['#df-from','#df-to'].forEach(s=>{ const el=$(s); el.min=iso(mn); el.max=iso(mx); el.value=''; });
+  bar.style.display='flex';
+}
+$('#df-apply').addEventListener('click',()=>{ if(RAW.length) buildView(); });
+$('#df-clear').addEventListener('click',()=>{ $('#df-from').value=''; $('#df-to').value=''; if(RAW.length) buildView(); });
+
+/* ---------- cálculo ---------- */
+function buildView(){
+  const [from,to]=currentRange();
+  const rows=RAW.filter(r=>inRange(r.fecha,from,to));
+  const byMen=new Map(); // mensajero -> Map(day -> [hmin])
+  rows.forEach(r=>{
+    const dk=dayKey(r.fecha)||'(sin fecha)';
+    if(!byMen.has(r.mensajero)) byMen.set(r.mensajero,new Map());
+    const days=byMen.get(r.mensajero);
+    if(!days.has(dk)) days.set(dk,[]);
+    days.get(dk).push(r.hmin);
+  });
+  MENS=[...byMen.entries()].map(([name,days])=>{
+    let entregas=0, horas=0, dias=0;
+    days.forEach(arr=>{
+      arr.sort((a,b)=>a-b);
+      entregas+=arr.length; dias++;
+      horas+=(arr[arr.length-1]-arr[0])/60; // span en horas (día de 1 entrega = 0)
+    });
+    const ritmo = horas>0 ? entregas/horas : null;
+    return { name, entregas, dias, entregasDia:entregas/dias, horas, ritmo };
+  }).sort((a,b)=>(b.ritmo??-1)-(a.ritmo??-1) || b.entregas-a.entregas);
+
+  const active=!!(from||to);
+  $('#df-count').textContent = active ? `Mostrando ${rows.length} de ${RAW.length} entregas` : `${RAW.length} entregas`;
+  render();
+}
+
+function render(){
+  const totEnt=MENS.reduce((s,m)=>s+m.entregas,0);
+  const totHrs=MENS.reduce((s,m)=>s+m.horas,0);
+  const ritProm=totHrs>0?totEnt/totHrs:0;
+  $('#s-mens').textContent=MENS.length;
+  $('#s-ent').textContent=nf(totEnt);
+  $('#s-hrs').textContent=f1(totHrs)+' h';
+  $('#s-rit').textContent=f1(ritProm)+'/h';
+  $('#summary').classList.add('show');
+  $('#toolbar').classList.add('show');
+
+  const maxR=Math.max(...MENS.map(m=>m.ritmo||0),0.001);
+  const body=MENS.map((m,i)=>`
+    <tr>
+      <td class="rk ${i<3?'top':''}">${i+1}</td>
+      <td>${esc(m.name)}</td>
+      <td class="num">${nf(m.entregas)}</td>
+      <td class="num">${m.dias}</td>
+      <td class="num">${f1(m.entregasDia)}</td>
+      <td class="num">${f1(m.horas)} h</td>
+      <td class="num"><span class="ritmo">${m.ritmo==null?'—':f1(m.ritmo)+'/h'}</span>${m.ritmo!=null?`<span class="bar" style="width:${Math.max(6,Math.round(m.ritmo/maxR*70))}px"></span>`:''}</td>
+    </tr>`).join('');
+  $('#panel').innerHTML =
+    `<table class="hist"><thead><tr>
+      <th class="rk">#</th><th>Mensajero</th><th>Entregas</th><th>Días</th><th>Entregas/día</th><th>Horas activas</th><th>Ritmo</th>
+    </tr></thead><tbody>${body}</tbody></table>`;
+}
+
+/* ---------- Excel ---------- */
+function periodoTexto(){
+  const ds=RAW.map(r=>toDate(r.fecha)).filter(d=>d&&d.getFullYear()>1971);
+  const [from,to]=currentRange();
+  const inr=ds.filter(d=>(!from||d>=from)&&(!to||d<=to));
+  if(!inr.length) return '—';
+  const mn=new Date(Math.min(...inr)), mx=new Date(Math.max(...inr));
+  return `${fmtDate(mn)} al ${fmtDate(mx)}`;
+}
+async function buildWorkbook(){
+  const wb=new ExcelJS.Workbook();
+  const ws=wb.addWorksheet('Productividad',{views:[{showGridLines:false}]});
+  const G='FF1F7A3D',GD='FF14572A',LIME='FFDDF0E2',GREY='FFF2F4F5',WHITE='FFFFFFFF',TXT='FF1A1A1A',BLACK='FF0C0F0D';
+  const fill=c=>({type:'pattern',pattern:'solid',fgColor:{argb:c}});
+  const bd={top:{style:'thin',color:{argb:'FFD5DADE'}},bottom:{style:'thin',color:{argb:'FFD5DADE'}},left:{style:'thin',color:{argb:'FFD5DADE'}},right:{style:'thin',color:{argb:'FFD5DADE'}}};
+  ws.getColumn(1).width=6; ws.getColumn(2).width=30; ws.getColumn(3).width=11; ws.getColumn(4).width=9; ws.getColumn(5).width=13; ws.getColumn(6).width=13; ws.getColumn(7).width=15;
+
+  ws.mergeCells('A1:G1'); ws.getRow(1).height=30;
+  let t=ws.getCell('A1'); t.value='Dropper · Productividad de Mensajeros';
+  t.font={name:'Arial',bold:true,size:14,color:{argb:WHITE}}; t.fill=fill(BLACK);
+  t.alignment={vertical:'middle',horizontal:'left',indent:1};
+
+  const totEnt=MENS.reduce((s,m)=>s+m.entregas,0), totHrs=MENS.reduce((s,m)=>s+m.horas,0);
+  const ritProm=totHrs>0?totEnt/totHrs:0;
+  [['Período:',periodoTexto()],['Mensajeros:',MENS.length],['Entregas:',totEnt],['Ritmo promedio (entregas/hora):',Number(ritProm.toFixed(1))]].forEach((p,i)=>{
+    const r=3+i;
+    ws.getCell(`A${r}`).value=p[0]; ws.getCell(`A${r}`).font={name:'Arial',bold:true,size:10,color:{argb:TXT}};
+    ws.mergeCells(`B${r}:D${r}`);
+    ws.getCell(`B${r}`).value=p[1]; ws.getCell(`B${r}`).font={name:'Arial',size:10,color:{argb:TXT}};
+  });
+
+  let r=8;
+  ['#','Mensajero','Entregas','Días','Entregas/día','Horas activas','Ritmo (entregas/h)'].forEach((x,j)=>{
+    const cell=ws.getCell(r,j+1); cell.value=x;
+    cell.font={name:'Arial',bold:true,size:10,color:{argb:TXT}}; cell.fill=fill(GREY); cell.border=bd;
+    cell.alignment={horizontal:j===1?'left':'center'};
+  });
+  r++;
+  MENS.forEach((m,i)=>{
+    const even=i%2===0;
+    const vals=[i+1, m.name, m.entregas, m.dias, Number(m.entregasDia.toFixed(1)), Number(m.horas.toFixed(1)), m.ritmo==null?'—':Number(m.ritmo.toFixed(1))];
+    vals.forEach((v,j)=>{
+      const cell=ws.getCell(r,j+1); cell.value=v;
+      cell.fill=fill(even?WHITE:LIME); cell.border=bd; cell.font={name:'Arial',size:10,color:{argb:j===6?GD:TXT},bold:j===6};
+      cell.alignment={horizontal:j===1?'left':'center'};
+      if(j>=4 && j<=5) cell.numFmt=TARIFA_FMT;
+      if(j===6 && v!=='—') cell.numFmt=TARIFA_FMT;
+    });
+    r++;
+  });
+  ws.views=[{state:'frozen',ySplit:8,showGridLines:false}];
+  return wb;
+}
+function saveBlob(blob,name){
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a'); a.href=url; a.download=name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),1500);
+}
+$('#btn-xlsx').addEventListener('click',async()=>{
+  if(!MENS.length){ status('Primero cargá un Excel.','err'); return; }
+  status('Generando reporte de productividad…','work');
+  try{
+    const wb=await buildWorkbook();
+    const buf=await wb.xlsx.writeBuffer();
+    saveBlob(new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}),'Dropper_Productividad_Mensajeros.xlsx');
+    hideStatus();
+  }catch(err){ console.error(err); status('Error generando el reporte: '+err.message,'err'); }
+});
+
+/* sesión */
+$('#logout').addEventListener('click',e=>{ e.preventDefault(); window.dropperAuth.signOut(); });
+(async function init(){
+  const guard=await window.dropperAuth.requireSession();
+  if(guard===null) return;
+  if(guard.previewMode){ $('#notice').classList.add('show'); return; }
+  window.dropperNav.setUser(guard.user.email||'');
+})();
+</script>
+</body>
+</html>
