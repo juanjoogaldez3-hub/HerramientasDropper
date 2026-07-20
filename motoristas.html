@@ -224,7 +224,13 @@ function calcDia(d,man){
   const descT=tardDesc(tard);
   const incT=(man.incidencias||[]).reduce((s,i)=>s+(+i.monto||0),0);
   const pagoBase=base*entr, bono=adj*entr, pago=pagoBase+bono-descT-incT;
-  return {comp,eph,base,adj,tard,descT,incT,pagoBase,bono,pago};
+  return {comp,eph,base,adj,tard,descT,incT,pagoBase,bono,pago,precioEnvio:base+adj};
+}
+function calcLine(d,c){
+  let s=`Precio <b style="color:var(--ink)">${Q(c.precioEnvio)}/envío</b> (base ${Q(c.base)}${c.adj?` · compl. ${c.adj>0?'+':''}${Q(c.adj)}`:''}) × ${d.entregados} = ${Q(c.pagoBase+c.bono)}`;
+  if(c.descT) s+=` − ${Q(c.descT)} tard.`;
+  if(c.incT) s+=` − ${Q(c.incT)} incid.`;
+  return s;
 }
 
 /* ========= carga Excel ========= */
@@ -335,6 +341,7 @@ function cardHTML(d,m,c){
         <button class="inc-add-btn">+ Incidencia</button>
       </div>
     </div>
+    <div class="mc-calc" style="font-size:.76rem;color:var(--muted);line-height:1.5;border-top:1px dashed #e8ede9;padding-top:8px">${calcLine(d,c)}</div>
     <div class="mc-foot">
       <label class="cbaja"><input type="checkbox" class="m-baja" ${m.baja?'checked':''}> Reporte falso (baja)</label>
       <div class="mc-pago">${Q(c.pago)}</div>
@@ -350,6 +357,7 @@ function refreshCard(el,d){
   el.querySelector('.mc-metrics').innerHTML=`<span>Asig <b>${d.asignados}</b></span><span>Entr <b>${d.entregados}</b></span> ${pill(pctS(c.comp),compCls(c.comp))} ${pill(f1(c.eph)+'/h',ephCls(c.eph))} <span>Horas <b>${f1(d.horas)}</b></span>`;
   el.querySelector('.m-tard').innerHTML=c.tard?pill('+'+c.tard+' min · −'+Q(c.descT),tardCls(c.tard)):(m.entrada?pill('A tiempo','ok'):'');
   el.querySelector('.inc-list').innerHTML=incListHTML(m);
+  el.querySelector('.mc-calc').innerHTML=calcLine(d,c);
   el.querySelector('.mc-pago').textContent=Q(c.pago);
   wireIncRemove(el,d);
 }
