@@ -64,6 +64,12 @@
   .tbl-wrap{overflow-x:auto;border-radius:var(--radius);border:1px solid var(--line);box-shadow:var(--shadow)}
   table.hist{min-width:640px}
   table.hist .neg{color:#a3261a}
+  th.sortable{cursor:pointer;user-select:none}th.sortable:hover{color:var(--green-dk)}
+  .dcaret{display:inline-block;color:var(--green);font-size:.72rem;transition:transform .18s;margin-right:5px}
+  tr.drow{cursor:pointer}tr.drow:hover td{background:#f2f7f3}
+  tr.ddetail td{padding:0;background:#fbfdfb}
+  tr.ddetail table.hist{min-width:0;box-shadow:none;border:none;font-size:.84rem}
+  tr.ddetail table.hist th{background:#eef2ee}
   .empty{padding:44px 24px;text-align:center;color:var(--muted)}
   .empty h3{font-family:'Sora',sans-serif;font-weight:700;font-size:1.05rem;color:var(--ink);margin-bottom:4px}
   .howto{font-size:.82rem;color:var(--muted);line-height:1.6}.howto b{color:var(--ink)}
@@ -417,13 +423,43 @@ function aggBy(regs){
     const o=by.get(r.motorista); o.dias++; o.asig+=r.asignados; o.entr+=r.entregados; o.horas+=+r.horas; o.tard+=r.tardanza_min; o.inc+=+r.incidencias_total; o.pago+=+r.pago; });
   return [...by.entries()].map(([mot,o])=>({mot,...o,comp:o.asig>0?o.entr/o.asig:0,eph:o.horas>0?o.entr/o.horas:0,tardProm:o.dias?o.tard/o.dias:0})).sort((a,b)=>b.pago-a.pago);
 }
+let DASH_REGS=[]; let DASH_SORT={key:'comp',dir:1};   // por defecto: peor completación arriba
 async function renderDashboard(){
   if(PREVIEW){ $('#d-table').innerHTML='<div class="empty"><h3>Configurá Supabase para ver el dashboard</h3></div>'; $('#d-stats').innerHTML=''; return; }
-  const rows=aggBy(await fetchRange($('#d-from').value,$('#d-to').value));
+  DASH_REGS=await fetchRange($('#d-from').value,$('#d-to').value);
+  renderDashTable();
+}
+function renderDashTable(){
+  const byMot=new Map();
+  DASH_REGS.forEach(r=>{ if(!byMot.has(r.motorista)) byMot.set(r.motorista,[]); byMot.get(r.motorista).push(r); });
+  let rows=[...byMot.entries()].map(([mot,list])=>{
+    const o={mot,dias:list.length,asig:0,entr:0,horas:0,tard:0,inc:0,pago:0,days:list,baja:list.some(d=>d.baja)};
+    list.forEach(r=>{ o.asig+=r.asignados;o.entr+=r.entregados;o.horas+=+r.horas;o.tard+=r.tardanza_min;o.inc+=+r.incidencias_total;o.pago+=+r.pago; });
+    o.comp=o.asig>0?o.entr/o.asig:0; o.eph=o.horas>0?o.entr/o.horas:0; o.tardProm=o.dias?o.tard/o.dias:0;
+    return o;
+  });
+  const {key,dir}=DASH_SORT;
+  rows.sort((a,b)=>{ const av=key==='mot'?a.mot.toLowerCase():a[key], bv=key==='mot'?b.mot.toLowerCase():b[key]; return av<bv?-dir:(av>bv?dir:0); });
   const tE=rows.reduce((s,r)=>s+r.entr,0), tP=rows.reduce((s,r)=>s+r.pago,0);
   $('#d-stats').innerHTML=`<div class="stat"><div class="k">Motoristas</div><div class="v">${rows.length}</div></div><div class="stat"><div class="k">Entregas</div><div class="v">${tE.toLocaleString('es-GT')}</div></div><div class="stat"><div class="k">Pago total</div><div class="v">${Q(tP)}</div></div>`;
   if(!rows.length){ $('#d-table').innerHTML='<div class="empty"><h3>Sin datos guardados en el período</h3></div>'; return; }
-  $('#d-table').innerHTML=`<div class="tbl-wrap"><table class="hist"><thead><tr><th>Motorista</th><th>Días</th><th>Asig</th><th>Entr</th><th>Compl.</th><th>Entr/h</th><th>Tard. prom</th><th>Incid.</th><th>Pago</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${esc(r.mot)}</td><td class="num">${r.dias}</td><td class="num">${r.asig}</td><td class="num">${r.entr}</td><td>${pill(pctS(r.comp),compCls(r.comp))}</td><td>${pill(f1(r.eph),ephCls(r.eph))}</td><td>${pill(Math.round(r.tardProm)+'m',tardCls(r.tardProm))}</td><td class="num neg">${r.inc?'−'+Q(r.inc):'—'}</td><td class="num">${Q(r.pago)}</td></tr>`).join('')}</tbody></table></div>`;
+  const cols=[['mot','Motorista'],['dias','Días'],['asig','Asig'],['entr','Entr'],['comp','Compl.'],['eph','Entr/h'],['tardProm','Tard. prom'],['inc','Incid.'],['pago','Pago']];
+  const arrow=k2=>DASH_SORT.key===k2?(DASH_SORT.dir<0?' ▾':' ▴'):'';
+  const head=cols.map(([k2,l])=>`<th class="sortable" data-k="${k2}">${l}${arrow(k2)}</th>`).join('');
+  const body=rows.map((r,i)=>`
+    <tr class="drow" data-i="${i}"><td><span class="dcaret">▸</span>${esc(r.mot)}${r.baja?' '+pill('baja','baja'):''}</td>
+      <td class="num">${r.dias}</td><td class="num">${r.asig}</td><td class="num">${r.entr}</td>
+      <td>${pill(pctS(r.comp),compCls(r.comp))}</td><td>${pill(f1(r.eph),ephCls(r.eph))}</td>
+      <td>${pill(Math.round(r.tardProm)+'m',tardCls(r.tardProm))}</td>
+      <td class="num neg">${r.inc?'−'+Q(r.inc):'—'}</td><td class="num">${Q(r.pago)}</td></tr>
+    <tr class="ddetail" data-i="${i}" hidden><td colspan="9">${dayDetailHTML(r.days)}</td></tr>`).join('');
+  $('#d-table').innerHTML=`<div class="tbl-wrap"><table class="hist"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div>`;
+  $('#d-table').querySelectorAll('th.sortable').forEach(th=>th.addEventListener('click',()=>{ const k2=th.dataset.k; if(DASH_SORT.key===k2) DASH_SORT.dir*=-1; else DASH_SORT={key:k2,dir:(k2==='mot'?1:-1)}; renderDashTable(); }));
+  $('#d-table').querySelectorAll('tr.drow').forEach(tr=>tr.addEventListener('click',()=>{ const det=$('#d-table').querySelector(`tr.ddetail[data-i="${tr.dataset.i}"]`); det.hidden=!det.hidden; const cr=tr.querySelector('.dcaret'); cr.style.transform=det.hidden?'':'rotate(90deg)'; }));
+}
+function dayDetailHTML(days){
+  const ds=[...days].sort((a,b)=>b.fecha.localeCompare(a.fecha));
+  return `<table class="hist"><thead><tr><th>Fecha</th><th>Entrada</th><th>Asig</th><th>Entr</th><th>Compl.</th><th>Entr/h</th><th>Horas</th><th>Incid.</th><th>Pago</th></tr></thead><tbody>${ds.map(r=>{const comp=r.asignados>0?r.entregados/r.asignados:0;return `<tr><td>${fmtDate(r.fecha)}</td><td>${esc(r.entrada_real||'—')} ${r.tardanza_min?pill('+'+r.tardanza_min+'m',tardCls(r.tardanza_min)):''}</td><td class="num">${r.asignados}</td><td class="num">${r.entregados}</td><td>${pill(pctS(comp),compCls(comp))}</td><td>${pill(f1(r.eph),ephCls(r.eph))}</td><td class="num">${f1(r.horas)}</td><td class="num neg">${+r.incidencias_total?'−'+Q(r.incidencias_total):'—'}</td><td class="num">${Q(r.pago)}</td></tr>`}).join('')}</tbody></table>`;
 }
 $('#d-apply').addEventListener('click',renderDashboard);
 $('#d-clear').addEventListener('click',()=>{ $('#d-from').value=''; $('#d-to').value=''; renderDashboard(); });
