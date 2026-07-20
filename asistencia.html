@@ -52,6 +52,15 @@
   .view[hidden]{display:none}
   .howto{font-size:.82rem;color:var(--muted);line-height:1.6}.howto b{color:var(--ink)}
   details.note{margin-top:14px}details.note summary{cursor:pointer;font-size:.85rem;font-weight:600;color:var(--green-dk)}
+  .pgrid{display:flex;flex-wrap:wrap;gap:12px;padding:14px 16px}
+  .pcell{display:flex;flex-direction:column;gap:6px;align-items:center}
+  .pcap{font-size:.74rem;color:var(--muted);text-align:center;line-height:1.3}.pcap b{color:var(--ink);font-size:.82rem}
+  .pthumb{width:96px;height:72px;object-fit:cover;border-radius:10px;border:1px solid var(--line);cursor:pointer}
+  .pthumb:hover{border-color:var(--green)}
+  .pnoimg{width:96px;height:72px;border-radius:10px;background:#eef1ef;display:flex;align-items:center;justify-content:center;color:#a9b3ac;font-size:.72rem}
+  .pact{font-size:.8rem;color:var(--muted);padding:6px 16px 14px}.pact b{color:var(--ink)}
+  .lightbox{position:fixed;inset:0;background:rgba(0,0,0,.82);display:none;align-items:center;justify-content:center;z-index:50;padding:24px}
+  .lightbox.show{display:flex}.lightbox img{max-width:92vw;max-height:88vh;border-radius:14px}
 </style>
 </head>
 <body>
@@ -69,6 +78,7 @@
         <a href="distribucion.html">Distribución</a>
         <a href="motoristas.html">Motoristas</a>
         <a href="asistencia.html" class="active">Asistencia</a>
+        <a href="checador.html">Checador</a>
         <a href="historial.html">Historial</a>
       </div>
       <span class="nav-sep"></span>
@@ -88,6 +98,7 @@
     </div>
     <div class="tabs">
       <button data-tab="registro" class="active">Registrar día</button>
+      <button data-tab="puncheos">Puncheos</button>
       <button data-tab="dashboard">Dashboard</button>
       <button data-tab="historial">Historial</button>
       <button data-tab="semanal">Resumen semanal</button>
@@ -127,6 +138,27 @@
     <div id="d-table"></div>
   </div>
 
+  <!-- ===== PUNCHEOS (checador) ===== -->
+  <div class="view" id="v-puncheos" hidden>
+    <div class="selrow">
+      <label style="font-size:.84rem;font-weight:600;color:var(--muted)">Desde <input type="date" id="p-from"></label>
+      <label style="font-size:.84rem;font-weight:600;color:var(--muted)">Hasta <input type="date" id="p-to"></label>
+      <label style="font-size:.84rem;font-weight:600;color:var(--muted)">Empleado <select id="p-emp"></select></label>
+      <button class="btn btn-ghost" id="p-apply" style="width:auto;padding:9px 14px;font-size:.86rem">Aplicar</button>
+      <button class="btn btn-ghost" id="p-today" style="width:auto;padding:9px 14px;font-size:.86rem">Hoy</button>
+    </div>
+    <div class="summary" id="p-stats"></div>
+    <div id="p-table"></div>
+    <details class="note">
+      <summary>Cómo se calculan los puncheos</summary>
+      <div class="howto" style="margin-top:10px">
+        Cada persona marca desde su computadora en <b>Checador</b> y cada marca guarda hora + foto.<br>
+        <b>Horas netas</b> = (Salida − Entrada) − tiempo de refacción.<br>
+        <b>Inactividad</b> = minutos sin mouse ni teclado (aprox. cuando dejan/bloquean la máquina). <b>Última señal</b> = último latido de la página; si es mucho antes de la salida, dejaron la compu sin marcar salida.
+      </div>
+    </details>
+  </div>
+
   <!-- ===== HISTORIAL ===== -->
   <div class="view" id="v-historial" hidden>
     <div class="selrow"><label style="font-size:.84rem;font-weight:600;color:var(--muted)">Empleado <select id="h-emp"></select></label></div>
@@ -163,6 +195,8 @@
 
   <footer>Dropper · Smart Delivery — Asistencia de Oficina</footer>
 </div>
+
+<div class="lightbox" id="lightbox"><img id="lb-img" alt="Foto de marcaje"></div>
 
 <script>
 const $=s=>document.querySelector(s);
@@ -403,17 +437,94 @@ $('#w-pdf').addEventListener('click',()=>{
   doc.save(`Asistencia_Semana_${mon}.pdf`);
 });
 
+/* ===== puncheos (checador) ===== */
+const P_TLABEL={entrada:'Entrada',refaccion_salida:'Salida refacción',refaccion_regreso:'Regreso refacción',salida:'Salida'};
+const P_TEMOJI={entrada:'▶',refaccion_salida:'☕',refaccion_regreso:'↩',salida:'■'};
+function progOf(nombre){ const e=EMP.find(x=>x.nombre===nombre); return e?e.entrada_prog:null; }
+function fmtHora(s){ return s?String(s).slice(0,5):'—'; }
+function hhmm(iso){ if(!iso) return '—'; const d=new Date(iso),p=x=>String(x).padStart(2,'0'); return `${p(d.getHours())}:${p(d.getMinutes())}`; }
+function aggPunch(marc,act){
+  const key=(e,f)=>e+'|'+f;
+  const byDay=new Map();
+  marc.forEach(m=>{ const k=key(m.empleado,m.fecha); if(!byDay.has(k)) byDay.set(k,{empleado:m.empleado,fecha:m.fecha,marc:[]}); byDay.get(k).marc.push(m); });
+  const actMap=new Map(); (act||[]).forEach(a=>actMap.set(key(a.empleado,a.fecha),a));
+  return [...byDay.values()].map(d=>{
+    const g=t=>d.marc.filter(m=>m.tipo===t).sort((a,b)=>String(a.ts).localeCompare(String(b.ts)));
+    const ent=g('entrada')[0], salA=g('salida'), sal=salA[salA.length-1], rout=g('refaccion_salida')[0], rin=g('refaccion_regreso')[0];
+    const entH=ent?hm(ent.hora):null, salH=sal?hm(sal.hora):null;
+    const refMin=(rout&&rin)?Math.max(0,hm(rin.hora)-hm(rout.hora)):0;
+    const prog=hm(progOf(d.empleado));
+    const tard=(entH!=null&&prog!=null)?Math.max(0,entH-prog):0;
+    let horas=0; if(entH!=null&&salH!=null) horas=Math.max(0,(salH-entH)/60 - refMin/60);
+    const a=actMap.get(key(d.empleado,d.fecha));
+    return {empleado:d.empleado,fecha:d.fecha,ent,sal,rout,rin,refMin,tard,horas,marc:d.marc,cerrada:!!sal,
+            inact:a?(a.inactividad_min||0):0, ultimo:a?a.ultimo_latido:null, eventos:a&&Array.isArray(a.eventos)?a.eventos:[]};
+  }).sort((a,b)=> a.fecha!==b.fecha ? b.fecha.localeCompare(a.fecha) : a.empleado.localeCompare(b.empleado));
+}
+async function fetchPunch(from,to,emp){
+  if(!window.sb) return {marc:[],act:[]};
+  let qm=window.sb.from('asistencia_marcajes').select('*');
+  let qa=window.sb.from('asistencia_actividad').select('*');
+  if(from){ qm=qm.gte('fecha',from); qa=qa.gte('fecha',from); }
+  if(to){ qm=qm.lte('fecha',to); qa=qa.lte('fecha',to); }
+  if(emp){ qm=qm.eq('empleado',emp); qa=qa.eq('empleado',emp); }
+  const [rm,ra]=await Promise.all([ qm.order('ts').limit(5000), qa.limit(3000) ]);
+  return {marc:rm.data||[], act:ra.data||[]};
+}
+let P_DAYS=[];
+async function renderPuncheos(){
+  if(PREVIEW){ $('#p-table').innerHTML='<div class="empty"><h3>Configurá Supabase para ver los puncheos</h3></div>'; $('#p-stats').innerHTML=''; return; }
+  const {marc,act}=await fetchPunch($('#p-from').value,$('#p-to').value,$('#p-emp').value);
+  P_DAYS=aggPunch(marc,act);
+  const totH=P_DAYS.reduce((s,d)=>s+d.horas,0), tardN=P_DAYS.filter(d=>d.tard>5).length, inN=P_DAYS.reduce((s,d)=>s+d.inact,0);
+  $('#p-stats').innerHTML=`<div class="stat"><div class="k">Jornadas</div><div class="v">${P_DAYS.length}</div></div><div class="stat"><div class="k">Horas netas</div><div class="v">${f1(totH)}</div></div><div class="stat"><div class="k">Días con tardanza</div><div class="v">${tardN}</div></div><div class="stat"><div class="k">Inactividad total</div><div class="v">${inN}m</div></div>`;
+  if(!P_DAYS.length){ $('#p-table').innerHTML='<div class="empty"><h3>Sin puncheos en el período</h3><p>Las marcas se registran desde la pestaña <b>Checador</b>.</p></div>'; return; }
+  const body=P_DAYS.map((d,i)=>{
+    const estT=d.ent?pill(d.tard>0?('Tarde '+d.tard+'m'):'A tiempo',tardCls(d.tard)):pill('Sin entrada','gray');
+    const inact=d.inact>0?pill(d.inact+'m',d.inact<=15?'ok':(d.inact<=45?'warn':'bad')):'—';
+    const cierre=d.cerrada?'':pill('sin salida','warn');
+    return `<tr class="drow" data-i="${i}"><td><span class="dcaret">▸</span>${fmtDate(d.fecha)}</td>
+      <td>${esc(d.empleado)}</td>
+      <td>${fmtHora(d.ent&&d.ent.hora)} ${d.ent?estT:''}</td>
+      <td>${d.rout?fmtHora(d.rout.hora):'—'}${d.rin?(' – '+fmtHora(d.rin.hora)):''}${d.refMin?(' <span class="ac-prog">('+d.refMin+'m)</span>'):''}</td>
+      <td>${fmtHora(d.sal&&d.sal.hora)} ${cierre}</td>
+      <td class="num">${f1(d.horas)}</td>
+      <td>${inact}</td></tr>
+    <tr class="ddetail" data-i="${i}" hidden><td colspan="7">${punchDetail(d)}</td></tr>`;
+  }).join('');
+  $('#p-table').innerHTML=`<div class="tbl-wrap"><table class="hist"><thead><tr><th>Fecha</th><th>Empleado</th><th>Entrada</th><th>Refacción</th><th>Salida</th><th>Horas netas</th><th>Inactividad</th></tr></thead><tbody>${body}</tbody></table></div>`;
+  $('#p-table').querySelectorAll('tr.drow').forEach(tr=>tr.addEventListener('click',()=>{ const det=$('#p-table').querySelector(`tr.ddetail[data-i="${tr.dataset.i}"]`); det.hidden=!det.hidden; tr.querySelector('.dcaret').style.transform=det.hidden?'':'rotate(90deg)'; }));
+  $('#p-table').querySelectorAll('.pthumb').forEach(im=>im.addEventListener('click',e=>{ e.stopPropagation(); $('#lb-img').src=im.dataset.full; $('#lightbox').classList.add('show'); }));
+}
+function punchDetail(d){
+  const ms=[...d.marc].sort((a,b)=>String(a.ts).localeCompare(String(b.ts)));
+  const fotos=ms.map(m=>{
+    const img=m.foto?`<img class="pthumb" src="${m.foto}" data-full="${m.foto}" alt="foto">`:`<div class="pnoimg">sin foto</div>`;
+    return `<div class="pcell"><div class="pcap">${P_TEMOJI[m.tipo]||'•'} ${esc(P_TLABEL[m.tipo]||m.tipo)}<br><b>${esc(String(m.hora).slice(0,8))}</b></div>${img}</div>`;
+  }).join('');
+  let actInfo=`<div class="pact"><b>Actividad:</b> última señal ${hhmm(d.ultimo)} · inactividad ${d.inact} min`;
+  if(d.eventos&&d.eventos.length) actInfo+=' · pausas: '+d.eventos.map(e=>`${hhmm(e.desde)}–${hhmm(e.hasta)} (${e.min}m)`).join(', ');
+  actInfo+='</div>';
+  return `<div class="pgrid">${fotos}</div>${actInfo}`;
+}
+$('#p-apply').addEventListener('click',renderPuncheos);
+$('#p-today').addEventListener('click',()=>{ $('#p-from').value=todayStr(); $('#p-to').value=todayStr(); renderPuncheos(); });
+function fillPEmp(){ const cur=$('#p-emp').value; $('#p-emp').innerHTML='<option value="">— todos —</option>'+EMP.map(e=>`<option ${e.nombre===cur?'selected':''}>${esc(e.nombre)}</option>`).join(''); }
+
 /* ===== pestañas + init ===== */
 document.querySelectorAll('.tabs button').forEach(b=>b.addEventListener('click',()=>{
   document.querySelectorAll('.tabs button').forEach(x=>x.classList.toggle('active',x===b));
-  const tab=b.dataset.tab; ['registro','dashboard','historial','semanal','empleados'].forEach(t=>$('#v-'+t).hidden=(t!==tab));
+  const tab=b.dataset.tab; ['registro','puncheos','dashboard','historial','semanal','empleados'].forEach(t=>$('#v-'+t).hidden=(t!==tab));
+  if(tab==='puncheos'){ fillPEmp(); renderPuncheos(); }
   if(tab==='dashboard') renderDashboard();
   if(tab==='historial'){ fillEmpSelect(); renderHistorial(); }
   if(tab==='semanal') renderSemanal();
   if(tab==='empleados') renderEmpTab();
 }));
 $('#logout').addEventListener('click',e=>{ e.preventDefault(); window.dropperAuth.signOut(); });
+$('#lightbox').addEventListener('click',()=>$('#lightbox').classList.remove('show'));
 $('#r-fecha').value=todayStr(); $('#w-date').value=todayStr(); SELDAY=todayStr();
+$('#p-from').value=todayStr(); $('#p-to').value=todayStr();
 (async function init(){
   const guard=await window.dropperAuth.requireSession();
   if(guard===null) return;

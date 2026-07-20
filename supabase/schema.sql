@@ -300,3 +300,59 @@ drop policy if exists "team_update" on public.asistencia_dias;
 create policy "team_update" on public.asistencia_dias for update to authenticated using (true) with check (true);
 drop policy if exists "team_delete" on public.asistencia_dias;
 create policy "team_delete" on public.asistencia_dias for delete to authenticated using (true);
+
+-- ============================================================
+--  CHECADOR (puncheo con foto) — marcajes + actividad
+-- ============================================================
+
+-- Cada puncheo individual (entrada / refaccion_salida / refaccion_regreso / salida) con su foto.
+create table if not exists public.asistencia_marcajes (
+  id            uuid primary key default gen_random_uuid(),
+  created_at    timestamptz not null default now(),
+  created_by    uuid references auth.users(id) on delete set null,
+  created_by_email text,
+  empleado      text not null,
+  fecha         date not null,
+  tipo          text not null,          -- entrada | refaccion_salida | refaccion_regreso | salida
+  hora          text not null,          -- HH:MM:SS local
+  ts            timestamptz not null default now(),
+  foto          text,                   -- JPEG en data URL (base64, reducido)
+  nota          text
+);
+create index if not exists marcajes_fecha_idx on public.asistencia_marcajes (fecha desc);
+create index if not exists marcajes_emp_idx on public.asistencia_marcajes (empleado);
+create index if not exists marcajes_emp_fecha_idx on public.asistencia_marcajes (empleado, fecha);
+alter table public.asistencia_marcajes enable row level security;
+drop policy if exists "team_select" on public.asistencia_marcajes;
+create policy "team_select" on public.asistencia_marcajes for select to authenticated using (true);
+drop policy if exists "team_insert" on public.asistencia_marcajes;
+create policy "team_insert" on public.asistencia_marcajes for insert to authenticated with check (auth.uid() = created_by);
+drop policy if exists "team_update" on public.asistencia_marcajes;
+create policy "team_update" on public.asistencia_marcajes for update to authenticated using (true) with check (true);
+drop policy if exists "team_delete" on public.asistencia_marcajes;
+create policy "team_delete" on public.asistencia_marcajes for delete to authenticated using (true);
+
+-- Latido e inactividad por empleado y día (una fila por empleado/fecha).
+create table if not exists public.asistencia_actividad (
+  id              uuid primary key default gen_random_uuid(),
+  created_at      timestamptz not null default now(),
+  updated_at      timestamptz not null default now(),
+  created_by      uuid references auth.users(id) on delete set null,
+  empleado        text not null,
+  fecha           date not null,
+  primer_latido   timestamptz,
+  ultimo_latido   timestamptz,
+  inactividad_min integer not null default 0,
+  eventos         jsonb not null default '[]'::jsonb,   -- [{desde, hasta, min}]
+  unique (empleado, fecha)
+);
+create index if not exists actividad_fecha_idx on public.asistencia_actividad (fecha desc);
+alter table public.asistencia_actividad enable row level security;
+drop policy if exists "team_select" on public.asistencia_actividad;
+create policy "team_select" on public.asistencia_actividad for select to authenticated using (true);
+drop policy if exists "team_insert" on public.asistencia_actividad;
+create policy "team_insert" on public.asistencia_actividad for insert to authenticated with check (auth.uid() = created_by);
+drop policy if exists "team_update" on public.asistencia_actividad;
+create policy "team_update" on public.asistencia_actividad for update to authenticated using (true) with check (true);
+drop policy if exists "team_delete" on public.asistencia_actividad;
+create policy "team_delete" on public.asistencia_actividad for delete to authenticated using (true);

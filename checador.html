@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Checador · Herramientas Dropper</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/css/app.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="assets/js/config.js"></script>
+<script src="assets/js/supabaseClient.js"></script>
+<script src="assets/js/auth-guard.js"></script>
+<script src="assets/js/brand.js"></script>
+<script src="assets/js/nav.js"></script>
+<style>
+  .status{margin:12px 0;font-size:.9rem;display:none;align-items:center;gap:9px;padding:11px 15px;border-radius:12px}
+  .status.show{display:flex}.status.ok{background:var(--lime-soft);color:var(--green-dk);border:1px solid #c4e3cd}.status.err{background:#fdecea;color:#a3261a;border:1px solid #f5c6c0}.status.work{background:var(--lime-soft);color:var(--green-dk);border:1px solid #c4e3cd}
+  .spin{width:15px;height:15px;border:2px solid #bcd9c4;border-top-color:var(--green-dk);border-radius:50%;animation:sp .7s linear infinite;flex:none}@keyframes sp{to{transform:rotate(360deg)}}
+
+  .who{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;background:var(--white);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);padding:14px 18px;margin-bottom:16px}
+  .who .lbl{font-size:.78rem;color:var(--muted);font-weight:600}
+  .who .nm{font-family:'Sora',sans-serif;font-weight:800;font-size:1.25rem;color:var(--ink)}
+  .who .chg{font-size:.82rem;font-weight:600;color:var(--green-dk);border:1px solid #cdd8cf;background:#fff;border-radius:9px;padding:8px 12px;cursor:pointer}
+  .who .chg:hover{border-color:var(--green)}
+  .clock{font-family:'Sora',sans-serif;font-weight:800;font-size:1.6rem;color:var(--ink);letter-spacing:.5px}
+  .clock small{display:block;font-family:'Plus Jakarta Sans',sans-serif;font-weight:600;font-size:.72rem;color:var(--muted);letter-spacing:0}
+
+  .grid2{display:grid;grid-template-columns:340px 1fr;gap:18px;align-items:start}
+  @media(max-width:820px){.grid2{grid-template-columns:1fr}}
+  .campanel{background:var(--white);border:1px solid var(--line);border-radius:16px;box-shadow:var(--shadow);padding:14px;display:flex;flex-direction:column;gap:10px}
+  .camwrap{position:relative;width:100%;aspect-ratio:4/3;background:#0c0f0d;border-radius:12px;overflow:hidden}
+  .camwrap video{width:100%;height:100%;object-fit:cover;transform:scaleX(-1)}
+  .camwrap .dot{position:absolute;top:10px;left:10px;display:flex;align-items:center;gap:6px;font-size:.72rem;font-weight:700;color:#fff;background:rgba(0,0,0,.45);padding:4px 9px;border-radius:20px}
+  .camwrap .dot i{width:9px;height:9px;border-radius:50%;background:#ff5b5b;box-shadow:0 0 0 0 rgba(255,91,91,.6);animation:pl 1.6s infinite}
+  @keyframes pl{0%{box-shadow:0 0 0 0 rgba(255,91,91,.6)}70%{box-shadow:0 0 0 8px rgba(255,91,91,0)}100%{box-shadow:0 0 0 0 rgba(255,91,91,0)}}
+  .cam-msg{display:none;font-size:.82rem;color:#8a5a00;background:#fdf6e3;border:1px solid #f0e2b6;border-radius:10px;padding:10px 12px;line-height:1.5}
+
+  .btns{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .pbtn{border:none;border-radius:16px;padding:20px 14px;cursor:pointer;font-family:'Sora',sans-serif;font-weight:800;font-size:1.02rem;color:#fff;display:flex;flex-direction:column;align-items:center;gap:8px;box-shadow:var(--shadow);transition:transform .08s,filter .15s;line-height:1.2;text-align:center}
+  .pbtn .em{font-size:1.7rem;line-height:1}
+  .pbtn:hover{filter:brightness(1.05)}.pbtn:active{transform:scale(.97)}
+  .pbtn:disabled{background:#e9edea!important;color:#a9b3ac!important;cursor:not-allowed;box-shadow:none;filter:none}
+  .pbtn.t-in{background:linear-gradient(135deg,#1f7a3d,#2fa356)}
+  .pbtn.t-ref{background:linear-gradient(135deg,#c98a00,#e0a500)}
+  .pbtn.t-out{background:linear-gradient(135deg,#0c0f0d,#334036)}
+  .jornada{text-align:center;font-size:.9rem;color:var(--muted);padding:8px}
+  .jornada b{color:var(--green-dk)}
+
+  .timeline{background:var(--white);border:1px solid var(--line);border-radius:16px;box-shadow:var(--shadow);padding:16px 18px}
+  .timeline h3{font-family:'Sora',sans-serif;font-weight:700;font-size:1.02rem;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between}
+  .tl-item{display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--line)}
+  .tl-item:last-child{border-bottom:none}
+  .tl-item img{width:46px;height:46px;border-radius:10px;object-fit:cover;cursor:pointer;border:1px solid var(--line);flex:none}
+  .tl-item .noimg{width:46px;height:46px;border-radius:10px;background:#eef1ef;display:flex;align-items:center;justify-content:center;color:#a9b3ac;flex:none}
+  .tl-badge{width:34px;height:34px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:1.1rem;flex:none}
+  .tl-in{background:#DDF0E2}.tl-ref{background:#fdf6e3}.tl-out{background:#eef1ef}
+  .tl-txt{flex:1;min-width:0}.tl-txt .lb{font-weight:700;font-size:.92rem;color:var(--ink)}.tl-txt .hr{font-size:.8rem;color:var(--muted)}
+  .tl-pill{margin-left:auto}
+  .tl-empty{color:var(--muted);font-size:.88rem;padding:14px 0;text-align:center}
+  .act{margin-top:12px;font-size:.78rem;color:var(--muted);border-top:1px dashed var(--line);padding-top:10px}
+  .act b{color:var(--ink)}
+  .pill{display:inline-block;font-size:.74rem;font-weight:700;border-radius:20px;padding:2px 9px;white-space:nowrap}
+  .ok{color:#14572A;background:#DDF0E2;border:1px solid #c4e3cd}.warn{color:#8a5a00;background:#fdf6e3;border:1px solid #f0e2b6}.bad{color:#a3261a;background:#fdecea;border:1px solid #f5c6c0}.gray{color:#5b6b60;background:#eef1ef;border:1px solid #dfe4e0}
+
+  /* setup */
+  .setup{max-width:440px;margin:24px auto;background:var(--white);border:1px solid var(--line);border-radius:16px;box-shadow:var(--shadow);padding:26px 24px;text-align:center}
+  .setup h3{font-family:'Sora',sans-serif;font-weight:800;font-size:1.2rem;margin-bottom:6px}
+  .setup p{color:var(--muted);font-size:.88rem;margin-bottom:18px;line-height:1.5}
+  .setup select{width:100%;font-family:inherit;font-size:1rem;border:1px solid #cdd8cf;border-radius:11px;padding:12px 14px;background:#fcfdfc;margin-bottom:14px}
+  .lightbox{position:fixed;inset:0;background:rgba(0,0,0,.82);display:none;align-items:center;justify-content:center;z-index:50;padding:24px}
+  .lightbox.show{display:flex}.lightbox img{max-width:92vw;max-height:88vh;border-radius:14px;box-shadow:0 20px 60px rgba(0,0,0,.5)}
+  .view[hidden]{display:none}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="topbar">
+    <a class="brand" href="inicio.html"><img id="brand-logo" alt="Dropper · Herramientas"></a>
+    <nav class="nav">
+      <div class="nav-links">
+        <a href="inicio.html">Inicio</a>
+        <a href="generador.html">Generador</a>
+        <a href="pagos.html">Pagos</a>
+        <a href="comisiones.html">Comisiones</a>
+        <a href="productividad.html">Productividad</a>
+        <a href="distribucion.html">Distribución</a>
+        <a href="motoristas.html">Motoristas</a>
+        <a href="asistencia.html">Asistencia</a>
+        <a href="checador.html" class="active">Checador</a>
+        <a href="historial.html">Historial</a>
+      </div>
+      <span class="nav-sep"></span>
+      <span class="nav-av" id="nav-av"></span>
+      <a href="#" class="nav-logout" id="logout">Salir</a>
+    </nav>
+  </div>
+
+  <div class="notice" id="notice">
+    <b>Modo vista previa.</b> Supabase no está configurado: podés probar el checador pero <b>no se guarda</b>. Pegá tus llaves en <code>assets/js/config.js</code>.
+  </div>
+
+  <div class="page-head">
+    <div>
+      <h2>Checador con foto</h2>
+      <div class="sub">Marcá tu entrada, refacción y salida. Cada marca guarda la hora y una foto.</div>
+    </div>
+  </div>
+
+  <div class="status" id="status"></div>
+
+  <!-- ===== SETUP: elegir empleado de esta compu ===== -->
+  <div class="view" id="v-setup" hidden>
+    <div class="setup">
+      <h3>¿Quién usa esta computadora?</h3>
+      <p>Elegí tu nombre. Queda guardado en esta máquina para que solo marqués con un clic. Podés cambiarlo cuando quieras.</p>
+      <select id="setup-sel"></select>
+      <button class="btn btn-primary" id="setup-ok">Usar esta computadora</button>
+    </div>
+  </div>
+
+  <!-- ===== PANEL PRINCIPAL ===== -->
+  <div class="view" id="v-panel" hidden>
+    <div class="who">
+      <div>
+        <div class="lbl">Esta computadora es de</div>
+        <div class="nm" id="who-name">—</div>
+      </div>
+      <div class="clock" id="clock" style="text-align:right">--:--<small id="clock-date"></small></div>
+      <button class="chg" id="who-change">Cambiar persona</button>
+    </div>
+
+    <div class="grid2">
+      <div class="campanel">
+        <div class="camwrap">
+          <video id="cam" autoplay playsinline muted></video>
+          <div class="dot"><i></i> EN VIVO</div>
+        </div>
+        <div class="cam-msg" id="cam-msg"></div>
+        <div class="btns" id="btns"></div>
+        <div class="jornada" id="jornada"></div>
+      </div>
+
+      <div class="timeline">
+        <h3>Hoy <span id="tl-date" style="font-size:.8rem;color:var(--muted);font-weight:600"></span></h3>
+        <div id="tl-list"><div class="tl-empty">Aún no marcás nada hoy.</div></div>
+        <div class="act" id="act-box" hidden></div>
+      </div>
+    </div>
+  </div>
+
+  <footer>Dropper · Smart Delivery — Checador</footer>
+</div>
+
+<div class="lightbox" id="lightbox"><img id="lb-img" alt="Foto de marcaje"></div>
+
+<script>
+const $=s=>document.querySelector(s);
+let USER=null, PREVIEW=true, EMP=[], MEMP=null, TODAY=[];
+let STREAM=null, CAM_OK=false;
+let ACT={primer_latido:null,ultimo_latido:null,inactividad_min:0,eventos:[]};
+
+const TIPOS=[
+  {k:'entrada',           label:'Entrada',              em:'▶', cls:'t-in'},
+  {k:'refaccion_salida',  label:'Salida a refacción',   em:'☕', cls:'t-ref'},
+  {k:'refaccion_regreso', label:'Regreso de refacción', em:'↩', cls:'t-ref'},
+  {k:'salida',            label:'Salida',               em:'■', cls:'t-out'},
+];
+const TLABEL=Object.fromEntries(TIPOS.map(t=>[t.k,t.label]));
+const TEMOJI=Object.fromEntries(TIPOS.map(t=>[t.k,t.em]));
+
+function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+function todayStr(){ const d=new Date(),p=x=>String(x).padStart(2,'0'); return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}`; }
+function nowHMS(){ const d=new Date(),p=x=>String(x).padStart(2,'0'); return `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`; }
+function hm(t){ const m=String(t||'').match(/(\d{1,2}):(\d{2})/); return m?(+m[1])*60+(+m[2]):null; }
+function fmtDateLong(){ const d=new Date(); return d.toLocaleDateString('es-GT',{weekday:'long',day:'numeric',month:'long'}); }
+function pill(t,c){ return `<span class="pill ${c}">${t}</span>`; }
+function status(msg,type){ const s=$('#status'); s.className='status show '+(type||''); s.innerHTML=(type==='work'?'<span class="spin"></span>':'')+msg; if(type==='ok') setTimeout(()=>{ if(s.classList.contains('ok')) s.className='status'; },3000); }
+function tardCls(min){ return min<=5?'ok':(min<=15?'warn':'bad'); }
+
+/* ===== reloj ===== */
+function tickClock(){ const d=new Date(),p=x=>String(x).padStart(2,'0'); const c=$('#clock'); if(c) c.firstChild.textContent=`${p(d.getHours())}:${p(d.getMinutes())}`; }
+
+/* ===== empleados / binding de máquina ===== */
+async function loadEmp(){
+  EMP=[];
+  if(!window.sb) return;
+  const {data}=await window.sb.from('empleados_oficina').select('*').order('nombre');
+  EMP=(data||[]).filter(e=>e.activo!==false);
+}
+function savedEmpName(){ try{ return localStorage.getItem('dropper_checador_emp')||''; }catch(e){ return ''; } }
+function saveEmpName(n){ try{ localStorage.setItem('dropper_checador_emp',n); }catch(e){} }
+
+function showSetup(){
+  $('#v-panel').hidden=true; $('#v-setup').hidden=false;
+  const sel=$('#setup-sel');
+  if(!EMP.length){ sel.innerHTML='<option value="">— No hay empleados dados de alta —</option>'; return; }
+  const cur=savedEmpName();
+  sel.innerHTML=EMP.map(e=>`<option ${e.nombre===cur?'selected':''}>${esc(e.nombre)}</option>`).join('');
+}
+$('#setup-ok').addEventListener('click',async()=>{
+  const n=$('#setup-sel').value; if(!n){ status('No hay empleados. Dalos de alta en Asistencia → Empleados.','err'); return; }
+  saveEmpName(n); await enterPanel();
+});
+$('#who-change').addEventListener('click',()=>{ stopHeartbeat(); showSetup(); });
+
+async function enterPanel(){
+  const name=savedEmpName();
+  MEMP=EMP.find(e=>e.nombre===name);
+  if(!MEMP){ showSetup(); return; }
+  $('#v-setup').hidden=true; $('#v-panel').hidden=false;
+  $('#who-name').textContent=MEMP.nombre;
+  $('#tl-date').textContent=fmtDateLong();
+  $('#clock-date').textContent=fmtDateLong();
+  await startCam();
+  await loadToday();
+  renderButtons(); renderTimeline();
+  if(!PREVIEW){ await loadAct(); startHeartbeat(); renderAct(); }
+}
+
+/* ===== cámara ===== */
+async function startCam(){
+  if(STREAM) return;
+  try{
+    STREAM=await navigator.mediaDevices.getUserMedia({video:{facingMode:'user',width:{ideal:640},height:{ideal:480}},audio:false});
+    const v=$('#cam'); v.srcObject=STREAM; await v.play(); CAM_OK=true; $('#cam-msg').style.display='none';
+  }catch(e){
+    CAM_OK=false; const m=$('#cam-msg'); m.style.display='block';
+    m.textContent='No se pudo abrir la cámara ('+(e.name||'error')+'). Podés marcar igual, pero sin foto. Revisá el permiso de cámara del navegador.';
+  }
+}
+function capture(){
+  if(!CAM_OK) return null;
+  try{
+    const v=$('#cam'); const w=320,h=240; const c=document.createElement('canvas'); c.width=w; c.height=h;
+    const ctx=c.getContext('2d'); const vw=v.videoWidth||640, vh=v.videoHeight||480;
+    const s=Math.max(w/vw,h/vh), dw=vw*s, dh=vh*s;
+    ctx.save();
+    ctx.translate(w,0); ctx.scale(-1,1);                 // espejo, como se ve en pantalla
+    ctx.drawImage(v,(w-dw)/2,(h-dh)/2,dw,dh);
+    ctx.restore();
+    return c.toDataURL('image/jpeg',0.55);
+  }catch(e){ return null; }
+}
+
+/* ===== estado de la jornada ===== */
+function allowed(){
+  const has=t=>TODAY.some(m=>m.tipo===t);
+  const ent=has('entrada'), rs=has('refaccion_salida'), rr=has('refaccion_regreso'), sal=has('salida');
+  if(sal) return {};
+  if(!ent) return {entrada:true};
+  if(rs && !rr) return {refaccion_regreso:true, salida:true};
+  return {refaccion_salida:!rs, salida:true};
+}
+function renderButtons(){
+  const al=allowed(), box=$('#btns');
+  box.innerHTML=TIPOS.map(t=>`<button class="pbtn ${t.cls}" data-k="${t.k}" ${al[t.k]?'':'disabled'}><span class="em">${t.em}</span>${esc(t.label)}</button>`).join('');
+  box.querySelectorAll('.pbtn').forEach(b=>b.addEventListener('click',()=>punch(b.dataset.k)));
+  const j=$('#jornada');
+  if(TODAY.some(m=>m.tipo==='salida')) j.innerHTML='<b>Jornada cerrada.</b> Nos vemos mañana. ✔';
+  else if(!TODAY.some(m=>m.tipo==='entrada')) j.textContent='Marcá tu entrada para empezar.';
+  else j.textContent='';
+}
+
+/* ===== puncheo ===== */
+async function punch(tipo){
+  if(!allowed()[tipo]) return;
+  if(TODAY.some(m=>m.tipo===tipo) && !confirm('Ya marcaste "'+TLABEL[tipo]+'" hoy. ¿Marcar de nuevo?')) return;
+  const foto=capture(), hora=nowHMS(), fecha=todayStr();
+  const rec={ empleado:MEMP.nombre, fecha, tipo, hora, ts:new Date().toISOString(), foto };
+  if(PREVIEW){ TODAY.push(rec); afterPunch(tipo,hora); return; }
+  status('Marcando '+TLABEL[tipo]+'…','work');
+  try{
+    const {data,error}=await window.sb.from('asistencia_marcajes')
+      .insert({...rec, created_by:USER.id, created_by_email:USER.email||null}).select().single();
+    if(error) throw error;
+    TODAY.push(data||rec); afterPunch(tipo,hora);
+  }catch(err){ console.error(err); status('No se pudo marcar: '+err.message,'err'); }
+}
+function afterPunch(tipo,hora){
+  renderButtons(); renderTimeline();
+  let extra='';
+  if(tipo==='entrada' && MEMP.entrada_prog){ const t=Math.max(0,(hm(hora)||0)-(hm(MEMP.entrada_prog)||0)); extra=' · '+(t>0?('llegaste '+t+' min tarde'):'a tiempo'); }
+  status('✓ '+TLABEL[tipo]+' marcada a las '+hora.slice(0,5)+extra,'ok');
+}
+
+/* ===== timeline de hoy ===== */
+async function loadToday(){
+  TODAY=[];
+  if(!window.sb || PREVIEW) return;
+  const {data}=await window.sb.from('asistencia_marcajes').select('*').eq('empleado',MEMP.nombre).eq('fecha',todayStr()).order('ts');
+  TODAY=data||[];
+}
+function clsOf(tipo){ return tipo==='entrada'?'tl-in':(tipo==='salida'?'tl-out':'tl-ref'); }
+function renderTimeline(){
+  const box=$('#tl-list');
+  if(!TODAY.length){ box.innerHTML='<div class="tl-empty">Aún no marcás nada hoy.</div>'; return; }
+  const ms=[...TODAY].sort((a,b)=>String(a.ts).localeCompare(String(b.ts)));
+  box.innerHTML=ms.map(m=>{
+    const img=m.foto?`<img src="${m.foto}" class="lb-open" alt="foto">`:`<div class="noimg">—</div>`;
+    let pl=''; if(m.tipo==='entrada' && MEMP.entrada_prog){ const t=Math.max(0,(hm(m.hora)||0)-(hm(MEMP.entrada_prog)||0)); pl=pill(t>0?('Tarde '+t+'m'):'A tiempo',tardCls(t)); }
+    return `<div class="tl-item">
+      <div class="tl-badge ${clsOf(m.tipo)}">${TEMOJI[m.tipo]||'•'}</div>
+      <div class="tl-txt"><div class="lb">${esc(TLABEL[m.tipo]||m.tipo)}</div><div class="hr">${esc(String(m.hora).slice(0,8))}</div></div>
+      <span class="tl-pill">${pl}</span>${img}</div>`;
+  }).join('');
+  box.querySelectorAll('.lb-open').forEach(i=>i.addEventListener('click',()=>{ $('#lb-img').src=i.src; $('#lightbox').classList.add('show'); }));
+}
+$('#lightbox').addEventListener('click',()=>$('#lightbox').classList.remove('show'));
+
+/* ===== actividad: latido + inactividad ===== */
+const IDLE_MS=5*60*1000;
+let lastActive=Date.now(), idleStart=null, HB=null;
+function iso(ms){ return new Date(ms).toISOString(); }
+async function loadAct(){
+  ACT={primer_latido:null,ultimo_latido:null,inactividad_min:0,eventos:[]};
+  const {data}=await window.sb.from('asistencia_actividad').select('*').eq('empleado',MEMP.nombre).eq('fecha',todayStr()).maybeSingle();
+  if(data) ACT={primer_latido:data.primer_latido,ultimo_latido:data.ultimo_latido,inactividad_min:data.inactividad_min||0,eventos:Array.isArray(data.eventos)?data.eventos:[]};
+}
+let saving=false;
+async function saveAct(){
+  if(PREVIEW||saving) return; saving=true;
+  try{
+    await window.sb.from('asistencia_actividad').upsert({
+      created_by:USER.id, empleado:MEMP.nombre, fecha:todayStr(),
+      primer_latido:ACT.primer_latido, ultimo_latido:ACT.ultimo_latido,
+      inactividad_min:ACT.inactividad_min, eventos:ACT.eventos, updated_at:new Date().toISOString()
+    },{onConflict:'empleado,fecha'});
+  }catch(e){ console.warn('actividad',e); } finally{ saving=false; }
+}
+function onActivity(){
+  const now=Date.now();
+  if(idleStart && (now-idleStart)>=IDLE_MS){
+    const min=Math.round((now-idleStart)/60000);
+    ACT.eventos.push({desde:iso(idleStart),hasta:iso(now),min});
+    ACT.inactividad_min+=min; saveAct(); renderAct();
+  }
+  idleStart=null; lastActive=now;
+}
+function startHeartbeat(){
+  ['mousemove','mousedown','keydown','touchstart','scroll'].forEach(ev=>window.addEventListener(ev,onActivity,{passive:true}));
+  const now=Date.now(); ACT.ultimo_latido=iso(now); if(!ACT.primer_latido) ACT.primer_latido=ACT.ultimo_latido; saveAct();
+  HB=setInterval(()=>{
+    const now=Date.now(); ACT.ultimo_latido=iso(now); if(!ACT.primer_latido) ACT.primer_latido=ACT.ultimo_latido;
+    if((now-lastActive)>=IDLE_MS && !idleStart) idleStart=lastActive;
+    saveAct(); renderAct();
+  },60000);
+}
+function stopHeartbeat(){ if(HB){ clearInterval(HB); HB=null; } ['mousemove','mousedown','keydown','touchstart','scroll'].forEach(ev=>window.removeEventListener(ev,onActivity)); }
+function renderAct(){
+  const box=$('#act-box'); if(!box) return;
+  if(!ACT.ultimo_latido){ box.hidden=true; return; }
+  box.hidden=false;
+  const ult=new Date(ACT.ultimo_latido), p=x=>String(x).padStart(2,'0');
+  const idle=idleStart?' · <span class="pill warn">ausente del puesto ahora</span>':'';
+  box.innerHTML=`<b>Actividad en la máquina</b><br>Última señal: ${p(ult.getHours())}:${p(ult.getMinutes())} · Tiempo inactivo acumulado: <b>${ACT.inactividad_min} min</b>${idle}`;
+}
+window.addEventListener('beforeunload',()=>{ if(!PREVIEW){ ACT.ultimo_latido=iso(Date.now()); try{ saveAct(); }catch(e){} } });
+
+/* ===== init ===== */
+$('#logout').addEventListener('click',e=>{ e.preventDefault(); stopHeartbeat(); window.dropperAuth.signOut(); });
+tickClock(); setInterval(tickClock,15000);
+(async function init(){
+  const guard=await window.dropperAuth.requireSession();
+  if(guard===null) return;
+  if(guard.previewMode){ PREVIEW=true; $('#notice').classList.add('show'); }
+  else { PREVIEW=false; USER=guard.user; window.dropperNav.setUser(guard.user.email||''); }
+  await loadEmp();
+  if(!EMP.length && !PREVIEW){ showSetup(); status('No hay empleados dados de alta. Agregalos en Asistencia → Empleados.','err'); return; }
+  if(savedEmpName() && EMP.find(e=>e.nombre===savedEmpName())) await enterPanel();
+  else showSetup();
+})();
+</script>
+</body>
+</html>
