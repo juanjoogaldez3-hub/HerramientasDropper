@@ -8,6 +8,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="assets/css/app.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
@@ -19,52 +20,55 @@
 <script src="assets/js/nav.js"></script>
 <style>
   .tabs{flex-wrap:wrap}
-  .card{background:var(--white);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:20px 22px;margin-bottom:18px}
-  .card h3{font-family:'Sora',sans-serif;font-weight:700;font-size:1.05rem;margin-bottom:14px}
-  .form-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px}
-  .fld{display:flex;flex-direction:column;gap:5px}
-  .fld label{font-size:.78rem;font-weight:600;color:var(--muted)}
-  .fld input,.fld select{font-family:inherit;font-size:.95rem;color:var(--ink);border:1px solid #cdd8cf;border-radius:10px;padding:9px 11px;background:#fcfdfc;width:100%}
-  .fld input:focus,.fld select:focus{outline:none;border-color:var(--green);box-shadow:0 0 0 3px rgba(31,122,61,.12)}
-  .fld .pair{display:flex;gap:8px}
-  .fld .tard{font-size:.72rem;font-weight:700;margin-top:1px}
-  .quick{display:flex;gap:6px;flex-wrap:wrap;margin-top:4px}
-  .quick button{font-size:.74rem;font-weight:600;color:#a3261a;background:#fdecea;border:1px solid #f5c6c0;border-radius:20px;padding:4px 10px;cursor:pointer}
-  .quick button:hover{background:#fbddd8}
-  .chk-row{display:flex;align-items:center;gap:8px;font-size:.86rem;color:var(--ink);margin-top:6px}
-  .chk-row input{width:18px;height:18px;accent-color:#a3261a}
-  .prev{display:flex;gap:12px;flex-wrap:wrap;margin:16px 0;padding:14px 16px;background:var(--grey);border-radius:12px}
-  .prev .pv{flex:1;min-width:120px}
-  .prev .pv .k{font-size:.7rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:600}
-  .prev .pv .v{font-family:'Sora',sans-serif;font-weight:800;font-size:1.25rem;margin-top:2px}
-  .prev .pv.pago .v{color:var(--green-dk)}
-  .pill{display:inline-block;font-size:.78rem;font-weight:700;border-radius:20px;padding:2px 10px;white-space:nowrap}
-  .ok{color:#14572A;background:#DDF0E2;border:1px solid #c4e3cd}
-  .warn{color:#8a5a00;background:#fdf6e3;border:1px solid #f0e2b6}
-  .bad{color:#a3261a;background:#fdecea;border:1px solid #f5c6c0}
-  .baja{color:#fff;background:#a3261a;border:1px solid #a3261a}
-  .rowbtns{display:flex;gap:8px;flex-wrap:wrap;margin-top:16px}
-  .tbl-wrap{overflow-x:auto;border-radius:var(--radius);border:1px solid var(--line);box-shadow:var(--shadow)}
-  table.hist{min-width:640px}
-  table.hist .neg{color:#a3261a}
-  .mot-mgr{margin-top:14px}
-  .mot-mgr summary{cursor:pointer;font-size:.85rem;font-weight:600;color:var(--green-dk)}
-  .mot-list{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
-  .mot-chip{display:inline-flex;align-items:center;gap:6px;font-size:.84rem;background:var(--grey);border:1px solid var(--line);border-radius:20px;padding:4px 6px 4px 12px}
-  .mot-chip button{border:none;background:#e6e9e7;color:#a3261a;border-radius:50%;width:20px;height:20px;cursor:pointer;font-weight:700;line-height:1}
-  .mot-add{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
-  .mot-add input{border:1px solid #cdd8cf;border-radius:10px;padding:8px 11px;font-family:inherit;font-size:.9rem;min-width:180px}
-  .selrow{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:16px}
-  .selrow select,.selrow input[type=date]{font-family:inherit;font-size:.92rem;color:var(--ink);border:1px solid #cdd8cf;border-radius:10px;padding:9px 12px;background:#fcfdfc}
-  .empty{padding:44px 24px;text-align:center;color:var(--muted)}
-  .empty h3{font-family:'Sora',sans-serif;font-weight:700;font-size:1.05rem;color:var(--ink);margin-bottom:4px}
+  .drop{padding:34px 24px;text-align:center;cursor:pointer;border:2px dashed #cdd8cf;border-radius:var(--radius);background:var(--white);transition:.2s;margin-bottom:8px}
+  .drop:hover{border-color:var(--green);background:#fbfdfb}
+  .drop.drag{border-color:var(--green);background:var(--lime-soft)}
+  .drop .ic{width:52px;height:52px;border-radius:50%;margin:0 auto 12px;background:var(--lime-soft);display:grid;place-items:center;color:var(--green-dk)}
+  .drop h2{font-family:'Sora',sans-serif;font-weight:700;font-size:1.08rem}
+  .drop p{color:var(--muted);font-size:.9rem;margin-top:5px}
+  input[type=file]{display:none}
   .status{margin:12px 0;font-size:.9rem;display:none;align-items:center;gap:9px;padding:11px 15px;border-radius:12px}
   .status.show{display:flex}
   .status.ok{background:var(--lime-soft);color:var(--green-dk);border:1px solid #c4e3cd}
   .status.err{background:#fdecea;color:#a3261a;border:1px solid #f5c6c0}
-  .howto{font-size:.82rem;color:var(--muted);line-height:1.6}
-  .howto b{color:var(--ink)}
+  .status.work{background:var(--lime-soft);color:var(--green-dk);border:1px solid #c4e3cd}
+  .spin{width:15px;height:15px;border:2px solid #bcd9c4;border-top-color:var(--green-dk);border-radius:50%;animation:sp .7s linear infinite;flex:none}
+  @keyframes sp{to{transform:rotate(360deg)}}
+  .daysel{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:14px 0}
+  .daysel select{font-family:inherit;font-size:.92rem;border:1px solid #cdd8cf;border-radius:10px;padding:9px 12px;background:#fcfdfc}
+  .mcards{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:14px;margin-bottom:16px}
+  .mcard{background:var(--white);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);padding:16px 16px 14px;display:flex;flex-direction:column;gap:10px}
+  .mc-name{font-family:'Sora',sans-serif;font-weight:700;font-size:1.02rem;display:flex;align-items:center;gap:8px}
+  .mc-metrics{display:flex;flex-wrap:wrap;gap:6px 12px;font-size:.82rem;color:var(--muted)}
+  .mc-metrics b{color:var(--ink);font-family:'Sora',sans-serif}
+  .pill{display:inline-block;font-size:.74rem;font-weight:700;border-radius:20px;padding:2px 9px;white-space:nowrap}
+  .ok{color:#14572A;background:#DDF0E2;border:1px solid #c4e3cd}
+  .warn{color:#8a5a00;background:#fdf6e3;border:1px solid #f0e2b6}
+  .bad{color:#a3261a;background:#fdecea;border:1px solid #f5c6c0}
+  .baja{color:#fff;background:#a3261a;border:1px solid #a3261a}
+  .mc-in{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:var(--grey);border-radius:10px;padding:9px 11px}
+  .mc-in label{font-size:.78rem;font-weight:600;color:var(--muted)}
+  .mc-in input[type=time]{border:1px solid #cdd8cf;border-radius:8px;padding:6px 8px;font-family:inherit}
+  .inc-list{display:flex;flex-direction:column;gap:5px}
+  .inc-item{display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:.8rem;background:#fdf3f2;border:1px solid #f1d6d2;border-radius:9px;padding:5px 9px}
+  .inc-item .x{border:none;background:none;color:#a3261a;cursor:pointer;font-weight:700}
+  .inc-add{display:flex;gap:6px;flex-wrap:wrap}
+  .inc-add select{font-family:inherit;font-size:.78rem;border:1px solid #cdd8cf;border-radius:8px;padding:6px 8px;background:#fff;max-width:150px}
+  .inc-add button{font-size:.78rem;font-weight:600;color:var(--green-dk);border:1px solid #cdd8cf;background:#fff;border-radius:8px;padding:6px 10px;cursor:pointer}
+  .mc-foot{display:flex;justify-content:space-between;align-items:center;gap:8px;border-top:1px solid var(--line);padding-top:10px;margin-top:2px}
+  .mc-foot .cbaja{display:inline-flex;align-items:center;gap:6px;font-size:.78rem;color:#a3261a}
+  .mc-foot .cbaja input{width:16px;height:16px;accent-color:#a3261a}
+  .mc-pago{font-family:'Sora',sans-serif;font-weight:800;font-size:1.05rem;color:var(--green-dk)}
+  .selrow{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:16px}
+  .selrow select,.selrow input[type=date]{font-family:inherit;font-size:.92rem;border:1px solid #cdd8cf;border-radius:10px;padding:9px 12px;background:#fcfdfc}
+  .tbl-wrap{overflow-x:auto;border-radius:var(--radius);border:1px solid var(--line);box-shadow:var(--shadow)}
+  table.hist{min-width:640px}
+  table.hist .neg{color:#a3261a}
+  .empty{padding:44px 24px;text-align:center;color:var(--muted)}
+  .empty h3{font-family:'Sora',sans-serif;font-weight:700;font-size:1.05rem;color:var(--ink);margin-bottom:4px}
+  .howto{font-size:.82rem;color:var(--muted);line-height:1.6}.howto b{color:var(--ink)}
   .view[hidden]{display:none}
+  details.note{margin-top:14px}details.note summary{cursor:pointer;font-size:.85rem;font-weight:600;color:var(--green-dk)}
 </style>
 </head>
 <body>
@@ -90,115 +94,55 @@
   </div>
 
   <div class="notice" id="notice">
-    <b>Modo vista previa.</b> Supabase aún no está configurado (no hay login). Los datos igual se guardan
-    en este navegador (localStorage). Pegá tus llaves en <code>assets/js/config.js</code> para el login.
+    <b>Modo vista previa.</b> Supabase no está configurado: podés calcular pero <b>no se guarda</b>. Pegá tus llaves en <code>assets/js/config.js</code>.
   </div>
 
   <div class="page-head">
     <div>
       <h2>Control de Motoristas</h2>
-      <div class="sub">Registro diario, métricas de desempeño y cálculo de pago automático. Los datos se guardan en este navegador.</div>
+      <div class="sub">Subí el Excel del día, poné la hora de entrada y las incidencias, y guardá. El pago se calcula solo.</div>
     </div>
     <div class="tabs">
-      <button data-tab="registro" class="active">Registro diario</button>
+      <button data-tab="registro" class="active">Registrar día</button>
       <button data-tab="dashboard">Dashboard</button>
       <button data-tab="historial">Historial</button>
       <button data-tab="semanal">Resumen semanal</button>
     </div>
   </div>
 
-  <!-- ========== REGISTRO ========== -->
+  <!-- ===== REGISTRAR DÍA ===== -->
   <div class="view" id="v-registro">
-    <div class="card">
-      <h3>Registrar día de un motorista</h3>
-      <div class="status" id="reg-status"></div>
-      <form id="reg-form">
-        <input type="hidden" id="f-id">
-        <div class="form-grid">
-          <div class="fld">
-            <label>Motorista</label>
-            <select id="f-motorista" required></select>
-          </div>
-          <div class="fld">
-            <label>Fecha</label>
-            <input type="date" id="f-fecha" required>
-          </div>
-          <div class="fld">
-            <label>Recolecta — programada / real</label>
-            <div class="pair"><input type="time" id="f-progRec"><input type="time" id="f-realRec"></div>
-            <div class="tard" id="t-rec"></div>
-          </div>
-          <div class="fld">
-            <label>Salida a entrega — programada / real</label>
-            <div class="pair"><input type="time" id="f-progSal"><input type="time" id="f-realSal"></div>
-            <div class="tard" id="t-sal"></div>
-          </div>
-          <div class="fld">
-            <label>Envíos asignados</label>
-            <input type="number" id="f-asig" min="0" step="1" value="0">
-          </div>
-          <div class="fld">
-            <label>Envíos entregados</label>
-            <input type="number" id="f-entr" min="0" step="1" value="0">
-          </div>
-          <div class="fld">
-            <label>Fallidos justificados (con evidencia)</label>
-            <input type="number" id="f-justif" min="0" step="1" value="0">
-          </div>
-          <div class="fld">
-            <label>Horas trabajadas</label>
-            <input type="number" id="f-horas" min="0" step="0.25" value="0">
-          </div>
-          <div class="fld">
-            <label>Incidencias (Q)</label>
-            <input type="number" id="f-incid" min="0" step="1" value="0">
-            <div class="quick">
-              <button type="button" data-inc="25">Queja −25</button>
-              <button type="button" data-inc="50">Dañado −50</button>
-              <button type="button" data-inc="25">Sin evidencia −25</button>
-            </div>
-          </div>
-          <div class="fld">
-            <label>Nota (opcional)</label>
-            <input type="text" id="f-nota" maxlength="140" placeholder="Detalle de incidencias, etc.">
-          </div>
-        </div>
+    <div class="drop" id="drop">
+      <input type="file" id="file" accept=".xlsx,.xls">
+      <div class="ic"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg></div>
+      <h2>Subí el Excel de envíos del día</h2>
+      <p>Calcula asignados, entregados, horas y entregas/hora por motorista. Después completás la hora de entrada e incidencias.</p>
+    </div>
+    <div class="status" id="status"></div>
 
-        <label class="chk-row"><input type="checkbox" id="f-baja"> Reporte falso comprobado — dar de baja (despido)</label>
-
-        <div class="prev" id="reg-prev"></div>
-
-        <div class="rowbtns">
-          <button type="submit" class="btn btn-primary" style="width:auto">Guardar registro</button>
-          <button type="button" class="btn btn-ghost" id="reg-reset" style="width:auto">Limpiar</button>
-        </div>
-      </form>
-
-      <details class="mot-mgr">
-        <summary>Gestionar motoristas</summary>
-        <div class="mot-list" id="mot-list"></div>
-        <div class="mot-add">
-          <input type="text" id="mot-new" placeholder="Nombre del motorista" maxlength="60">
-          <button type="button" class="btn btn-ghost" id="mot-add-btn" style="width:auto">Agregar</button>
-        </div>
-      </details>
-
-      <details class="mot-mgr" style="margin-top:16px">
-        <summary>Cómo se calcula el pago</summary>
-        <div class="howto" style="margin-top:10px">
-          <b>Pago base por envío (según entregas/hora):</b> &lt;3 → Q12 · 3–3.9 → Q13 · 4–4.9 → Q14 · 5+ → Q15.<br>
-          <b>Completación</b> (entregados ÷ [asignados − fallidos justificados]): 100% → +Q1/envío · 90–99% → 0 · 80–89% → −Q1/envío · &lt;80% → −Q2/envío.<br>
-          <b>Tardanza</b> (recolecta y salida, cada una): ≤15 min → sin descuento · 15–30 → −Q50 · 30–60 → −Q75 · +60 → −Q100.<br>
-          <b>Incidencias:</b> descuento manual en Q. <b>Pago final</b> = base + bono − tardanzas − incidencias (base y bono se pagan por envío entregado).
-        </div>
-      </details>
+    <div class="daysel" id="daysel" style="display:none">
+      <label style="font-size:.84rem;font-weight:600;color:var(--muted)">Día</label>
+      <select id="day"></select>
+      <span style="flex:1"></span>
+      <button class="btn btn-primary" id="save-day" style="width:auto">Guardar día</button>
     </div>
 
-    <h3 style="font-family:'Sora',sans-serif;font-weight:700;font-size:1.05rem;margin:6px 0 12px">Registros recientes</h3>
-    <div id="reg-recent"></div>
+    <div class="mcards" id="mcards"></div>
+
+    <details class="note">
+      <summary>Cómo se calcula el pago</summary>
+      <div class="howto" style="margin-top:10px">
+        <b>Del Excel:</b> asignados = todos los envíos con el nombre del motorista ese día · entregados = los "Entregado" · horas = 1ª a última entrega.<br>
+        <b>Base por envío</b> (según entregas/hora): &lt;3 → Q12 · 3–3.9 → Q13 · 4–4.9 → Q14 · 5+ → Q15.<br>
+        <b>Completación</b> (entregados÷asignados): 100% → +Q1/envío · 90–99% → 0 · 80–89% → −Q1/envío · &lt;80% → −Q2/envío.<br>
+        <b>Tardanza de entrada</b> (vs 8:00): ≤15 min → sin descuento · 15–30 → −Q50 · 30–60 → −Q75 · +60 → −Q100.<br>
+        <b>Incidencias por orden:</b> queja −Q25 · dañado −Q50 + precio del paquete · sin evidencia −Q25 · reporte falso → baja.<br>
+        <b>Pago</b> = base + bono − tardanza − incidencias (base y bono por envío entregado).
+      </div>
+    </details>
   </div>
 
-  <!-- ========== DASHBOARD ========== -->
+  <!-- ===== DASHBOARD ===== -->
   <div class="view" id="v-dashboard" hidden>
     <div class="selrow">
       <label style="font-size:.84rem;font-weight:600;color:var(--muted)">Desde <input type="date" id="d-from"></label>
@@ -210,17 +154,15 @@
     <div id="d-table"></div>
   </div>
 
-  <!-- ========== HISTORIAL ========== -->
+  <!-- ===== HISTORIAL ===== -->
   <div class="view" id="v-historial" hidden>
     <div class="selrow">
-      <label style="font-size:.84rem;font-weight:600;color:var(--muted)">Motorista
-        <select id="h-mot"></select>
-      </label>
+      <label style="font-size:.84rem;font-weight:600;color:var(--muted)">Motorista <select id="h-mot"></select></label>
     </div>
     <div id="h-table"></div>
   </div>
 
-  <!-- ========== SEMANAL ========== -->
+  <!-- ===== SEMANAL ===== -->
   <div class="view" id="v-semanal" hidden>
     <div class="selrow">
       <label style="font-size:.84rem;font-weight:600;color:var(--muted)">Semana de <input type="date" id="w-date"></label>
@@ -233,314 +175,322 @@
     <div id="w-table"></div>
   </div>
 
-  <footer>Dropper · Smart Delivery — Control de Motoristas · datos guardados en este navegador</footer>
+  <footer>Dropper · Smart Delivery — Control de Motoristas</footer>
 </div>
 
 <script>
 const $=s=>document.querySelector(s);
-const LS_REC='dropper_ctrl_motoristas_v1';
-const LS_MOT='dropper_ctrl_motoristas_lista_v1';
-const DEFAULT_MOTS=['Miguel Fuentes','Ruben Cifuentes','Fredy Navas','Jorge Jose Enrique','Alex Polanco','Brayan Garcia','Franklin Lucha','Erikson Luis'];
-let REGS=load(LS_REC,[]);
-let MOTS=load(LS_MOT,DEFAULT_MOTS.slice());
-let BAJAS=load('dropper_ctrl_bajas_v1',[]); // nombres dados de baja
+let USER=null, PREVIEW=true;
+let DIAS=new Map();   // key(mot,fecha) -> {motorista, fecha, asignados, entregados, horas, orders:[{no,precio}]}
+let MANUAL={};        // key -> {entrada, incidencias:[{orden,tipo,label,monto}], baja}
+let DAYS=[];          // fechas presentes en el archivo
+let SELDAY='';
+const INC_TIPOS={
+  queja:{label:'Queja confirmada', base:25},
+  danado:{label:'Paquete dañado', base:50, sumaProducto:true},
+  sinEvidencia:{label:'Sin evidencia', base:25},
+  reporteFalso:{label:'Reporte falso (baja)', base:0, baja:true},
+};
 
-function load(k,def){ try{ const v=JSON.parse(localStorage.getItem(k)); return v==null?def:v; }catch(e){ return def; } }
-function save(){ localStorage.setItem(LS_REC,JSON.stringify(REGS)); localStorage.setItem(LS_MOT,JSON.stringify(MOTS)); localStorage.setItem('dropper_ctrl_bajas_v1',JSON.stringify(BAJAS)); }
-
+/* helpers */
 function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+function norm(s){ return String(s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,''); }
 function Q(n){ return 'Q'+Number(n||0).toLocaleString('es-GT',{minimumFractionDigits:2,maximumFractionDigits:2}); }
 function f1(n){ return Number(n||0).toLocaleString('es-GT',{minimumFractionDigits:1,maximumFractionDigits:1}); }
 function pctS(n){ return Math.round(n*100)+'%'; }
-function todayStr(){ const d=new Date(),p=x=>String(x).padStart(2,'0'); return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}`; }
+function r2(n){ return Math.round((+n||0)*100)/100; }
+function k(m,f){ return m+'||'+f; }
 function fmtDate(s){ const m=String(s||'').match(/(\d{4})-(\d{2})-(\d{2})/); return m?`${m[3]}/${m[2]}/${m[1]}`:s; }
 function hm(t){ const m=String(t||'').match(/(\d{1,2}):(\d{2})/); return m?(+m[1])*60+(+m[2]):null; }
 function tardMin(prog,real){ const p=hm(prog),r=hm(real); if(p==null||r==null) return 0; return Math.max(0,r-p); }
 function tardDesc(min){ if(min<=15) return 0; if(min<=30) return 50; if(min<=60) return 75; return 100; }
-
-/* ---------- cálculo de métricas y pago ---------- */
-function calc(r){
-  const asig=+r.asig||0, entr=+r.entr||0, just=+r.justif||0, horas=+r.horas||0;
-  const denom=Math.max(0, asig-just);
-  const comp=denom>0?Math.min(1,entr/denom):(entr>0?1:0);
-  const eph=horas>0?entr/horas:0;
-  const tRec=tardMin(r.progRec,r.realRec), tSal=tardMin(r.progSal,r.realSal);
-  let base; if(eph<3) base=12; else if(eph<4) base=13; else if(eph<5) base=14; else base=15;
-  const pctc=comp*100;
-  let adj; if(pctc>=100) adj=1; else if(pctc>=90) adj=0; else if(pctc>=80) adj=-1; else adj=-2;
-  const pagoBase=base*entr, bono=adj*entr, descRec=tardDesc(tRec), descSal=tardDesc(tSal), incid=+r.incid||0;
-  const pago=pagoBase+bono-descRec-descSal-incid;
-  return {asig,entr,just,horas,denom,comp,eph,tRec,tSal,base,adj,pagoBase,bono,descRec,descSal,incid,pago};
-}
+function parseMoney(v){ if(v==null) return 0; if(typeof v==='number') return isFinite(v)?v:0; let s=String(v).replace(/[^0-9.,-]/g,''); if(!s) return 0; if(s.includes('.')&&s.includes(',')){ if(s.lastIndexOf(',')>s.lastIndexOf('.')) s=s.replace(/\./g,'').replace(',','.'); else s=s.replace(/,/g,''); } else if(s.includes(',')){ const p=s.split(','); if(p[p.length-1].length<=2&&p.length===2) s=s.replace(',','.'); else s=s.replace(/,/g,''); } const n=parseFloat(s); return isNaN(n)?0:n; }
+function parseDT(v){ if(v instanceof Date) return isNaN(v)?null:v; if(typeof v==='number') return new Date(Math.round((v-25569)*86400*1000)); let s=String(v==null?'':v).trim(); if(!s) return null; let d=new Date(s.replace(' ','T')); if(!isNaN(d)) return d; d=new Date(s); return isNaN(d)?null:d; }
+function dayKey(dt){ const p=x=>String(x).padStart(2,'0'); return `${dt.getFullYear()}-${p(dt.getMonth()+1)}-${p(dt.getDate())}`; }
+function pill(t,c){ return `<span class="pill ${c}">${t}</span>`; }
 function ephCls(v){ return v>=4?'ok':(v>=3?'warn':'bad'); }
 function compCls(p){ return p>=0.9?'ok':(p>=0.8?'warn':'bad'); }
 function tardCls(m){ return m<=15?'ok':(m<=30?'warn':'bad'); }
-function pill(txt,cls){ return `<span class="pill ${cls}">${txt}</span>`; }
 
-/* ---------- motoristas manager ---------- */
-function renderMotSelects(){
-  const opts='<option value="">— elegí —</option>'+MOTS.map(m=>`<option>${esc(m)}</option>`).join('');
-  $('#f-motorista').innerHTML=opts;
-  $('#h-mot').innerHTML='<option value="">— elegí —</option>'+MOTS.map(m=>`<option>${esc(m)}</option>`).join('');
+/* cálculo del día */
+function calcDia(d,man){
+  man=man||{};
+  const asig=d.asignados, entr=d.entregados, horas=d.horas;
+  const comp=asig>0?Math.min(1,entr/asig):0;
+  const eph=horas>0?entr/horas:0;
+  let base; if(eph<3)base=12;else if(eph<4)base=13;else if(eph<5)base=14;else base=15;
+  const pc=comp*100; let adj; if(pc>=100)adj=1;else if(pc>=90)adj=0;else if(pc>=80)adj=-1;else adj=-2;
+  const tard=tardMin('08:00',man.entrada);
+  const descT=tardDesc(tard);
+  const incT=(man.incidencias||[]).reduce((s,i)=>s+(+i.monto||0),0);
+  const pagoBase=base*entr, bono=adj*entr, pago=pagoBase+bono-descT-incT;
+  return {comp,eph,base,adj,tard,descT,incT,pagoBase,bono,pago};
 }
-function renderMotList(){
-  $('#mot-list').innerHTML=MOTS.map(m=>`<span class="mot-chip">${esc(m)}${BAJAS.includes(m)?' <span class="pill baja">baja</span>':''}<button data-del="${esc(m)}" title="Quitar">×</button></span>`).join('') || '<span style="color:var(--muted);font-size:.85rem">Sin motoristas. Agregá abajo.</span>';
-  $('#mot-list').querySelectorAll('[data-del]').forEach(b=>b.addEventListener('click',()=>{
-    const n=b.dataset.del;
-    if(confirm('¿Quitar a '+n+' de la lista? (sus registros no se borran)')){ MOTS=MOTS.filter(x=>x!==n); save(); renderMotSelects(); renderMotList(); }
-  }));
-}
-$('#mot-add-btn').addEventListener('click',()=>{
-  const n=$('#mot-new').value.trim();
-  if(!n) return;
-  if(!MOTS.includes(n)) MOTS.push(n);
-  $('#mot-new').value=''; save(); renderMotSelects(); renderMotList();
-});
 
-/* ---------- formulario registro ---------- */
-function readForm(){
-  return {
-    id:$('#f-id').value||null,
-    motorista:$('#f-motorista').value,
-    fecha:$('#f-fecha').value,
-    progRec:$('#f-progRec').value, realRec:$('#f-realRec').value,
-    progSal:$('#f-progSal').value, realSal:$('#f-realSal').value,
-    asig:+$('#f-asig').value||0, entr:+$('#f-entr').value||0, justif:+$('#f-justif').value||0,
-    horas:+$('#f-horas').value||0, incid:+$('#f-incid').value||0,
-    nota:$('#f-nota').value.trim(), baja:$('#f-baja').checked,
+/* ========= carga Excel ========= */
+const drop=$('#drop'), fileInput=$('#file');
+drop.addEventListener('click',()=>fileInput.click());
+['dragover','dragenter'].forEach(e=>drop.addEventListener(e,ev=>{ev.preventDefault();drop.classList.add('drag')}));
+['dragleave','drop'].forEach(e=>drop.addEventListener(e,ev=>{ev.preventDefault();drop.classList.remove('drag')}));
+drop.addEventListener('drop',ev=>{ if(ev.dataTransfer.files.length) handleFile(ev.dataTransfer.files[0]); });
+fileInput.addEventListener('change',()=>{ if(fileInput.files.length) handleFile(fileInput.files[0]); });
+function status(msg,type){ const s=$('#status'); s.className='status show '+(type||''); s.innerHTML=(type==='work'?'<span class="spin"></span>':'')+msg; }
+function hideStatus(){ $('#status').className='status'; }
+function handleFile(file){
+  status('Leyendo <b style="margin:0 4px">'+esc(file.name)+'</b>…','work');
+  const rd=new FileReader();
+  rd.onload=async e=>{ try{ await parseWorkbook(e.target.result); }catch(err){ console.error(err); status('No se pudo leer el archivo: '+err.message,'err'); } };
+  rd.readAsArrayBuffer(file);
+}
+function pick(keys,cands){ const nk=keys.map(x=>({x,n:norm(x).trim()})); for(const c of cands){ const h=nk.find(o=>o.n===c); if(h) return h.x; } for(const c of cands){ const h=nk.find(o=>o.n.includes(c)); if(h) return h.x; } return null; }
+async function parseWorkbook(buf){
+  const wb=XLSX.read(buf,{type:'array',cellDates:true});
+  const sn=wb.SheetNames.find(n=>/entrega/i.test(n))||wb.SheetNames[0];
+  const rowsRaw=XLSX.utils.sheet_to_json(wb.Sheets[sn],{raw:true,defval:''});
+  const rowsTxt=XLSX.utils.sheet_to_json(wb.Sheets[sn],{raw:false,defval:''});
+  if(!rowsRaw.length){ status('La hoja está vacía.','err'); return; }
+  const keys=Object.keys(rowsRaw[0]);
+  const C={
+    mot:pick(keys,['nombre del mensajero','mensajero','repartidor','motorista','piloto']),
+    fecha:pick(keys,['fecha de entrega','fecha']),
+    estado:pick(keys,['estado del envio','estado de entrega','estado']),
+    norden:pick(keys,['numero de orden','no. de orden','no de orden','orden']),
+    idorden:pick(keys,['id de orden','id']),
+    precio:pick(keys,['precio del paquete','precio paquete','valor del paquete','precio']),
   };
-}
-function updatePreview(){
-  const r=readForm(), c=calc(r);
-  $('#t-rec').innerHTML = c.tRec>0 ? pill('Tardanza '+c.tRec+' min'+(c.descRec?' · −'+Q(c.descRec):''), tardCls(c.tRec)) : (r.progRec&&r.realRec?pill('A tiempo','ok'):'');
-  $('#t-sal').innerHTML = c.tSal>0 ? pill('Tardanza '+c.tSal+' min'+(c.descSal?' · −'+Q(c.descSal):''), tardCls(c.tSal)) : (r.progSal&&r.realSal?pill('A tiempo','ok'):'');
-  $('#reg-prev').innerHTML=`
-    <div class="pv"><div class="k">Entregas/hora</div><div class="v">${pill(f1(c.eph)+'/h',ephCls(c.eph))}</div></div>
-    <div class="pv"><div class="k">Completación</div><div class="v">${pill(pctS(c.comp),compCls(c.comp))}</div></div>
-    <div class="pv"><div class="k">Base/envío</div><div class="v">${Q(c.base)}${c.adj?` <span class="pill ${c.adj>0?'ok':'bad'}">${c.adj>0?'+':''}${Q(c.adj)}</span>`:''}</div></div>
-    <div class="pv pago"><div class="k">Pago del día</div><div class="v">${Q(c.pago)}</div></div>`;
-}
-['#f-progRec','#f-realRec','#f-progSal','#f-realSal','#f-asig','#f-entr','#f-justif','#f-horas','#f-incid'].forEach(s=>$(s).addEventListener('input',updatePreview));
-document.querySelectorAll('.quick button').forEach(b=>b.addEventListener('click',()=>{ $('#f-incid').value=(+$('#f-incid').value||0)+(+b.dataset.inc); updatePreview(); }));
+  if(!C.mot){ status('No encontré la columna del <b>mensajero</b>.','err'); return; }
+  if(!C.fecha){ status('No encontré la columna <b>Fecha de Entrega</b>.','err'); return; }
 
-function regStatus(msg,type){ const s=$('#reg-status'); s.className='status show '+(type||''); s.textContent=msg; if(type==='ok') setTimeout(()=>s.className='status',2500); }
-$('#reg-form').addEventListener('submit',e=>{
-  e.preventDefault();
-  const r=readForm();
-  if(!r.motorista){ regStatus('Elegí un motorista.','err'); return; }
-  if(!r.fecha){ regStatus('Poné la fecha.','err'); return; }
-  if(r.id){ const i=REGS.findIndex(x=>x.id===r.id); if(i>=0) REGS[i]={...r}; }
-  else { r.id=Date.now()+'-'+Math.random().toString(36).slice(2,7); REGS.push(r); }
-  if(r.baja && !BAJAS.includes(r.motorista)) BAJAS.push(r.motorista);
-  save();
-  resetForm();
-  regStatus('✓ Registro guardado.','ok');
-  renderRecent(); renderMotList();
+  DIAS=new Map();
+  rowsRaw.forEach((r,i)=>{
+    const t=rowsTxt[i]||{}; const g=x=>x?String((t[x]??r[x])||'').trim():'';
+    const mot=g(C.mot); if(!mot) return;
+    const dt=parseDT(t[C.fecha]??r[C.fecha]); if(!dt) return;
+    const fecha=dayKey(dt);
+    const entregado=/entreg/.test(norm(g(C.estado)));
+    const key=k(mot,fecha);
+    if(!DIAS.has(key)) DIAS.set(key,{motorista:mot,fecha,asignados:0,entregados:0,_times:[],orders:[]});
+    const d=DIAS.get(key);
+    d.asignados++;
+    d.orders.push({no:g(C.norden)||g(C.idorden)||'—', precio:parseMoney(t[C.precio]??r[C.precio])});
+    if(entregado){ d.entregados++; d._times.push(dt.getHours()*60+dt.getMinutes()+dt.getSeconds()/60); }
+  });
+  DIAS.forEach(d=>{ if(d._times.length){ d._times.sort((a,b)=>a-b); d.horas=(d._times[d._times.length-1]-d._times[0])/60; } else d.horas=0; delete d._times; });
+
+  DAYS=[...new Set([...DIAS.values()].map(d=>d.fecha))].sort().reverse();
+  if(!DAYS.length){ status('No encontré filas válidas.','err'); return; }
+  SELDAY=DAYS[0];
+  status('Buscando registros ya guardados…','work');
+  await loadSaved(DAYS);
+  hideStatus();
+  $('#daysel').style.display='flex';
+  $('#day').innerHTML=DAYS.map(f=>`<option value="${f}">${fmtDate(f)}</option>`).join('');
+  $('#day').value=SELDAY;
+  renderRegistro();
+}
+async function loadSaved(days){
+  MANUAL={};
+  if(!window.sb) return;
+  try{
+    const {data,error}=await window.sb.from('motorista_dias').select('motorista,fecha,entrada_real,incidencias,baja').in('fecha',days);
+    if(error) throw error;
+    (data||[]).forEach(r=>{ MANUAL[k(r.motorista,r.fecha)]={entrada:r.entrada_real||'',incidencias:r.incidencias||[],baja:!!r.baja}; });
+  }catch(e){ console.error(e); }
+}
+$('#day').addEventListener('change',()=>{ SELDAY=$('#day').value; renderRegistro(); });
+
+/* ========= render tarjetas ========= */
+function man(key){ if(!MANUAL[key]) MANUAL[key]={entrada:'',incidencias:[],baja:false}; return MANUAL[key]; }
+function renderRegistro(){
+  const dias=[...DIAS.values()].filter(d=>d.fecha===SELDAY).sort((a,b)=>a.motorista.localeCompare(b.motorista));
+  const box=$('#mcards');
+  if(!dias.length){ box.innerHTML='<div class="empty"><h3>Sin motoristas ese día</h3></div>'; return; }
+  box.innerHTML='';
+  dias.forEach(d=>{
+    const key=k(d.motorista,d.fecha), m=man(key), c=calcDia(d,m);
+    const el=document.createElement('div'); el.className='mcard'; el.dataset.key=key;
+    el.innerHTML=cardHTML(d,m,c);
+    wireCard(el,d);
+    box.appendChild(el);
+  });
+}
+function cardHTML(d,m,c){
+  return `
+    <div class="mc-name">${esc(d.motorista)} ${m.baja?pill('baja','baja'):''}</div>
+    <div class="mc-metrics">
+      <span>Asig <b>${d.asignados}</b></span><span>Entr <b>${d.entregados}</b></span>
+      ${pill(pctS(c.comp),compCls(c.comp))} ${pill(f1(c.eph)+'/h',ephCls(c.eph))}
+      <span>Horas <b>${f1(d.horas)}</b></span>
+    </div>
+    <div class="mc-in">
+      <label>Entrada real (prog. 8:00)</label>
+      <input type="time" class="m-ent" value="${esc(m.entrada||'')}">
+      <span class="m-tard">${c.tard?pill('+'+c.tard+' min · −'+Q(c.descT),tardCls(c.tard)):(m.entrada?pill('A tiempo','ok'):'')}</span>
+    </div>
+    <div class="mc-inc">
+      <div class="inc-list">${incListHTML(m)}</div>
+      <div class="inc-add">
+        <select class="inc-orden">${d.orders.map(o=>`<option value="${esc(o.no)}">${esc(o.no)}${o.precio?` (${Q(o.precio)})`:''}</option>`).join('')}</select>
+        <select class="inc-tipo">${Object.entries(INC_TIPOS).map(([k2,t])=>`<option value="${k2}">${esc(t.label)}${t.base?' −Q'+t.base:''}${t.sumaProducto?'+prod':''}</option>`).join('')}</select>
+        <button class="inc-add-btn">+ Incidencia</button>
+      </div>
+    </div>
+    <div class="mc-foot">
+      <label class="cbaja"><input type="checkbox" class="m-baja" ${m.baja?'checked':''}> Reporte falso (baja)</label>
+      <div class="mc-pago">${Q(c.pago)}</div>
+    </div>`;
+}
+function incListHTML(m){
+  if(!m.incidencias.length) return '';
+  return m.incidencias.map((it,i)=>`<div class="inc-item"><span>${esc(it.orden)} · ${esc(it.label)} · <b>−${Q(it.monto)}</b></span><button class="x" data-i="${i}">×</button></div>`).join('');
+}
+function refreshCard(el,d){
+  const key=el.dataset.key, m=man(key), c=calcDia(d,m);
+  el.querySelector('.mc-name').innerHTML=`${esc(d.motorista)} ${m.baja?pill('baja','baja'):''}`;
+  el.querySelector('.mc-metrics').innerHTML=`<span>Asig <b>${d.asignados}</b></span><span>Entr <b>${d.entregados}</b></span> ${pill(pctS(c.comp),compCls(c.comp))} ${pill(f1(c.eph)+'/h',ephCls(c.eph))} <span>Horas <b>${f1(d.horas)}</b></span>`;
+  el.querySelector('.m-tard').innerHTML=c.tard?pill('+'+c.tard+' min · −'+Q(c.descT),tardCls(c.tard)):(m.entrada?pill('A tiempo','ok'):'');
+  el.querySelector('.inc-list').innerHTML=incListHTML(m);
+  el.querySelector('.mc-pago').textContent=Q(c.pago);
+  wireIncRemove(el,d);
+}
+function wireCard(el,d){
+  const key=el.dataset.key, m=man(key);
+  el.querySelector('.m-ent').addEventListener('input',ev=>{ m.entrada=ev.target.value; refreshCard(el,d); });
+  el.querySelector('.m-baja').addEventListener('change',ev=>{ m.baja=ev.target.checked; refreshCard(el,d); });
+  el.querySelector('.inc-add-btn').addEventListener('click',()=>{
+    const orden=el.querySelector('.inc-orden').value, tipo=el.querySelector('.inc-tipo').value, t=INC_TIPOS[tipo];
+    let monto=t.base; if(t.sumaProducto){ const o=d.orders.find(x=>x.no===orden); monto+=o?o.precio:0; }
+    m.incidencias.push({orden,tipo,label:t.label,monto:r2(monto)});
+    if(t.baja) m.baja=true;
+    refreshCard(el,d);
+  });
+  wireIncRemove(el,d);
+}
+function wireIncRemove(el,d){
+  el.querySelectorAll('.inc-list .x').forEach(b=>b.addEventListener('click',()=>{ const m=man(el.dataset.key); m.incidencias.splice(+b.dataset.i,1); refreshCard(el,d); }));
+}
+
+/* ========= guardar día ========= */
+$('#save-day').addEventListener('click',async()=>{
+  if(!window.sb||!USER){ status('Iniciá sesión para guardar (o falta configurar Supabase).','err'); return; }
+  const dias=[...DIAS.values()].filter(d=>d.fecha===SELDAY);
+  if(!dias.length) return;
+  status('Guardando el día…','work');
+  try{
+    const rows=dias.map(d=>{ const m=man(k(d.motorista,d.fecha)), c=calcDia(d,m);
+      return { created_by:USER.id, created_by_email:USER.email||null, motorista:d.motorista, fecha:d.fecha,
+        asignados:d.asignados, entregados:d.entregados, horas:r2(d.horas), eph:r2(c.eph),
+        entrada_prog:'08:00', entrada_real:m.entrada||null, tardanza_min:c.tard,
+        incidencias:m.incidencias||[], incidencias_total:r2(c.incT),
+        pago_base:r2(c.pagoBase), bono:r2(c.bono), desc_tardanza:r2(c.descT), pago:r2(c.pago), baja:!!m.baja,
+        updated_at:new Date().toISOString() };
+    });
+    const {error}=await window.sb.from('motorista_dias').upsert(rows,{onConflict:'motorista,fecha'});
+    if(error) throw error;
+    status('✓ Guardado. '+rows.length+' motoristas del '+fmtDate(SELDAY)+'.','ok');
+    setTimeout(hideStatus,3500);
+  }catch(err){ console.error(err); status('No se pudo guardar: '+err.message,'err'); }
 });
-$('#reg-reset').addEventListener('click',resetForm);
-function resetForm(){
-  $('#reg-form').reset();
-  $('#f-id').value=''; $('#f-fecha').value=todayStr();
-  ['f-asig','f-entr','f-justif','f-horas','f-incid'].forEach(id=>$('#'+id).value=0);
-  $('#t-rec').innerHTML=''; $('#t-sal').innerHTML=''; updatePreview();
-}
-function editReg(id){
-  const r=REGS.find(x=>x.id===id); if(!r) return;
-  $('#f-id').value=r.id; $('#f-motorista').value=r.motorista; $('#f-fecha').value=r.fecha;
-  $('#f-progRec').value=r.progRec||''; $('#f-realRec').value=r.realRec||'';
-  $('#f-progSal').value=r.progSal||''; $('#f-realSal').value=r.realSal||'';
-  $('#f-asig').value=r.asig; $('#f-entr').value=r.entr; $('#f-justif').value=r.justif||0;
-  $('#f-horas').value=r.horas; $('#f-incid').value=r.incid||0; $('#f-nota').value=r.nota||''; $('#f-baja').checked=!!r.baja;
-  updatePreview(); window.scrollTo({top:0,behavior:'smooth'});
-}
-function delReg(id){ if(confirm('¿Borrar este registro?')){ REGS=REGS.filter(x=>x.id!==id); save(); renderRecent(); } }
 
-function renderRecent(){
-  const recent=[...REGS].sort((a,b)=>(b.fecha+b.id).localeCompare(a.fecha+a.id)).slice(0,10);
-  const box=$('#reg-recent');
-  if(!recent.length){ box.innerHTML='<div class="empty"><h3>Sin registros todavía</h3><p>Guardá el primer día arriba.</p></div>'; return; }
-  box.innerHTML=`<div class="tbl-wrap"><table class="hist"><thead><tr>
-    <th>Fecha</th><th>Motorista</th><th>Entr/Asig</th><th>Compl.</th><th>Entr/h</th><th>Tard. rec/sal</th><th>Pago</th><th></th>
-  </tr></thead><tbody>${recent.map(r=>{const c=calc(r);return `<tr>
-    <td>${fmtDate(r.fecha)}</td><td>${esc(r.motorista)}${r.baja?' '+pill('baja','baja'):''}</td>
-    <td class="num">${c.entr}/${c.asig}</td>
-    <td>${pill(pctS(c.comp),compCls(c.comp))}</td>
-    <td>${pill(f1(c.eph),ephCls(c.eph))}</td>
-    <td>${pill(c.tRec+'m',tardCls(c.tRec))} ${pill(c.tSal+'m',tardCls(c.tSal))}</td>
-    <td class="num">${Q(c.pago)}</td>
-    <td><button class="btn btn-ghost" style="width:auto;padding:5px 10px;font-size:.78rem" onclick="editReg('${r.id}')">Editar</button>
-        <button class="btn btn-ghost" style="width:auto;padding:5px 10px;font-size:.78rem" onclick="delReg('${r.id}')">Borrar</button></td>
-  </tr>`}).join('')}</tbody></table></div>`;
+/* ========= dashboard / historial / semanal (leen de la base) ========= */
+async function fetchRange(from,to){
+  if(!window.sb) return [];
+  let q=window.sb.from('motorista_dias').select('*');
+  if(from) q=q.gte('fecha',from); if(to) q=q.lte('fecha',to);
+  const {data,error}=await q.order('fecha',{ascending:false}).limit(2000);
+  if(error){ console.error(error); return []; }
+  return data||[];
 }
-window.editReg=editReg; window.delReg=delReg;
-
-/* ---------- dashboard ---------- */
 function aggBy(regs){
   const by=new Map();
-  regs.forEach(r=>{
-    const c=calc(r);
-    if(!by.has(r.motorista)) by.set(r.motorista,{dias:0,asig:0,entr:0,horas:0,tRec:0,tSal:0,incid:0,pago:0});
-    const o=by.get(r.motorista);
-    o.dias++; o.asig+=c.asig; o.entr+=c.entr; o.horas+=c.horas; o.tRec+=c.tRec; o.tSal+=c.tSal; o.incid+=c.incid; o.pago+=c.pago;
-  });
-  return [...by.entries()].map(([mot,o])=>{
-    const comp=o.asig>0?o.entr/o.asig:0;
-    const eph=o.horas>0?o.entr/o.horas:0;
-    return {mot,...o,comp,eph,tRecProm:o.dias?o.tRec/o.dias:0,tSalProm:o.dias?o.tSal/o.dias:0};
-  }).sort((a,b)=>b.pago-a.pago);
+  regs.forEach(r=>{ if(!by.has(r.motorista)) by.set(r.motorista,{dias:0,asig:0,entr:0,horas:0,tard:0,inc:0,pago:0});
+    const o=by.get(r.motorista); o.dias++; o.asig+=r.asignados; o.entr+=r.entregados; o.horas+=+r.horas; o.tard+=r.tardanza_min; o.inc+=+r.incidencias_total; o.pago+=+r.pago; });
+  return [...by.entries()].map(([mot,o])=>({mot,...o,comp:o.asig>0?o.entr/o.asig:0,eph:o.horas>0?o.entr/o.horas:0,tardProm:o.dias?o.tard/o.dias:0})).sort((a,b)=>b.pago-a.pago);
 }
-function renderDashboard(){
-  const [from,to]=[$('#d-from').value,$('#d-to').value];
-  const regs=REGS.filter(r=>(!from||r.fecha>=from)&&(!to||r.fecha<=to));
-  const rows=aggBy(regs);
-  const totEntr=rows.reduce((s,r)=>s+r.entr,0), totPago=rows.reduce((s,r)=>s+r.pago,0);
-  $('#d-stats').innerHTML=`
-    <div class="stat"><div class="k">Motoristas</div><div class="v">${rows.length}</div></div>
-    <div class="stat"><div class="k">Entregas</div><div class="v">${totEntr.toLocaleString('es-GT')}</div></div>
-    <div class="stat"><div class="k">Pago total</div><div class="v">${Q(totPago)}</div></div>`;
-  if(!rows.length){ $('#d-table').innerHTML='<div class="empty"><h3>Sin datos en el período</h3></div>'; return; }
-  $('#d-table').innerHTML=`<div class="tbl-wrap"><table class="hist"><thead><tr>
-    <th>Motorista</th><th>Días</th><th>Asig</th><th>Entr</th><th>Compl.</th><th>Entr/h</th><th>Tard. rec/sal prom</th><th>Incid.</th><th>Pago</th>
-  </tr></thead><tbody>${rows.map(r=>`<tr>
-    <td>${esc(r.mot)}${BAJAS.includes(r.mot)?' '+pill('baja','baja'):''}</td>
-    <td class="num">${r.dias}</td><td class="num">${r.asig}</td><td class="num">${r.entr}</td>
-    <td>${pill(pctS(r.comp),compCls(r.comp))}</td>
-    <td>${pill(f1(r.eph),ephCls(r.eph))}</td>
-    <td>${pill(Math.round(r.tRecProm)+'m',tardCls(r.tRecProm))} ${pill(Math.round(r.tSalProm)+'m',tardCls(r.tSalProm))}</td>
-    <td class="num neg">${r.incid?'−'+Q(r.incid):'—'}</td>
-    <td class="num">${Q(r.pago)}</td>
-  </tr>`).join('')}</tbody></table></div>`;
+async function renderDashboard(){
+  if(PREVIEW){ $('#d-table').innerHTML='<div class="empty"><h3>Configurá Supabase para ver el dashboard</h3></div>'; $('#d-stats').innerHTML=''; return; }
+  const rows=aggBy(await fetchRange($('#d-from').value,$('#d-to').value));
+  const tE=rows.reduce((s,r)=>s+r.entr,0), tP=rows.reduce((s,r)=>s+r.pago,0);
+  $('#d-stats').innerHTML=`<div class="stat"><div class="k">Motoristas</div><div class="v">${rows.length}</div></div><div class="stat"><div class="k">Entregas</div><div class="v">${tE.toLocaleString('es-GT')}</div></div><div class="stat"><div class="k">Pago total</div><div class="v">${Q(tP)}</div></div>`;
+  if(!rows.length){ $('#d-table').innerHTML='<div class="empty"><h3>Sin datos guardados en el período</h3></div>'; return; }
+  $('#d-table').innerHTML=`<div class="tbl-wrap"><table class="hist"><thead><tr><th>Motorista</th><th>Días</th><th>Asig</th><th>Entr</th><th>Compl.</th><th>Entr/h</th><th>Tard. prom</th><th>Incid.</th><th>Pago</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${esc(r.mot)}</td><td class="num">${r.dias}</td><td class="num">${r.asig}</td><td class="num">${r.entr}</td><td>${pill(pctS(r.comp),compCls(r.comp))}</td><td>${pill(f1(r.eph),ephCls(r.eph))}</td><td>${pill(Math.round(r.tardProm)+'m',tardCls(r.tardProm))}</td><td class="num neg">${r.inc?'−'+Q(r.inc):'—'}</td><td class="num">${Q(r.pago)}</td></tr>`).join('')}</tbody></table></div>`;
 }
 $('#d-apply').addEventListener('click',renderDashboard);
 $('#d-clear').addEventListener('click',()=>{ $('#d-from').value=''; $('#d-to').value=''; renderDashboard(); });
 
-/* ---------- historial por motorista ---------- */
-function renderHistorial(){
+async function renderHistorial(){
+  if(PREVIEW){ $('#h-table').innerHTML='<div class="empty"><h3>Configurá Supabase para ver el historial</h3></div>'; return; }
   const mot=$('#h-mot').value;
-  const box=$('#h-table');
-  if(!mot){ box.innerHTML='<div class="empty"><h3>Elegí un motorista</h3></div>'; return; }
-  const regs=REGS.filter(r=>r.motorista===mot).sort((a,b)=>b.fecha.localeCompare(a.fecha));
-  if(!regs.length){ box.innerHTML='<div class="empty"><h3>Sin registros de '+esc(mot)+'</h3></div>'; return; }
-  box.innerHTML=`<div class="tbl-wrap"><table class="hist"><thead><tr>
-    <th>Fecha</th><th>Rec. prog/real</th><th>Sal. prog/real</th><th>Asig</th><th>Entr</th><th>Compl.</th><th>Entr/h</th><th>Horas</th><th>Incid.</th><th>Pago</th><th></th>
-  </tr></thead><tbody>${regs.map(r=>{const c=calc(r);return `<tr>
-    <td>${fmtDate(r.fecha)}</td>
-    <td>${esc(r.progRec||'—')} / ${esc(r.realRec||'—')} ${c.tRec?pill('+'+c.tRec+'m',tardCls(c.tRec)):''}</td>
-    <td>${esc(r.progSal||'—')} / ${esc(r.realSal||'—')} ${c.tSal?pill('+'+c.tSal+'m',tardCls(c.tSal)):''}</td>
-    <td class="num">${c.asig}</td><td class="num">${c.entr}</td>
-    <td>${pill(pctS(c.comp),compCls(c.comp))}</td>
-    <td>${pill(f1(c.eph),ephCls(c.eph))}</td>
-    <td class="num">${f1(c.horas)}</td>
-    <td class="num neg">${c.incid?'−'+Q(c.incid):'—'}</td>
-    <td class="num">${Q(c.pago)}</td>
-    <td><button class="btn btn-ghost" style="width:auto;padding:5px 10px;font-size:.78rem" onclick="editReg('${r.id}')">Editar</button></td>
-  </tr>`}).join('')}</tbody></table></div>`;
+  if(!mot){ $('#h-table').innerHTML='<div class="empty"><h3>Elegí un motorista</h3></div>'; return; }
+  const {data}=await window.sb.from('motorista_dias').select('*').eq('motorista',mot).order('fecha',{ascending:false}).limit(400);
+  const regs=data||[];
+  if(!regs.length){ $('#h-table').innerHTML='<div class="empty"><h3>Sin registros de '+esc(mot)+'</h3></div>'; return; }
+  $('#h-table').innerHTML=`<div class="tbl-wrap"><table class="hist"><thead><tr><th>Fecha</th><th>Entrada</th><th>Asig</th><th>Entr</th><th>Compl.</th><th>Entr/h</th><th>Horas</th><th>Incid.</th><th>Pago</th></tr></thead><tbody>${regs.map(r=>{const comp=r.asignados>0?r.entregados/r.asignados:0;return `<tr><td>${fmtDate(r.fecha)}</td><td>${esc(r.entrada_real||'—')} ${r.tardanza_min?pill('+'+r.tardanza_min+'m',tardCls(r.tardanza_min)):''}</td><td class="num">${r.asignados}</td><td class="num">${r.entregados}</td><td>${pill(pctS(comp),compCls(comp))}</td><td>${pill(f1(r.eph),ephCls(r.eph))}</td><td class="num">${f1(r.horas)}</td><td class="num neg">${+r.incidencias_total?'−'+Q(r.incidencias_total):'—'}</td><td class="num">${Q(r.pago)}</td></tr>`}).join('')}</tbody></table></div>`;
 }
 $('#h-mot').addEventListener('change',renderHistorial);
 
-/* ---------- resumen semanal ---------- */
-function weekRange(dstr){
-  const d=dstr?new Date(dstr+'T00:00:00'):new Date();
-  const dow=(d.getDay()+6)%7; // lunes=0
-  const mon=new Date(d); mon.setDate(d.getDate()-dow);
-  const sun=new Date(mon); sun.setDate(mon.getDate()+6);
-  const iso=x=>{const p=n=>String(n).padStart(2,'0');return `${x.getFullYear()}-${p(x.getMonth()+1)}-${p(x.getDate())}`;};
-  return [iso(mon),iso(sun)];
-}
-function currentWeekRows(){
-  const [mon,sun]=weekRange($('#w-date').value);
-  $('#w-range').textContent=`${fmtDate(mon)} al ${fmtDate(sun)}`;
-  const regs=REGS.filter(r=>r.fecha>=mon&&r.fecha<=sun);
-  return {rows:aggBy(regs),mon,sun};
-}
-function renderSemanal(){
-  const {rows}=currentWeekRows();
-  const totEntr=rows.reduce((s,r)=>s+r.entr,0), totPago=rows.reduce((s,r)=>s+r.pago,0);
-  $('#w-stats').innerHTML=`
-    <div class="stat"><div class="k">Motoristas</div><div class="v">${rows.length}</div></div>
-    <div class="stat"><div class="k">Entregas</div><div class="v">${totEntr.toLocaleString('es-GT')}</div></div>
-    <div class="stat"><div class="k">Pago total semana</div><div class="v">${Q(totPago)}</div></div>`;
+function weekRange(dstr){ const d=dstr?new Date(dstr+'T00:00:00'):new Date(); const dow=(d.getDay()+6)%7; const mon=new Date(d); mon.setDate(d.getDate()-dow); const sun=new Date(mon); sun.setDate(mon.getDate()+6); const iso=x=>{const p=n=>String(n).padStart(2,'0');return `${x.getFullYear()}-${p(x.getMonth()+1)}-${p(x.getDate())}`;}; return [iso(mon),iso(sun)]; }
+let WK=[];
+async function renderSemanal(){
+  const [mon,sun]=weekRange($('#w-date').value); $('#w-range').textContent=`${fmtDate(mon)} al ${fmtDate(sun)}`;
+  if(PREVIEW){ $('#w-table').innerHTML='<div class="empty"><h3>Configurá Supabase para el resumen</h3></div>'; $('#w-stats').innerHTML=''; WK=[]; return; }
+  const rows=aggBy(await fetchRange(mon,sun)); WK=rows;
+  const tE=rows.reduce((s,r)=>s+r.entr,0), tP=rows.reduce((s,r)=>s+r.pago,0);
+  $('#w-stats').innerHTML=`<div class="stat"><div class="k">Motoristas</div><div class="v">${rows.length}</div></div><div class="stat"><div class="k">Entregas</div><div class="v">${tE.toLocaleString('es-GT')}</div></div><div class="stat"><div class="k">Pago total semana</div><div class="v">${Q(tP)}</div></div>`;
   if(!rows.length){ $('#w-table').innerHTML='<div class="empty"><h3>Sin registros esta semana</h3></div>'; return; }
-  $('#w-table').innerHTML=`<div class="tbl-wrap"><table class="hist"><thead><tr>
-    <th>Motorista</th><th>Días</th><th>Entregas</th><th>Compl. prom</th><th>Entr/h prom</th><th>Incid.</th><th>Pago semana</th>
-  </tr></thead><tbody>${rows.map(r=>`<tr>
-    <td>${esc(r.mot)}</td><td class="num">${r.dias}</td><td class="num">${r.entr}</td>
-    <td>${pill(pctS(r.comp),compCls(r.comp))}</td>
-    <td>${pill(f1(r.eph),ephCls(r.eph))}</td>
-    <td class="num neg">${r.incid?'−'+Q(r.incid):'—'}</td>
-    <td class="num">${Q(r.pago)}</td>
-  </tr>`).join('')}</tbody></table></div>`;
+  $('#w-table').innerHTML=`<div class="tbl-wrap"><table class="hist"><thead><tr><th>Motorista</th><th>Días</th><th>Entregas</th><th>Compl. prom</th><th>Entr/h prom</th><th>Incid.</th><th>Pago semana</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${esc(r.mot)}</td><td class="num">${r.dias}</td><td class="num">${r.entr}</td><td>${pill(pctS(r.comp),compCls(r.comp))}</td><td>${pill(f1(r.eph),ephCls(r.eph))}</td><td class="num neg">${r.inc?'−'+Q(r.inc):'—'}</td><td class="num">${Q(r.pago)}</td></tr>`).join('')}</tbody></table></div>`;
 }
 $('#w-date').addEventListener('change',renderSemanal);
-
-/* ---------- exportar semanal ---------- */
+function dl(blob,name){ const u=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=u; a.download=name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(u),1500); }
 $('#w-xlsx').addEventListener('click',async()=>{
-  const {rows,mon,sun}=currentWeekRows();
-  if(!rows.length){ alert('Sin datos esta semana.'); return; }
+  if(!WK.length){ alert('Sin datos esta semana.'); return; }
+  const [mon,sun]=weekRange($('#w-date').value);
   const wb=new ExcelJS.Workbook(); const ws=wb.addWorksheet('Semana',{views:[{showGridLines:false}]});
-  const G='FF1F7A3D',GD='FF14572A',LIME='FFDDF0E2',GREY='FFF2F4F5',WHITE='FFFFFFFF',TXT='FF1A1A1A',BLACK='FF0C0F0D';
-  const fill=c=>({type:'pattern',pattern:'solid',fgColor:{argb:c}});
-  const bd={top:{style:'thin',color:{argb:'FFD5DADE'}},bottom:{style:'thin',color:{argb:'FFD5DADE'}},left:{style:'thin',color:{argb:'FFD5DADE'}},right:{style:'thin',color:{argb:'FFD5DADE'}}};
+  const fill=c=>({type:'pattern',pattern:'solid',fgColor:{argb:c}}); const bd={top:{style:'thin',color:{argb:'FFD5DADE'}},bottom:{style:'thin',color:{argb:'FFD5DADE'}},left:{style:'thin',color:{argb:'FFD5DADE'}},right:{style:'thin',color:{argb:'FFD5DADE'}}};
   [26,8,11,12,12,12,14].forEach((w,i)=>ws.getColumn(i+1).width=w);
-  ws.mergeCells('A1:G1'); ws.getRow(1).height=28; let t=ws.getCell('A1');
-  t.value='Dropper · Resumen Semanal de Motoristas'; t.font={name:'Arial',bold:true,size:13,color:{argb:WHITE}}; t.fill=fill(BLACK); t.alignment={vertical:'middle',horizontal:'left',indent:1};
-  ws.getCell('A3').value='Semana:'; ws.getCell('A3').font={name:'Arial',bold:true,size:10,color:{argb:TXT}};
-  ws.getCell('B3').value=`${fmtDate(mon)} al ${fmtDate(sun)}`; ws.getCell('B3').font={name:'Arial',size:10,color:{argb:TXT}};
-  let r=5; ['Motorista','Días','Entregas','Compl. prom','Entr/h prom','Incidencias','Pago semana'].forEach((x,j)=>{
-    const c=ws.getCell(r,j+1); c.value=x; c.font={name:'Arial',bold:true,size:10,color:{argb:TXT}}; c.fill=fill(GREY); c.border=bd; c.alignment={horizontal:j===0?'left':'center'};
-  }); r++;
-  rows.forEach((row,i)=>{ const even=i%2===0;
-    const vals=[row.mot,row.dias,row.entr,Math.round(row.comp*100)/100,Number(row.eph.toFixed(1)),row.incid,Number(row.pago.toFixed(2))];
-    vals.forEach((v,j)=>{ const c=ws.getCell(r,j+1); c.value=v; c.fill=fill(even?WHITE:LIME); c.border=bd; c.font={name:'Arial',size:10,color:{argb:j===6?GD:TXT},bold:j===6};
-      c.alignment={horizontal:j===0?'left':'center'}; if(j===3) c.numFmt='0%'; if(j===5||j===6) c.numFmt='"Q"#,##0.00'; });
-    r++;
-  });
-  const buf=await wb.xlsx.writeBuffer();
-  dl(new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}),`Motoristas_Semana_${mon}.xlsx`);
+  ws.mergeCells('A1:G1'); ws.getRow(1).height=28; let t=ws.getCell('A1'); t.value='Dropper · Resumen Semanal de Motoristas'; t.font={name:'Arial',bold:true,size:13,color:{argb:'FFFFFFFF'}}; t.fill=fill('FF0C0F0D'); t.alignment={vertical:'middle',horizontal:'left',indent:1};
+  ws.getCell('A3').value='Semana:'; ws.getCell('A3').font={name:'Arial',bold:true,size:10}; ws.getCell('B3').value=`${fmtDate(mon)} al ${fmtDate(sun)}`; ws.getCell('B3').font={name:'Arial',size:10};
+  let r=5; ['Motorista','Días','Entregas','Compl. prom','Entr/h prom','Incidencias','Pago semana'].forEach((x,j)=>{ const c=ws.getCell(r,j+1); c.value=x; c.font={name:'Arial',bold:true,size:10}; c.fill=fill('FFF2F4F5'); c.border=bd; c.alignment={horizontal:j===0?'left':'center'}; }); r++;
+  WK.forEach((row,i)=>{ const even=i%2===0; const vals=[row.mot,row.dias,row.entr,r2(row.comp),r2(row.eph),row.inc,r2(row.pago)]; vals.forEach((v,j)=>{ const c=ws.getCell(r,j+1); c.value=v; c.fill=fill(even?'FFFFFFFF':'FFDDF0E2'); c.border=bd; c.font={name:'Arial',size:10,bold:j===6,color:{argb:j===6?'FF14572A':'FF1A1A1A'}}; c.alignment={horizontal:j===0?'left':'center'}; if(j===3) c.numFmt='0%'; if(j===5||j===6) c.numFmt='"Q"#,##0.00'; }); r++; });
+  const buf=await wb.xlsx.writeBuffer(); dl(new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}),`Motoristas_Semana_${mon}.xlsx`);
 });
 $('#w-pdf').addEventListener('click',()=>{
-  const {rows,mon,sun}=currentWeekRows();
-  if(!rows.length){ alert('Sin datos esta semana.'); return; }
+  if(!WK.length){ alert('Sin datos esta semana.'); return; }
+  const [mon,sun]=weekRange($('#w-date').value);
   const {jsPDF}=window.jspdf; const doc=new jsPDF({unit:'pt',format:'a4'}); const PW=doc.internal.pageSize.getWidth(),M=40;
-  doc.setFillColor(12,15,13); doc.rect(0,0,PW,60,'F');
-  doc.setFont('helvetica','bold'); doc.setFontSize(15); doc.setTextColor(255,255,255); doc.text('Dropper · Resumen Semanal de Motoristas',M,30);
+  doc.setFillColor(12,15,13); doc.rect(0,0,PW,60,'F'); doc.setFont('helvetica','bold'); doc.setFontSize(15); doc.setTextColor(255,255,255); doc.text('Dropper · Resumen Semanal de Motoristas',M,30);
   doc.setFont('helvetica','normal'); doc.setFontSize(9.5); doc.setTextColor(207,230,211); doc.text(`Semana: ${fmtDate(mon)} al ${fmtDate(sun)}`,M,47);
-  const totPago=rows.reduce((s,r)=>s+r.pago,0);
-  doc.autoTable({
-    startY:78,
-    head:[['Motorista','Días','Entregas','Compl. prom','Entr/h','Incid.','Pago semana']],
-    body:rows.map(r=>[r.mot,r.dias,r.entr,Math.round(r.comp*100)+'%',f1(r.eph),r.incid?'-'+Q(r.incid):'-',Q(r.pago)]),
-    foot:[['TOTAL','','','','','',Q(totPago)]],
+  const tP=WK.reduce((s,r)=>s+r.pago,0);
+  doc.autoTable({ startY:78, head:[['Motorista','Días','Entregas','Compl.','Entr/h','Incid.','Pago semana']],
+    body:WK.map(r=>[r.mot,r.dias,r.entr,pctS(r.comp),f1(r.eph),r.inc?'-'+Q(r.inc):'-',Q(r.pago)]),
+    foot:[['TOTAL','','','','','',Q(tP)]],
     styles:{font:'helvetica',fontSize:8.5,cellPadding:4,textColor:[26,26,26],lineColor:[213,218,222],lineWidth:0.5},
-    headStyles:{fillColor:[31,122,61],textColor:[255,255,255],fontStyle:'bold'},
-    footStyles:{fillColor:[20,87,42],textColor:[255,255,255],fontStyle:'bold'},
-    alternateRowStyles:{fillColor:[221,240,226]},
-    columnStyles:{0:{cellWidth:'auto'},1:{halign:'center'},2:{halign:'center'},3:{halign:'center'},4:{halign:'center'},5:{halign:'right'},6:{halign:'right'}},
-    margin:{left:M,right:M}
-  });
+    headStyles:{fillColor:[31,122,61],textColor:[255,255,255],fontStyle:'bold'}, footStyles:{fillColor:[20,87,42],textColor:[255,255,255],fontStyle:'bold'}, alternateRowStyles:{fillColor:[221,240,226]},
+    columnStyles:{0:{cellWidth:'auto'},5:{halign:'right'},6:{halign:'right'}}, margin:{left:M,right:M} });
   doc.save(`Motoristas_Semana_${mon}.pdf`);
 });
-function dl(blob,name){ const u=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=u; a.download=name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(u),1500); }
 
-/* ---------- pestañas ---------- */
+/* ========= pestañas + init ========= */
+async function fillMotSelect(){
+  if(!window.sb){ return; }
+  const {data}=await window.sb.from('motorista_dias').select('motorista').limit(2000);
+  const mots=[...new Set((data||[]).map(r=>r.motorista))].sort();
+  $('#h-mot').innerHTML='<option value="">— elegí —</option>'+mots.map(m=>`<option>${esc(m)}</option>`).join('');
+}
 document.querySelectorAll('.tabs button').forEach(b=>b.addEventListener('click',()=>{
   document.querySelectorAll('.tabs button').forEach(x=>x.classList.toggle('active',x===b));
-  const tab=b.dataset.tab;
-  ['registro','dashboard','historial','semanal'].forEach(t=>$('#v-'+t).hidden=(t!==tab));
+  const tab=b.dataset.tab; ['registro','dashboard','historial','semanal'].forEach(t=>$('#v-'+t).hidden=(t!==tab));
   if(tab==='dashboard') renderDashboard();
-  if(tab==='historial') renderHistorial();
+  if(tab==='historial'){ fillMotSelect().then(renderHistorial); }
   if(tab==='semanal') renderSemanal();
 }));
-
-/* ---------- init ---------- */
 $('#logout').addEventListener('click',e=>{ e.preventDefault(); window.dropperAuth.signOut(); });
-$('#f-fecha').value=todayStr(); $('#w-date').value=todayStr();
-renderMotSelects(); renderMotList(); updatePreview(); renderRecent();
+(function initDates(){ const p=x=>String(x).padStart(2,'0'); const d=new Date(); const s=`${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}`; $('#w-date').value=s; })();
 (async function init(){
   const guard=await window.dropperAuth.requireSession();
   if(guard===null) return;
-  if(guard.previewMode){ $('#notice').classList.add('show'); return; }
-  window.dropperNav.setUser(guard.user.email||'');
+  if(guard.previewMode){ PREVIEW=true; $('#notice').classList.add('show'); return; }
+  PREVIEW=false; USER=guard.user; window.dropperNav.setUser(guard.user.email||'');
 })();
 </script>
 </body>

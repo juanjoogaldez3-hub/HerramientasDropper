@@ -200,3 +200,51 @@ create policy "team_insert" on public.paid_deliveries for insert to authenticate
 -- Al anular un recibo se liberan sus envíos (acción de equipo).
 drop policy if exists "team_delete" on public.paid_deliveries;
 create policy "team_delete" on public.paid_deliveries for delete to authenticated using (true);
+
+-- ============================================================
+-- Control de Motoristas: un registro por motorista y día.
+-- Datos del Excel (asignados/entregados/horas) + manuales (hora de
+-- entrada real, incidencias por orden). Se hace UPSERT por (motorista, fecha).
+-- ============================================================
+create table if not exists public.motorista_dias (
+  id                 uuid primary key default gen_random_uuid(),
+  created_at         timestamptz not null default now(),
+  updated_at         timestamptz not null default now(),
+  created_by         uuid references auth.users(id) on delete set null,
+  created_by_email   text,
+  motorista          text not null,
+  fecha              date not null,
+  asignados          integer not null default 0,
+  entregados         integer not null default 0,
+  horas              numeric(8,2) not null default 0,
+  eph                numeric(8,2) not null default 0,
+  entrada_prog       text default '08:00',
+  entrada_real       text,
+  tardanza_min       integer not null default 0,
+  incidencias        jsonb not null default '[]'::jsonb,   -- [{orden, tipo, monto}]
+  incidencias_total  numeric(12,2) not null default 0,
+  pago_base          numeric(12,2) not null default 0,
+  bono               numeric(12,2) not null default 0,
+  desc_tardanza      numeric(12,2) not null default 0,
+  pago               numeric(12,2) not null default 0,
+  baja               boolean not null default false,
+  unique (motorista, fecha)
+);
+
+create index if not exists motorista_dias_fecha_idx on public.motorista_dias (fecha desc);
+create index if not exists motorista_dias_mot_idx on public.motorista_dias (motorista);
+
+alter table public.motorista_dias enable row level security;
+
+drop policy if exists "team_select" on public.motorista_dias;
+create policy "team_select" on public.motorista_dias for select to authenticated using (true);
+
+drop policy if exists "team_insert" on public.motorista_dias;
+create policy "team_insert" on public.motorista_dias for insert to authenticated with check (auth.uid() = created_by);
+
+-- El registro del día lo edita el equipo (varios supervisores).
+drop policy if exists "team_update" on public.motorista_dias;
+create policy "team_update" on public.motorista_dias for update to authenticated using (true) with check (true);
+
+drop policy if exists "team_delete" on public.motorista_dias;
+create policy "team_delete" on public.motorista_dias for delete to authenticated using (true);
