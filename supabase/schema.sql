@@ -252,6 +252,13 @@ create policy "team_delete" on public.motorista_dias for delete to authenticated
 -- ============================================================
 -- Asistencia de oficina: empleados (con su horario) y registro diario.
 -- ============================================================
+-- Admin de asistencia: define en UN solo lugar quien puede editar/borrar/administrar.
+-- Para agregar mas admins: in ('juanjoogaldez3@gmail.com','otro@correo.com')
+create or replace function public.is_asis_admin() returns boolean
+language sql stable as $$
+  select coalesce((auth.jwt() ->> 'email') in ('juanjoogaldez3@gmail.com'), false)
+$$;
+
 create table if not exists public.empleados_oficina (
   id            uuid primary key default gen_random_uuid(),
   created_at    timestamptz not null default now(),
@@ -265,11 +272,14 @@ alter table public.empleados_oficina enable row level security;
 drop policy if exists "team_select" on public.empleados_oficina;
 create policy "team_select" on public.empleados_oficina for select to authenticated using (true);
 drop policy if exists "team_insert" on public.empleados_oficina;
-create policy "team_insert" on public.empleados_oficina for insert to authenticated with check (auth.uid() = created_by);
+drop policy if exists "admin_insert" on public.empleados_oficina;
+create policy "admin_insert" on public.empleados_oficina for insert to authenticated with check (public.is_asis_admin());
 drop policy if exists "team_update" on public.empleados_oficina;
-create policy "team_update" on public.empleados_oficina for update to authenticated using (true) with check (true);
+drop policy if exists "admin_update" on public.empleados_oficina;
+create policy "admin_update" on public.empleados_oficina for update to authenticated using (public.is_asis_admin()) with check (public.is_asis_admin());
 drop policy if exists "team_delete" on public.empleados_oficina;
-create policy "team_delete" on public.empleados_oficina for delete to authenticated using (true);
+drop policy if exists "admin_delete" on public.empleados_oficina;
+create policy "admin_delete" on public.empleados_oficina for delete to authenticated using (public.is_asis_admin());
 
 create table if not exists public.asistencia_dias (
   id            uuid primary key default gen_random_uuid(),
@@ -295,11 +305,14 @@ alter table public.asistencia_dias enable row level security;
 drop policy if exists "team_select" on public.asistencia_dias;
 create policy "team_select" on public.asistencia_dias for select to authenticated using (true);
 drop policy if exists "team_insert" on public.asistencia_dias;
-create policy "team_insert" on public.asistencia_dias for insert to authenticated with check (auth.uid() = created_by);
+drop policy if exists "admin_insert" on public.asistencia_dias;
+create policy "admin_insert" on public.asistencia_dias for insert to authenticated with check (public.is_asis_admin());
 drop policy if exists "team_update" on public.asistencia_dias;
-create policy "team_update" on public.asistencia_dias for update to authenticated using (true) with check (true);
+drop policy if exists "admin_update" on public.asistencia_dias;
+create policy "admin_update" on public.asistencia_dias for update to authenticated using (public.is_asis_admin()) with check (public.is_asis_admin());
 drop policy if exists "team_delete" on public.asistencia_dias;
-create policy "team_delete" on public.asistencia_dias for delete to authenticated using (true);
+drop policy if exists "admin_delete" on public.asistencia_dias;
+create policy "admin_delete" on public.asistencia_dias for delete to authenticated using (public.is_asis_admin());
 
 -- ============================================================
 --  CHECADOR (puncheo con foto) — marcajes + actividad
@@ -328,9 +341,11 @@ create policy "team_select" on public.asistencia_marcajes for select to authenti
 drop policy if exists "team_insert" on public.asistencia_marcajes;
 create policy "team_insert" on public.asistencia_marcajes for insert to authenticated with check (auth.uid() = created_by);
 drop policy if exists "team_update" on public.asistencia_marcajes;
-create policy "team_update" on public.asistencia_marcajes for update to authenticated using (true) with check (true);
+drop policy if exists "admin_update" on public.asistencia_marcajes;
+create policy "admin_update" on public.asistencia_marcajes for update to authenticated using (public.is_asis_admin()) with check (public.is_asis_admin());
 drop policy if exists "team_delete" on public.asistencia_marcajes;
-create policy "team_delete" on public.asistencia_marcajes for delete to authenticated using (true);
+drop policy if exists "admin_delete" on public.asistencia_marcajes;
+create policy "admin_delete" on public.asistencia_marcajes for delete to authenticated using (public.is_asis_admin());
 
 -- Latido e inactividad por empleado y día (una fila por empleado/fecha).
 create table if not exists public.asistencia_actividad (
@@ -353,6 +368,8 @@ create policy "team_select" on public.asistencia_actividad for select to authent
 drop policy if exists "team_insert" on public.asistencia_actividad;
 create policy "team_insert" on public.asistencia_actividad for insert to authenticated with check (auth.uid() = created_by);
 drop policy if exists "team_update" on public.asistencia_actividad;
-create policy "team_update" on public.asistencia_actividad for update to authenticated using (true) with check (true);
+drop policy if exists "own_update" on public.asistencia_actividad;
+create policy "own_update" on public.asistencia_actividad for update to authenticated using (auth.uid() = created_by or public.is_asis_admin()) with check (auth.uid() = created_by or public.is_asis_admin());
 drop policy if exists "team_delete" on public.asistencia_actividad;
-create policy "team_delete" on public.asistencia_actividad for delete to authenticated using (true);
+drop policy if exists "admin_delete" on public.asistencia_actividad;
+create policy "admin_delete" on public.asistencia_actividad for delete to authenticated using (public.is_asis_admin());
