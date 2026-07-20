@@ -78,7 +78,7 @@
         <a href="distribucion.html">Distribución</a>
         <a href="motoristas.html">Motoristas</a>
         <a href="asistencia.html" class="active">Asistencia</a>
-        <a href="checador.html">Checador</a>
+        <a href="marcaje.html">Marcaje</a>
         <a href="historial.html">Historial</a>
       </div>
       <span class="nav-sep"></span>
@@ -94,11 +94,10 @@
   <div class="page-head">
     <div>
       <h2>Asistencia de Oficina</h2>
-      <div class="sub">Marcá la entrada y salida del personal y controlá el cumplimiento de horarios.</div>
+      <div class="sub">Revisá los puncheos, la puntualidad y las horas del personal. El personal marca desde <b>Marcaje</b>.</div>
     </div>
     <div class="tabs">
-      <button data-tab="registro" class="active">Registrar día</button>
-      <button data-tab="puncheos">Puncheos</button>
+      <button data-tab="puncheos" class="active">Puncheos</button>
       <button data-tab="dashboard">Dashboard</button>
       <button data-tab="historial">Historial</button>
       <button data-tab="semanal">Resumen semanal</button>
@@ -107,24 +106,6 @@
   </div>
 
   <div class="status" id="status"></div>
-
-  <!-- ===== REGISTRAR DÍA ===== -->
-  <div class="view" id="v-registro">
-    <div class="selrow">
-      <label style="font-size:.84rem;font-weight:600;color:var(--muted)">Fecha <input type="date" id="r-fecha"></label>
-      <span style="flex:1"></span>
-      <button class="btn btn-primary" id="save-day" style="width:auto">Guardar día</button>
-    </div>
-    <div class="acards" id="acards"></div>
-    <details class="note">
-      <summary>Cómo se evalúa la puntualidad</summary>
-      <div class="howto" style="margin-top:10px">
-        <b>Tardanza</b> = hora de entrada real − hora programada de cada persona.<br>
-        <b>Semáforo:</b> 🟢 a tiempo (hasta 5 min) · 🟡 leve (6–15 min) · 🔴 tarde (+15 min) · ⬜ ausente.<br>
-        <b>Horas trabajadas</b> = salida real − entrada real. Es <b>solo registro y reporte</b> (sin descuentos).
-      </div>
-    </details>
-  </div>
 
   <!-- ===== DASHBOARD ===== -->
   <div class="view" id="v-dashboard" hidden>
@@ -138,7 +119,7 @@
     <div id="d-table"></div>
   </div>
 
-  <!-- ===== PUNCHEOS (checador) ===== -->
+  <!-- ===== PUNCHEOS (marcaje) ===== -->
   <div class="view" id="v-puncheos" hidden>
     <div class="selrow">
       <label style="font-size:.84rem;font-weight:600;color:var(--muted)">Desde <input type="date" id="p-from"></label>
@@ -152,7 +133,7 @@
     <details class="note">
       <summary>Cómo se calculan los puncheos</summary>
       <div class="howto" style="margin-top:10px">
-        Cada persona marca desde su computadora en <b>Checador</b> y cada marca guarda hora + foto.<br>
+        Cada persona marca desde su computadora en <b>Marcaje</b> y cada marca guarda hora + foto.<br>
         <b>Horas netas</b> = (Salida − Entrada) − tiempo de refacción.<br>
         <b>Inactividad</b> = minutos sin mouse ni teclado (aprox. cuando dejan/bloquean la máquina). <b>Última señal</b> = último latido de la página; si es mucho antes de la salida, dejaron la compu sin marcar salida.
       </div>
@@ -202,8 +183,6 @@
 const $=s=>document.querySelector(s);
 let USER=null, PREVIEW=true;
 let EMP=[];        // {id,nombre,entrada_prog,salida_prog,activo}
-let ASIS={};       // nombre -> {entrada,salida,ausente,nota} (del día seleccionado)
-let SELDAY='';
 
 function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
 function Q(n){ return 'Q'+Number(n||0).toLocaleString('es-GT',{minimumFractionDigits:2,maximumFractionDigits:2}); }
@@ -217,20 +196,7 @@ function hm(t){ const m=String(t||'').match(/(\d{1,2}):(\d{2})/); return m?(+m[1
 function pill(t,c){ return `<span class="pill ${c}">${t}</span>`; }
 function status(msg,type){ const s=$('#status'); s.className='status show '+(type||''); s.innerHTML=(type==='work'?'<span class="spin"></span>':'')+msg; if(type==='ok') setTimeout(()=>s.className='status',2800); }
 
-function calcAsis(emp,a){
-  a=a||{};
-  const er=hm(a.entrada), ep=hm(emp.entrada_prog);
-  const tard = (a.entrada && er!=null && ep!=null) ? Math.max(0, er-ep) : 0;
-  let horas=0; const sr=hm(a.salida); if(er!=null && sr!=null){ const d=(sr-er)/60; horas=d>0?d:0; }
-  return {tard,horas};
-}
 function tardCls(min){ return min<=5?'ok':(min<=15?'warn':'bad'); }
-function estadoPill(emp,a){
-  if(a.ausente) return pill('Ausente','gray');
-  if(!a.entrada) return pill('Sin marcar','gray');
-  const {tard}=calcAsis(emp,a);
-  return pill(tard>0?('Tarde '+tard+' min'):'A tiempo', tardCls(tard));
-}
 
 /* ===== empleados ===== */
 async function loadEmp(){
@@ -272,70 +238,20 @@ $('#emp-add').addEventListener('click',async()=>{
   $('#emp-nombre').value=''; await loadEmp(); renderEmpTab(); status('✓ Empleado agregado.','ok');
 });
 
-/* ===== registrar día ===== */
-async function loadDay(){
-  ASIS={};
-  if(!window.sb) return;
-  const {data}=await window.sb.from('asistencia_dias').select('*').eq('fecha',SELDAY);
-  (data||[]).forEach(r=>{ ASIS[r.empleado]={entrada:r.entrada_real||'',salida:r.salida_real||'',ausente:!!r.ausente,nota:r.nota||''}; });
+/* ===== dashboard (deriva de los puncheos) ===== */
+function punchDaysToRegs(days){
+  return days.map(d=>({
+    empleado:d.empleado, fecha:d.fecha,
+    entrada_prog: progOf(d.empleado),
+    entrada_real: d.ent?String(d.ent.hora).slice(0,5):null,
+    salida_real: d.sal?String(d.sal.hora).slice(0,5):null,
+    tardanza_min: d.tard, horas: d.horas, ausente:false
+  }));
 }
-function A(nombre){ if(!ASIS[nombre]) ASIS[nombre]={entrada:'',salida:'',ausente:false,nota:''}; return ASIS[nombre]; }
-function renderRegistro(){
-  const box=$('#acards');
-  const emps=EMP.filter(e=>e.activo!==false);
-  if(!emps.length){ box.innerHTML='<div class="empty"><h3>Sin empleados</h3><p>Agregalos en la pestaña «Empleados».</p></div>'; return; }
-  box.innerHTML='';
-  emps.forEach(e=>{
-    const a=A(e.nombre), c=calcAsis(e,a);
-    const el=document.createElement('div'); el.className='acard'; el.dataset.nom=e.nombre;
-    el.innerHTML=`
-      <div class="ac-name">${esc(e.nombre)} <span class="ac-estado">${estadoPill(e,a)}</span></div>
-      <div class="ac-prog">Horario: ${esc(e.entrada_prog)} – ${esc(e.salida_prog)} · <span class="ac-horas">${a.entrada&&a.salida?f1(c.horas)+' h trabajadas':''}</span></div>
-      <div class="ac-row"><label>Entrada</label><input type="time" class="i-ent" value="${esc(a.entrada||'')}"><button class="now n-ent">ahora</button></div>
-      <div class="ac-row"><label>Salida</label><input type="time" class="i-sal" value="${esc(a.salida||'')}"><button class="now n-sal">ahora</button></div>
-      <div class="ac-foot"><label class="caus"><input type="checkbox" class="i-aus" ${a.ausente?'checked':''}> Ausente</label></div>`;
-    wireCard(el,e);
-    box.appendChild(el);
-  });
-}
-function refreshCard(el,e){
-  const a=A(e.nombre), c=calcAsis(e,a);
-  el.querySelector('.ac-estado').innerHTML=estadoPill(e,a);
-  el.querySelector('.ac-horas').textContent=a.entrada&&a.salida?f1(c.horas)+' h trabajadas':'';
-}
-function wireCard(el,e){
-  const a=A(e.nombre);
-  el.querySelector('.i-ent').addEventListener('input',ev=>{ a.entrada=ev.target.value; refreshCard(el,e); });
-  el.querySelector('.i-sal').addEventListener('input',ev=>{ a.salida=ev.target.value; refreshCard(el,e); });
-  el.querySelector('.i-aus').addEventListener('change',ev=>{ a.ausente=ev.target.checked; refreshCard(el,e); });
-  el.querySelector('.n-ent').addEventListener('click',()=>{ a.entrada=nowHM(); el.querySelector('.i-ent').value=a.entrada; refreshCard(el,e); });
-  el.querySelector('.n-sal').addEventListener('click',()=>{ a.salida=nowHM(); el.querySelector('.i-sal').value=a.salida; refreshCard(el,e); });
-}
-$('#r-fecha').addEventListener('change',async()=>{ SELDAY=$('#r-fecha').value; await loadDay(); renderRegistro(); });
-$('#save-day').addEventListener('click',async()=>{
-  if(!window.sb||!USER){ status('Configurá Supabase / iniciá sesión para guardar.','err'); return; }
-  const emps=EMP.filter(e=>e.activo!==false);
-  status('Guardando el día…','work');
-  try{
-    const rows=emps.map(e=>{ const a=A(e.nombre), c=calcAsis(e,a);
-      return { created_by:USER.id, created_by_email:USER.email||null, empleado:e.nombre, fecha:SELDAY,
-        entrada_prog:e.entrada_prog, salida_prog:e.salida_prog, entrada_real:a.entrada||null, salida_real:a.salida||null,
-        tardanza_min:c.tard, horas:r2(c.horas), ausente:!!a.ausente, nota:a.nota||null, updated_at:new Date().toISOString() };
-    }).filter(r=> r.entrada_real || r.salida_real || r.ausente);
-    if(!rows.length){ status('No hay nada que guardar (marcá al menos una entrada).','err'); return; }
-    const {error}=await window.sb.from('asistencia_dias').upsert(rows,{onConflict:'empleado,fecha'});
-    if(error) throw error;
-    status('✓ Guardado. '+rows.length+' empleados del '+fmtDate(SELDAY)+'.','ok');
-  }catch(err){ console.error(err); status('No se pudo guardar: '+err.message,'err'); }
-});
-
-/* ===== dashboard ===== */
 async function fetchRange(from,to){
   if(!window.sb) return [];
-  let q=window.sb.from('asistencia_dias').select('*');
-  if(from) q=q.gte('fecha',from); if(to) q=q.lte('fecha',to);
-  const {data}=await q.order('fecha',{ascending:false}).limit(3000);
-  return data||[];
+  const {marc,act}=await fetchPunch(from,to,'');
+  return punchDaysToRegs(aggPunch(marc,act));
 }
 let D_REGS=[], D_SORT={key:'punt',dir:1};
 async function renderDashboard(){
@@ -390,8 +306,8 @@ async function renderHistorial(){
   if(PREVIEW){ $('#h-table').innerHTML='<div class="empty"><h3>Configurá Supabase</h3></div>'; return; }
   const emp=$('#h-emp').value;
   if(!emp){ $('#h-table').innerHTML='<div class="empty"><h3>Elegí un empleado</h3></div>'; return; }
-  const {data}=await window.sb.from('asistencia_dias').select('*').eq('empleado',emp).order('fecha',{ascending:false}).limit(400);
-  const regs=data||[];
+  const {marc,act}=await fetchPunch(null,null,emp);
+  const regs=punchDaysToRegs(aggPunch(marc,act));
   if(!regs.length){ $('#h-table').innerHTML='<div class="empty"><h3>Sin registros de '+esc(emp)+'</h3></div>'; return; }
   $('#h-table').innerHTML=`<div class="tbl-wrap"><table class="hist"><thead><tr><th>Fecha</th><th>Prog.</th><th>Entrada</th><th>Salida</th><th>Estado</th><th>Horas</th></tr></thead><tbody>${regs.map(r=>{
     const est=r.ausente?pill('Ausente','gray'):(r.entrada_real?pill(r.tardanza_min>0?'Tarde '+r.tardanza_min+'m':'A tiempo',tardCls(r.tardanza_min)):pill('Sin marcar','gray'));
@@ -437,7 +353,7 @@ $('#w-pdf').addEventListener('click',()=>{
   doc.save(`Asistencia_Semana_${mon}.pdf`);
 });
 
-/* ===== puncheos (checador) ===== */
+/* ===== puncheos (marcaje) ===== */
 const P_TLABEL={entrada:'Entrada',refaccion_salida:'Salida refacción',refaccion_regreso:'Regreso refacción',salida:'Salida'};
 const P_TEMOJI={entrada:'▶',refaccion_salida:'☕',refaccion_regreso:'↩',salida:'■'};
 function progOf(nombre){ const e=EMP.find(x=>x.nombre===nombre); return e?e.entrada_prog:null; }
@@ -478,7 +394,7 @@ async function renderPuncheos(){
   P_DAYS=aggPunch(marc,act);
   const totH=P_DAYS.reduce((s,d)=>s+d.horas,0), tardN=P_DAYS.filter(d=>d.tard>5).length, inN=P_DAYS.reduce((s,d)=>s+d.inact,0);
   $('#p-stats').innerHTML=`<div class="stat"><div class="k">Jornadas</div><div class="v">${P_DAYS.length}</div></div><div class="stat"><div class="k">Horas netas</div><div class="v">${f1(totH)}</div></div><div class="stat"><div class="k">Días con tardanza</div><div class="v">${tardN}</div></div><div class="stat"><div class="k">Inactividad total</div><div class="v">${inN}m</div></div>`;
-  if(!P_DAYS.length){ $('#p-table').innerHTML='<div class="empty"><h3>Sin puncheos en el período</h3><p>Las marcas se registran desde la pestaña <b>Checador</b>.</p></div>'; return; }
+  if(!P_DAYS.length){ $('#p-table').innerHTML='<div class="empty"><h3>Sin puncheos en el período</h3><p>Las marcas se registran desde la herramienta <b>Marcaje</b>.</p></div>'; return; }
   const body=P_DAYS.map((d,i)=>{
     const estT=d.ent?pill(d.tard>0?('Tarde '+d.tard+'m'):'A tiempo',tardCls(d.tard)):pill('Sin entrada','gray');
     const inact=d.inact>0?pill(d.inact+'m',d.inact<=15?'ok':(d.inact<=45?'warn':'bad')):'—';
@@ -514,7 +430,7 @@ function fillPEmp(){ const cur=$('#p-emp').value; $('#p-emp').innerHTML='<option
 /* ===== pestañas + init ===== */
 document.querySelectorAll('.tabs button').forEach(b=>b.addEventListener('click',()=>{
   document.querySelectorAll('.tabs button').forEach(x=>x.classList.toggle('active',x===b));
-  const tab=b.dataset.tab; ['registro','puncheos','dashboard','historial','semanal','empleados'].forEach(t=>$('#v-'+t).hidden=(t!==tab));
+  const tab=b.dataset.tab; ['puncheos','dashboard','historial','semanal','empleados'].forEach(t=>$('#v-'+t).hidden=(t!==tab));
   if(tab==='puncheos'){ fillPEmp(); renderPuncheos(); }
   if(tab==='dashboard') renderDashboard();
   if(tab==='historial'){ fillEmpSelect(); renderHistorial(); }
@@ -523,14 +439,14 @@ document.querySelectorAll('.tabs button').forEach(b=>b.addEventListener('click',
 }));
 $('#logout').addEventListener('click',e=>{ e.preventDefault(); window.dropperAuth.signOut(); });
 $('#lightbox').addEventListener('click',()=>$('#lightbox').classList.remove('show'));
-$('#r-fecha').value=todayStr(); $('#w-date').value=todayStr(); SELDAY=todayStr();
+$('#w-date').value=todayStr();
 $('#p-from').value=todayStr(); $('#p-to').value=todayStr();
 (async function init(){
   const guard=await window.dropperAuth.requireSession();
   if(guard===null) return;
-  if(guard.previewMode){ PREVIEW=true; $('#notice').classList.add('show'); renderRegistro(); return; }
+  if(guard.previewMode){ PREVIEW=true; $('#notice').classList.add('show'); fillPEmp(); renderPuncheos(); return; }
   PREVIEW=false; USER=guard.user; window.dropperNav.setUser(guard.user.email||'');
-  await loadEmp(); await loadDay(); renderRegistro();
+  await loadEmp(); fillPEmp(); renderPuncheos();
 })();
 </script>
 </body>

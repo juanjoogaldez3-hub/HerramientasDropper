@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Checador · Herramientas Dropper</title>
+<title>Marcaje · Herramientas Dropper</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -89,7 +89,7 @@
         <a href="distribucion.html">Distribución</a>
         <a href="motoristas.html">Motoristas</a>
         <a href="asistencia.html">Asistencia</a>
-        <a href="checador.html" class="active">Checador</a>
+        <a href="marcaje.html" class="active">Marcaje</a>
         <a href="historial.html">Historial</a>
       </div>
       <span class="nav-sep"></span>
@@ -99,12 +99,12 @@
   </div>
 
   <div class="notice" id="notice">
-    <b>Modo vista previa.</b> Supabase no está configurado: podés probar el checador pero <b>no se guarda</b>. Pegá tus llaves en <code>assets/js/config.js</code>.
+    <b>Modo vista previa.</b> Supabase no está configurado: podés probar el marcaje pero <b>no se guarda</b>. Pegá tus llaves en <code>assets/js/config.js</code>.
   </div>
 
   <div class="page-head">
     <div>
-      <h2>Checador con foto</h2>
+      <h2>Marcaje con foto</h2>
       <div class="sub">Marcá tu entrada, refacción y salida. Cada marca guarda la hora y una foto.</div>
     </div>
   </div>
@@ -151,7 +151,7 @@
     </div>
   </div>
 
-  <footer>Dropper · Smart Delivery — Checador</footer>
+  <footer>Dropper · Smart Delivery — Marcaje</footer>
 </div>
 
 <div class="lightbox" id="lightbox"><img id="lb-img" alt="Foto de marcaje"></div>
@@ -190,8 +190,8 @@ async function loadEmp(){
   const {data}=await window.sb.from('empleados_oficina').select('*').order('nombre');
   EMP=(data||[]).filter(e=>e.activo!==false);
 }
-function savedEmpName(){ try{ return localStorage.getItem('dropper_checador_emp')||''; }catch(e){ return ''; } }
-function saveEmpName(n){ try{ localStorage.setItem('dropper_checador_emp',n); }catch(e){} }
+function savedEmpName(){ try{ return localStorage.getItem('dropper_marcaje_emp')||''; }catch(e){ return ''; } }
+function saveEmpName(n){ try{ localStorage.setItem('dropper_marcaje_emp',n); }catch(e){} }
 
 function showSetup(){
   $('#v-panel').hidden=true; $('#v-setup').hidden=false;
