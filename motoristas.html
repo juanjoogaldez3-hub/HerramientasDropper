@@ -133,8 +133,8 @@
       <summary>Cómo se calcula el pago</summary>
       <div class="howto" style="margin-top:10px">
         <b>Del Excel:</b> asignados = todos los envíos con el nombre del motorista ese día · entregados = los "Entregado" · horas = 1ª a última entrega.<br>
-        <b>Base por envío</b> (según entregas/hora): &lt;3 → Q12 · 3–3.9 → Q13 · 4–4.9 → Q14 · 5+ → Q15.<br>
-        <b>Completación</b> (entregados÷asignados): 100% → +Q1/envío · 90–99% → 0 · 80–89% → −Q1/envío · &lt;80% → −Q2/envío.<br>
+        <b>Base por envío</b> (según entregas/hora): &lt;3 → Q12 · 3–3.9 → Q13 · <b>4+ → Q14 (máximo)</b>. Sin bono por encima del estándar.<br>
+        <b>Completación</b> (entregados÷asignados): 90% o más → sin cambio · 80–89% → −Q1/envío · &lt;80% → −Q2/envío.<br>
         <b>Tardanza de entrada</b> (vs 8:00): ≤15 min → sin descuento · 15–30 → −Q50 · 30–60 → −Q75 · +60 → −Q100.<br>
         <b>Incidencias por orden:</b> queja −Q25 · dañado −Q50 + precio del paquete · sin evidencia −Q25 · reporte falso → baja.<br>
         <b>Pago</b> = base + bono − tardanza − incidencias (base y bono por envío entregado).
@@ -218,18 +218,20 @@ function calcDia(d,man){
   const asig=d.asignados, entr=d.entregados, horas=d.horas;
   const comp=asig>0?Math.min(1,entr/asig):0;
   const eph=horas>0?entr/horas:0;
-  let base; if(eph<3)base=12;else if(eph<4)base=13;else if(eph<5)base=14;else base=15;
-  const pc=comp*100; let adj; if(pc>=100)adj=1;else if(pc>=90)adj=0;else if(pc>=80)adj=-1;else adj=-2;
+  // Bonos por encima del estándar (Q14) deshabilitados: base tope Q14, sin +Q1 por 100%.
+  let base; if(eph<3)base=12;else if(eph<4)base=13;else base=14;
+  const pc=comp*100; let adj; if(pc>=90)adj=0;else if(pc>=80)adj=-1;else adj=-2;
   const tard=tardMin('08:00',man.entrada);
   const descT=tardDesc(tard);
   const incT=(man.incidencias||[]).reduce((s,i)=>s+(+i.monto||0),0);
   const pagoBase=base*entr, bono=adj*entr, pago=pagoBase+bono-descT-incT;
   return {comp,eph,base,adj,tard,descT,incT,pagoBase,bono,pago,precioEnvio:base+adj};
 }
-function calcLine(d,c){
-  let s=`Precio <b style="color:var(--ink)">${Q(c.precioEnvio)}/envío</b> (base ${Q(c.base)}${c.adj?` · compl. ${c.adj>0?'+':''}${Q(c.adj)}`:''}) × ${d.entregados} = ${Q(c.pagoBase+c.bono)}`;
-  if(c.descT) s+=` − ${Q(c.descT)} tard.`;
-  if(c.incT) s+=` − ${Q(c.incT)} incid.`;
+function calcLine(d,c,m){
+  m=m||{};
+  let s=`<div>Precio <b style="color:var(--ink)">${Q(c.precioEnvio)}/envío</b> (${f1(c.eph)} entregas/hora${c.adj<0?` · ${pctS(c.comp)} completación → ${Q(c.adj)}/envío`:''}) × ${d.entregados} entregas = <b style="color:var(--ink)">${Q(c.pagoBase+c.bono)}</b></div>`;
+  if(c.tard>0) s+=`<div>Tardanza de entrada: ${c.tard} min tarde → <span style="color:#a3261a">−${Q(c.descT)}</span></div>`;
+  if((m.incidencias||[]).length) s+=`<div>${m.incidencias.length} incidencia${m.incidencias.length>1?'s':''} → <span style="color:#a3261a">−${Q(c.incT)}</span></div>`;
   return s;
 }
 
@@ -341,7 +343,7 @@ function cardHTML(d,m,c){
         <button class="inc-add-btn">+ Incidencia</button>
       </div>
     </div>
-    <div class="mc-calc" style="font-size:.76rem;color:var(--muted);line-height:1.5;border-top:1px dashed #e8ede9;padding-top:8px">${calcLine(d,c)}</div>
+    <div class="mc-calc" style="font-size:.76rem;color:var(--muted);line-height:1.55;border-top:1px dashed #e8ede9;padding-top:8px">${calcLine(d,c,m)}</div>
     <div class="mc-foot">
       <label class="cbaja"><input type="checkbox" class="m-baja" ${m.baja?'checked':''}> Reporte falso (baja)</label>
       <div class="mc-pago">${Q(c.pago)}</div>
@@ -357,7 +359,7 @@ function refreshCard(el,d){
   el.querySelector('.mc-metrics').innerHTML=`<span>Asig <b>${d.asignados}</b></span><span>Entr <b>${d.entregados}</b></span> ${pill(pctS(c.comp),compCls(c.comp))} ${pill(f1(c.eph)+'/h',ephCls(c.eph))} <span>Horas <b>${f1(d.horas)}</b></span>`;
   el.querySelector('.m-tard').innerHTML=c.tard?pill('+'+c.tard+' min · −'+Q(c.descT),tardCls(c.tard)):(m.entrada?pill('A tiempo','ok'):'');
   el.querySelector('.inc-list').innerHTML=incListHTML(m);
-  el.querySelector('.mc-calc').innerHTML=calcLine(d,c);
+  el.querySelector('.mc-calc').innerHTML=calcLine(d,c,man(el.dataset.key));
   el.querySelector('.mc-pago').textContent=Q(c.pago);
   wireIncRemove(el,d);
 }
