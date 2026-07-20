@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Asistencia de Oficina · Herramientas Dropper</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/css/app.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="assets/js/config.js"></script>
+<script src="assets/js/supabaseClient.js"></script>
+<script src="assets/js/auth-guard.js"></script>
+<script src="assets/js/brand.js"></script>
+<script src="assets/js/nav.js"></script>
+<style>
+  .tabs{flex-wrap:wrap}
+  .status{margin:12px 0;font-size:.9rem;display:none;align-items:center;gap:9px;padding:11px 15px;border-radius:12px}
+  .status.show{display:flex}.status.ok{background:var(--lime-soft);color:var(--green-dk);border:1px solid #c4e3cd}.status.err{background:#fdecea;color:#a3261a;border:1px solid #f5c6c0}.status.work{background:var(--lime-soft);color:var(--green-dk);border:1px solid #c4e3cd}
+  .spin{width:15px;height:15px;border:2px solid #bcd9c4;border-top-color:var(--green-dk);border-radius:50%;animation:sp .7s linear infinite;flex:none}@keyframes sp{to{transform:rotate(360deg)}}
+  .selrow{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:16px}
+  .selrow select,.selrow input[type=date]{font-family:inherit;font-size:.92rem;border:1px solid #cdd8cf;border-radius:10px;padding:9px 12px;background:#fcfdfc}
+  .acards{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px;margin-bottom:16px}
+  .acard{background:var(--white);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);padding:15px 16px;display:flex;flex-direction:column;gap:10px}
+  .ac-name{font-family:'Sora',sans-serif;font-weight:700;font-size:1.02rem;display:flex;align-items:center;justify-content:space-between;gap:8px}
+  .ac-prog{font-size:.76rem;color:var(--muted)}
+  .ac-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .ac-row label{font-size:.78rem;font-weight:600;color:var(--muted);min-width:52px}
+  .ac-row input[type=time]{border:1px solid #cdd8cf;border-radius:8px;padding:6px 8px;font-family:inherit}
+  .ac-row .now{font-size:.74rem;font-weight:600;color:var(--green-dk);border:1px solid #cdd8cf;background:#fff;border-radius:8px;padding:5px 8px;cursor:pointer}
+  .ac-row .now:hover{border-color:var(--green);background:#fbfdfb}
+  .pill{display:inline-block;font-size:.74rem;font-weight:700;border-radius:20px;padding:2px 9px;white-space:nowrap}
+  .ok{color:#14572A;background:#DDF0E2;border:1px solid #c4e3cd}.warn{color:#8a5a00;background:#fdf6e3;border:1px solid #f0e2b6}.bad{color:#a3261a;background:#fdecea;border:1px solid #f5c6c0}.gray{color:#5b6b60;background:#eef1ef;border:1px solid #dfe4e0}
+  .ac-foot{display:flex;justify-content:space-between;align-items:center;gap:8px;border-top:1px solid var(--line);padding-top:9px}
+  .ac-foot .caus{display:inline-flex;align-items:center;gap:6px;font-size:.8rem;color:#8a5a00}.ac-foot .caus input{width:16px;height:16px}
+  .tbl-wrap{overflow-x:auto;border-radius:var(--radius);border:1px solid var(--line);box-shadow:var(--shadow)}
+  table.hist{min-width:600px}
+  th.sortable{cursor:pointer;user-select:none}th.sortable:hover{color:var(--green-dk)}
+  .dcaret{display:inline-block;color:var(--green);font-size:.72rem;transition:transform .18s;margin-right:5px}
+  tr.drow{cursor:pointer}tr.drow:hover td{background:#f2f7f3}
+  tr.ddetail td{padding:0;background:#fbfdfb}tr.ddetail table.hist{min-width:0;box-shadow:none;border:none;font-size:.84rem}tr.ddetail table.hist th{background:#eef2ee}
+  .empty{padding:44px 24px;text-align:center;color:var(--muted)}.empty h3{font-family:'Sora',sans-serif;font-weight:700;font-size:1.05rem;color:var(--ink);margin-bottom:4px}
+  .empmgr .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:10px 0;border-bottom:1px solid var(--line)}
+  .empmgr .row:last-child{border-bottom:none}
+  .empmgr input{font-family:inherit;font-size:.9rem;border:1px solid #cdd8cf;border-radius:9px;padding:8px 10px}
+  .empmgr .nom{min-width:160px;flex:1}.empmgr .hr{width:110px}
+  .empmgr .x{border:none;background:#fdecea;color:#a3261a;border-radius:8px;padding:6px 10px;cursor:pointer;font-weight:600}
+  .view[hidden]{display:none}
+  .howto{font-size:.82rem;color:var(--muted);line-height:1.6}.howto b{color:var(--ink)}
+  details.note{margin-top:14px}details.note summary{cursor:pointer;font-size:.85rem;font-weight:600;color:var(--green-dk)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="topbar">
+    <a class="brand" href="inicio.html"><img id="brand-logo" alt="Dropper · Herramientas"></a>
+    <nav class="nav">
+      <div class="nav-links">
+        <a href="inicio.html">Inicio</a>
+        <a href="generador.html">Generador</a>
+        <a href="pagos.html">Pagos</a>
+        <a href="comisiones.html">Comisiones</a>
+        <a href="productividad.html">Productividad</a>
+        <a href="distribucion.html">Distribución</a>
+        <a href="motoristas.html">Motoristas</a>
+        <a href="asistencia.html" class="active">Asistencia</a>
+        <a href="historial.html">Historial</a>
+      </div>
+      <span class="nav-sep"></span>
+      <span class="nav-av" id="nav-av"></span>
+      <a href="#" class="nav-logout" id="logout">Salir</a>
+    </nav>
+  </div>
+
+  <div class="notice" id="notice">
+    <b>Modo vista previa.</b> Supabase no está configurado: podés ver la herramienta pero <b>no se guarda</b>. Pegá tus llaves en <code>assets/js/config.js</code>.
+  </div>
+
+  <div class="page-head">
+    <div>
+      <h2>Asistencia de Oficina</h2>
+      <div class="sub">Marcá la entrada y salida del personal y controlá el cumplimiento de horarios.</div>
+    </div>
+    <div class="tabs">
+      <button data-tab="registro" class="active">Registrar día</button>
+      <button data-tab="dashboard">Dashboard</button>
+      <button data-tab="historial">Historial</button>
+      <button data-tab="semanal">Resumen semanal</button>
+      <button data-tab="empleados">Empleados</button>
+    </div>
+  </div>
+
+  <div class="status" id="status"></div>
+
+  <!-- ===== REGISTRAR DÍA ===== -->
+  <div class="view" id="v-registro">
+    <div class="selrow">
+      <label style="font-size:.84rem;font-weight:600;color:var(--muted)">Fecha <input type="date" id="r-fecha"></label>
+      <span style="flex:1"></span>
+      <button class="btn btn-primary" id="save-day" style="width:auto">Guardar día</button>
+    </div>
+    <div class="acards" id="acards"></div>
+    <details class="note">
+      <summary>Cómo se evalúa la puntualidad</summary>
+      <div class="howto" style="margin-top:10px">
+        <b>Tardanza</b> = hora de entrada real − hora programada de cada persona.<br>
+        <b>Semáforo:</b> 🟢 a tiempo (hasta 5 min) · 🟡 leve (6–15 min) · 🔴 tarde (+15 min) · ⬜ ausente.<br>
+        <b>Horas trabajadas</b> = salida real − entrada real. Es <b>solo registro y reporte</b> (sin descuentos).
+      </div>
+    </details>
+  </div>
+
+  <!-- ===== DASHBOARD ===== -->
+  <div class="view" id="v-dashboard" hidden>
+    <div class="selrow">
+      <label style="font-size:.84rem;font-weight:600;color:var(--muted)">Desde <input type="date" id="d-from"></label>
+      <label style="font-size:.84rem;font-weight:600;color:var(--muted)">Hasta <input type="date" id="d-to"></label>
+      <button class="btn btn-ghost" id="d-apply" style="width:auto;padding:9px 14px;font-size:.86rem">Aplicar</button>
+      <button class="btn btn-ghost" id="d-clear" style="width:auto;padding:9px 14px;font-size:.86rem">Todo</button>
+    </div>
+    <div class="summary" id="d-stats"></div>
+    <div id="d-table"></div>
+  </div>
+
+  <!-- ===== HISTORIAL ===== -->
+  <div class="view" id="v-historial" hidden>
+    <div class="selrow"><label style="font-size:.84rem;font-weight:600;color:var(--muted)">Empleado <select id="h-emp"></select></label></div>
+    <div id="h-table"></div>
+  </div>
+
+  <!-- ===== SEMANAL ===== -->
+  <div class="view" id="v-semanal" hidden>
+    <div class="selrow">
+      <label style="font-size:.84rem;font-weight:600;color:var(--muted)">Semana de <input type="date" id="w-date"></label>
+      <span id="w-range" style="font-size:.85rem;color:var(--muted);font-weight:600"></span>
+      <span style="flex:1"></span>
+      <button class="btn btn-ghost" id="w-xlsx" style="width:auto;padding:9px 14px;font-size:.86rem">Excel</button>
+      <button class="btn btn-primary" id="w-pdf" style="width:auto;padding:9px 14px;font-size:.86rem">PDF</button>
+    </div>
+    <div class="summary" id="w-stats"></div>
+    <div id="w-table"></div>
+  </div>
+
+  <!-- ===== EMPLEADOS ===== -->
+  <div class="view" id="v-empleados" hidden>
+    <div class="panel" style="padding:18px 20px">
+      <h3 style="font-family:'Sora',sans-serif;font-weight:700;font-size:1.05rem;margin-bottom:6px">Empleados y sus horarios</h3>
+      <div class="howto" style="margin-bottom:12px">Definí cada empleado con su hora de entrada y salida. Podés poner el mismo horario para todos o distinto por persona.</div>
+      <div class="empmgr" id="emp-list"></div>
+      <div class="row" style="border:none;margin-top:12px;gap:10px">
+        <input class="nom" id="emp-nombre" placeholder="Nombre del empleado" maxlength="60">
+        <input class="hr" id="emp-ent" type="time" value="08:00" title="Entrada">
+        <input class="hr" id="emp-sal" type="time" value="17:00" title="Salida">
+        <button class="btn btn-primary" id="emp-add" style="width:auto">Agregar</button>
+      </div>
+    </div>
+  </div>
+
+  <footer>Dropper · Smart Delivery — Asistencia de Oficina</footer>
+</div>
+
+<script>
+const $=s=>document.querySelector(s);
+let USER=null, PREVIEW=true;
+let EMP=[];        // {id,nombre,entrada_prog,salida_prog,activo}
+let ASIS={};       // nombre -> {entrada,salida,ausente,nota} (del día seleccionado)
+let SELDAY='';
+
+function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+function Q(n){ return 'Q'+Number(n||0).toLocaleString('es-GT',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+function f1(n){ return Number(n||0).toLocaleString('es-GT',{minimumFractionDigits:1,maximumFractionDigits:1}); }
+function pctS(n){ return Math.round(n*100)+'%'; }
+function r2(n){ return Math.round((+n||0)*100)/100; }
+function todayStr(){ const d=new Date(),p=x=>String(x).padStart(2,'0'); return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}`; }
+function nowHM(){ const d=new Date(),p=x=>String(x).padStart(2,'0'); return `${p(d.getHours())}:${p(d.getMinutes())}`; }
+function fmtDate(s){ const m=String(s||'').match(/(\d{4})-(\d{2})-(\d{2})/); return m?`${m[3]}/${m[2]}/${m[1]}`:s; }
+function hm(t){ const m=String(t||'').match(/(\d{1,2}):(\d{2})/); return m?(+m[1])*60+(+m[2]):null; }
+function pill(t,c){ return `<span class="pill ${c}">${t}</span>`; }
+function status(msg,type){ const s=$('#status'); s.className='status show '+(type||''); s.innerHTML=(type==='work'?'<span class="spin"></span>':'')+msg; if(type==='ok') setTimeout(()=>s.className='status',2800); }
+
+function calcAsis(emp,a){
+  a=a||{};
+  const er=hm(a.entrada), ep=hm(emp.entrada_prog);
+  const tard = (a.entrada && er!=null && ep!=null) ? Math.max(0, er-ep) : 0;
+  let horas=0; const sr=hm(a.salida); if(er!=null && sr!=null){ const d=(sr-er)/60; horas=d>0?d:0; }
+  return {tard,horas};
+}
+function tardCls(min){ return min<=5?'ok':(min<=15?'warn':'bad'); }
+function estadoPill(emp,a){
+  if(a.ausente) return pill('Ausente','gray');
+  if(!a.entrada) return pill('Sin marcar','gray');
+  const {tard}=calcAsis(emp,a);
+  return pill(tard>0?('Tarde '+tard+' min'):'A tiempo', tardCls(tard));
+}
+
+/* ===== empleados ===== */
+async function loadEmp(){
+  EMP=[];
+  if(!window.sb) return;
+  const {data}=await window.sb.from('empleados_oficina').select('*').order('nombre');
+  EMP=(data||[]);
+}
+function renderEmpTab(){
+  const box=$('#emp-list');
+  if(!EMP.length){ box.innerHTML='<div class="empty" style="padding:24px"><h3>Sin empleados</h3><p>Agregá el primero abajo.</p></div>'; return; }
+  box.innerHTML=EMP.map(e=>`<div class="row" data-id="${e.id}">
+    <input class="nom em-nom" value="${esc(e.nombre)}">
+    <input class="hr em-ent" type="time" value="${esc(e.entrada_prog)}">
+    <input class="hr em-sal" type="time" value="${esc(e.salida_prog)}">
+    <button class="btn btn-ghost em-save" style="width:auto;padding:6px 12px;font-size:.8rem">Guardar</button>
+    <button class="x em-del">Quitar</button>
+  </div>`).join('');
+  box.querySelectorAll('.row').forEach(row=>{
+    const id=row.dataset.id;
+    row.querySelector('.em-save').addEventListener('click',async()=>{
+      const nombre=row.querySelector('.em-nom').value.trim(), ent=row.querySelector('.em-ent').value, sal=row.querySelector('.em-sal').value;
+      if(!nombre) return;
+      await window.sb.from('empleados_oficina').update({nombre,entrada_prog:ent,salida_prog:sal}).eq('id',id);
+      await loadEmp(); renderEmpTab(); status('✓ Guardado.','ok');
+    });
+    row.querySelector('.em-del').addEventListener('click',async()=>{
+      if(!confirm('¿Quitar a este empleado? (sus registros no se borran)')) return;
+      await window.sb.from('empleados_oficina').delete().eq('id',id);
+      await loadEmp(); renderEmpTab();
+    });
+  });
+}
+$('#emp-add').addEventListener('click',async()=>{
+  if(!window.sb||!USER){ status('Configurá Supabase para guardar empleados.','err'); return; }
+  const nombre=$('#emp-nombre').value.trim(); if(!nombre) return;
+  const {error}=await window.sb.from('empleados_oficina').insert({nombre,entrada_prog:$('#emp-ent').value,salida_prog:$('#emp-sal').value,created_by:USER.id});
+  if(error){ status('No se pudo agregar: '+error.message,'err'); return; }
+  $('#emp-nombre').value=''; await loadEmp(); renderEmpTab(); status('✓ Empleado agregado.','ok');
+});
+
+/* ===== registrar día ===== */
+async function loadDay(){
+  ASIS={};
+  if(!window.sb) return;
+  const {data}=await window.sb.from('asistencia_dias').select('*').eq('fecha',SELDAY);
+  (data||[]).forEach(r=>{ ASIS[r.empleado]={entrada:r.entrada_real||'',salida:r.salida_real||'',ausente:!!r.ausente,nota:r.nota||''}; });
+}
+function A(nombre){ if(!ASIS[nombre]) ASIS[nombre]={entrada:'',salida:'',ausente:false,nota:''}; return ASIS[nombre]; }
+function renderRegistro(){
+  const box=$('#acards');
+  const emps=EMP.filter(e=>e.activo!==false);
+  if(!emps.length){ box.innerHTML='<div class="empty"><h3>Sin empleados</h3><p>Agregalos en la pestaña «Empleados».</p></div>'; return; }
+  box.innerHTML='';
+  emps.forEach(e=>{
+    const a=A(e.nombre), c=calcAsis(e,a);
+    const el=document.createElement('div'); el.className='acard'; el.dataset.nom=e.nombre;
+    el.innerHTML=`
+      <div class="ac-name">${esc(e.nombre)} <span class="ac-estado">${estadoPill(e,a)}</span></div>
+      <div class="ac-prog">Horario: ${esc(e.entrada_prog)} – ${esc(e.salida_prog)} · <span class="ac-horas">${a.entrada&&a.salida?f1(c.horas)+' h trabajadas':''}</span></div>
+      <div class="ac-row"><label>Entrada</label><input type="time" class="i-ent" value="${esc(a.entrada||'')}"><button class="now n-ent">ahora</button></div>
+      <div class="ac-row"><label>Salida</label><input type="time" class="i-sal" value="${esc(a.salida||'')}"><button class="now n-sal">ahora</button></div>
+      <div class="ac-foot"><label class="caus"><input type="checkbox" class="i-aus" ${a.ausente?'checked':''}> Ausente</label></div>`;
+    wireCard(el,e);
+    box.appendChild(el);
+  });
+}
+function refreshCard(el,e){
+  const a=A(e.nombre), c=calcAsis(e,a);
+  el.querySelector('.ac-estado').innerHTML=estadoPill(e,a);
+  el.querySelector('.ac-horas').textContent=a.entrada&&a.salida?f1(c.horas)+' h trabajadas':'';
+}
+function wireCard(el,e){
+  const a=A(e.nombre);
+  el.querySelector('.i-ent').addEventListener('input',ev=>{ a.entrada=ev.target.value; refreshCard(el,e); });
+  el.querySelector('.i-sal').addEventListener('input',ev=>{ a.salida=ev.target.value; refreshCard(el,e); });
+  el.querySelector('.i-aus').addEventListener('change',ev=>{ a.ausente=ev.target.checked; refreshCard(el,e); });
+  el.querySelector('.n-ent').addEventListener('click',()=>{ a.entrada=nowHM(); el.querySelector('.i-ent').value=a.entrada; refreshCard(el,e); });
+  el.querySelector('.n-sal').addEventListener('click',()=>{ a.salida=nowHM(); el.querySelector('.i-sal').value=a.salida; refreshCard(el,e); });
+}
+$('#r-fecha').addEventListener('change',async()=>{ SELDAY=$('#r-fecha').value; await loadDay(); renderRegistro(); });
+$('#save-day').addEventListener('click',async()=>{
+  if(!window.sb||!USER){ status('Configurá Supabase / iniciá sesión para guardar.','err'); return; }
+  const emps=EMP.filter(e=>e.activo!==false);
+  status('Guardando el día…','work');
+  try{
+    const rows=emps.map(e=>{ const a=A(e.nombre), c=calcAsis(e,a);
+      return { created_by:USER.id, created_by_email:USER.email||null, empleado:e.nombre, fecha:SELDAY,
+        entrada_prog:e.entrada_prog, salida_prog:e.salida_prog, entrada_real:a.entrada||null, salida_real:a.salida||null,
+        tardanza_min:c.tard, horas:r2(c.horas), ausente:!!a.ausente, nota:a.nota||null, updated_at:new Date().toISOString() };
+    }).filter(r=> r.entrada_real || r.salida_real || r.ausente);
+    if(!rows.length){ status('No hay nada que guardar (marcá al menos una entrada).','err'); return; }
+    const {error}=await window.sb.from('asistencia_dias').upsert(rows,{onConflict:'empleado,fecha'});
+    if(error) throw error;
+    status('✓ Guardado. '+rows.length+' empleados del '+fmtDate(SELDAY)+'.','ok');
+  }catch(err){ console.error(err); status('No se pudo guardar: '+err.message,'err'); }
+});
+
+/* ===== dashboard ===== */
+async function fetchRange(from,to){
+  if(!window.sb) return [];
+  let q=window.sb.from('asistencia_dias').select('*');
+  if(from) q=q.gte('fecha',from); if(to) q=q.lte('fecha',to);
+  const {data}=await q.order('fecha',{ascending:false}).limit(3000);
+  return data||[];
+}
+let D_REGS=[], D_SORT={key:'punt',dir:1};
+async function renderDashboard(){
+  if(PREVIEW){ $('#d-table').innerHTML='<div class="empty"><h3>Configurá Supabase para ver el dashboard</h3></div>'; $('#d-stats').innerHTML=''; return; }
+  D_REGS=await fetchRange($('#d-from').value,$('#d-to').value); renderDTable();
+}
+function aggEmp(regs){
+  const by=new Map();
+  regs.forEach(r=>{ if(!by.has(r.empleado)) by.set(r.empleado,[]); by.get(r.empleado).push(r); });
+  return [...by.entries()].map(([emp,list])=>{
+    let dias=list.length, aus=0, pres=0, aTiempo=0, tardT=0, horasT=0;
+    list.forEach(r=>{ if(r.ausente){aus++;return;} if(!r.entrada_real) return; pres++; horasT+=+r.horas; tardT+=r.tardanza_min; if(r.tardanza_min<=5) aTiempo++; });
+    return {emp,dias,aus,pres,aTiempo,punt:pres>0?aTiempo/pres:0,tardProm:pres>0?tardT/pres:0,horasProm:pres>0?horasT/pres:0,days:list};
+  });
+}
+function puntCls(p){ return p>=0.9?'ok':(p>=0.75?'warn':'bad'); }
+function renderDTable(){
+  let rows=aggEmp(D_REGS);
+  const {key,dir}=D_SORT;
+  rows.sort((a,b)=>{ const av=key==='emp'?a.emp.toLowerCase():a[key], bv=key==='emp'?b.emp.toLowerCase():b[key]; return av<bv?-dir:(av>bv?dir:0); });
+  $('#d-stats').innerHTML=`<div class="stat"><div class="k">Empleados</div><div class="v">${rows.length}</div></div><div class="stat"><div class="k">Días registrados</div><div class="v">${rows.reduce((s,r)=>s+r.dias,0)}</div></div><div class="stat"><div class="k">Ausencias</div><div class="v">${rows.reduce((s,r)=>s+r.aus,0)}</div></div>`;
+  if(!rows.length){ $('#d-table').innerHTML='<div class="empty"><h3>Sin datos guardados en el período</h3></div>'; return; }
+  const cols=[['emp','Empleado'],['dias','Días'],['pres','Presentes'],['aus','Ausencias'],['punt','Puntualidad'],['tardProm','Tard. prom'],['horasProm','Horas prom']];
+  const arrow=k2=>D_SORT.key===k2?(D_SORT.dir<0?' ▾':' ▴'):'';
+  const head=cols.map(([k2,l])=>`<th class="sortable" data-k="${k2}">${l}${arrow(k2)}</th>`).join('');
+  const body=rows.map((r,i)=>`
+    <tr class="drow" data-i="${i}"><td><span class="dcaret">▸</span>${esc(r.emp)}</td>
+      <td class="num">${r.dias}</td><td class="num">${r.pres}</td><td class="num">${r.aus||'—'}</td>
+      <td>${pill(pctS(r.punt),puntCls(r.punt))}</td><td>${pill(Math.round(r.tardProm)+'m',tardCls(r.tardProm))}</td><td class="num">${f1(r.horasProm)}</td></tr>
+    <tr class="ddetail" data-i="${i}" hidden><td colspan="7">${dayDetail(r.days)}</td></tr>`).join('');
+  $('#d-table').innerHTML=`<div class="tbl-wrap"><table class="hist"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div>`;
+  $('#d-table').querySelectorAll('th.sortable').forEach(th=>th.addEventListener('click',()=>{ const k2=th.dataset.k; if(D_SORT.key===k2) D_SORT.dir*=-1; else D_SORT={key:k2,dir:(k2==='emp'?1:-1)}; renderDTable(); }));
+  $('#d-table').querySelectorAll('tr.drow').forEach(tr=>tr.addEventListener('click',()=>{ const det=$('#d-table').querySelector(`tr.ddetail[data-i="${tr.dataset.i}"]`); det.hidden=!det.hidden; tr.querySelector('.dcaret').style.transform=det.hidden?'':'rotate(90deg)'; }));
+}
+function dayDetail(days){
+  const ds=[...days].sort((a,b)=>b.fecha.localeCompare(a.fecha));
+  return `<table class="hist"><thead><tr><th>Fecha</th><th>Entrada</th><th>Salida</th><th>Estado</th><th>Horas</th></tr></thead><tbody>${ds.map(r=>{
+    const est=r.ausente?pill('Ausente','gray'):(r.entrada_real?pill(r.tardanza_min>0?'Tarde '+r.tardanza_min+'m':'A tiempo',tardCls(r.tardanza_min)):pill('Sin marcar','gray'));
+    return `<tr><td>${fmtDate(r.fecha)}</td><td>${esc(r.entrada_real||'—')}</td><td>${esc(r.salida_real||'—')}</td><td>${est}</td><td class="num">${f1(r.horas)}</td></tr>`;
+  }).join('')}</tbody></table>`;
+}
+$('#d-apply').addEventListener('click',renderDashboard);
+$('#d-clear').addEventListener('click',()=>{ $('#d-from').value=''; $('#d-to').value=''; renderDashboard(); });
+
+/* ===== historial ===== */
+async function fillEmpSelect(){
+  if(!window.sb) return;
+  const names=EMP.map(e=>e.nombre);
+  $('#h-emp').innerHTML='<option value="">— elegí —</option>'+names.map(n=>`<option>${esc(n)}</option>`).join('');
+}
+async function renderHistorial(){
+  if(PREVIEW){ $('#h-table').innerHTML='<div class="empty"><h3>Configurá Supabase</h3></div>'; return; }
+  const emp=$('#h-emp').value;
+  if(!emp){ $('#h-table').innerHTML='<div class="empty"><h3>Elegí un empleado</h3></div>'; return; }
+  const {data}=await window.sb.from('asistencia_dias').select('*').eq('empleado',emp).order('fecha',{ascending:false}).limit(400);
+  const regs=data||[];
+  if(!regs.length){ $('#h-table').innerHTML='<div class="empty"><h3>Sin registros de '+esc(emp)+'</h3></div>'; return; }
+  $('#h-table').innerHTML=`<div class="tbl-wrap"><table class="hist"><thead><tr><th>Fecha</th><th>Prog.</th><th>Entrada</th><th>Salida</th><th>Estado</th><th>Horas</th></tr></thead><tbody>${regs.map(r=>{
+    const est=r.ausente?pill('Ausente','gray'):(r.entrada_real?pill(r.tardanza_min>0?'Tarde '+r.tardanza_min+'m':'A tiempo',tardCls(r.tardanza_min)):pill('Sin marcar','gray'));
+    return `<tr><td>${fmtDate(r.fecha)}</td><td>${esc(r.entrada_prog||'—')}</td><td>${esc(r.entrada_real||'—')}</td><td>${esc(r.salida_real||'—')}</td><td>${est}</td><td class="num">${f1(r.horas)}</td></tr>`;
+  }).join('')}</tbody></table></div>`;
+}
+$('#h-emp').addEventListener('change',renderHistorial);
+
+/* ===== semanal ===== */
+function weekRange(dstr){ const d=dstr?new Date(dstr+'T00:00:00'):new Date(); const dow=(d.getDay()+6)%7; const mon=new Date(d); mon.setDate(d.getDate()-dow); const sun=new Date(mon); sun.setDate(mon.getDate()+6); const iso=x=>{const p=n=>String(n).padStart(2,'0');return `${x.getFullYear()}-${p(x.getMonth()+1)}-${p(x.getDate())}`;}; return [iso(mon),iso(sun)]; }
+let WK=[];
+async function renderSemanal(){
+  const [mon,sun]=weekRange($('#w-date').value); $('#w-range').textContent=`${fmtDate(mon)} al ${fmtDate(sun)}`;
+  if(PREVIEW){ $('#w-table').innerHTML='<div class="empty"><h3>Configurá Supabase</h3></div>'; $('#w-stats').innerHTML=''; WK=[]; return; }
+  WK=aggEmp(await fetchRange(mon,sun));
+  $('#w-stats').innerHTML=`<div class="stat"><div class="k">Empleados</div><div class="v">${WK.length}</div></div><div class="stat"><div class="k">Días</div><div class="v">${WK.reduce((s,r)=>s+r.dias,0)}</div></div><div class="stat"><div class="k">Ausencias</div><div class="v">${WK.reduce((s,r)=>s+r.aus,0)}</div></div>`;
+  if(!WK.length){ $('#w-table').innerHTML='<div class="empty"><h3>Sin registros esta semana</h3></div>'; return; }
+  $('#w-table').innerHTML=`<div class="tbl-wrap"><table class="hist"><thead><tr><th>Empleado</th><th>Días</th><th>Presentes</th><th>Ausencias</th><th>Puntualidad</th><th>Tard. prom</th><th>Horas prom</th></tr></thead><tbody>${WK.map(r=>`<tr><td>${esc(r.emp)}</td><td class="num">${r.dias}</td><td class="num">${r.pres}</td><td class="num">${r.aus||'—'}</td><td>${pill(pctS(r.punt),puntCls(r.punt))}</td><td>${pill(Math.round(r.tardProm)+'m',tardCls(r.tardProm))}</td><td class="num">${f1(r.horasProm)}</td></tr>`).join('')}</tbody></table></div>`;
+}
+$('#w-date').addEventListener('change',renderSemanal);
+function dl(blob,name){ const u=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=u; a.download=name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(u),1500); }
+$('#w-xlsx').addEventListener('click',async()=>{
+  if(!WK.length){ alert('Sin datos.'); return; } const [mon,sun]=weekRange($('#w-date').value);
+  const wb=new ExcelJS.Workbook(); const ws=wb.addWorksheet('Semana',{views:[{showGridLines:false}]});
+  const fill=c=>({type:'pattern',pattern:'solid',fgColor:{argb:c}}); const bd={top:{style:'thin',color:{argb:'FFD5DADE'}},bottom:{style:'thin',color:{argb:'FFD5DADE'}},left:{style:'thin',color:{argb:'FFD5DADE'}},right:{style:'thin',color:{argb:'FFD5DADE'}}};
+  [26,8,11,11,13,12,11].forEach((w,i)=>ws.getColumn(i+1).width=w);
+  ws.mergeCells('A1:G1'); ws.getRow(1).height=28; let t=ws.getCell('A1'); t.value='Dropper · Asistencia Semanal de Oficina'; t.font={name:'Arial',bold:true,size:13,color:{argb:'FFFFFFFF'}}; t.fill=fill('FF0C0F0D'); t.alignment={vertical:'middle',horizontal:'left',indent:1};
+  ws.getCell('A3').value='Semana:'; ws.getCell('A3').font={name:'Arial',bold:true,size:10}; ws.getCell('B3').value=`${fmtDate(mon)} al ${fmtDate(sun)}`; ws.getCell('B3').font={name:'Arial',size:10};
+  let r=5; ['Empleado','Días','Presentes','Ausencias','Puntualidad','Tard. prom','Horas prom'].forEach((x,j)=>{ const c=ws.getCell(r,j+1); c.value=x; c.font={name:'Arial',bold:true,size:10}; c.fill=fill('FFF2F4F5'); c.border=bd; c.alignment={horizontal:j===0?'left':'center'}; }); r++;
+  WK.forEach((row,i)=>{ const even=i%2===0; const vals=[row.emp,row.dias,row.pres,row.aus,r2(row.punt),Math.round(row.tardProm),r2(row.horasProm)]; vals.forEach((v,j)=>{ const c=ws.getCell(r,j+1); c.value=v; c.fill=fill(even?'FFFFFFFF':'FFDDF0E2'); c.border=bd; c.font={name:'Arial',size:10}; c.alignment={horizontal:j===0?'left':'center'}; if(j===4) c.numFmt='0%'; }); r++; });
+  const buf=await wb.xlsx.writeBuffer(); dl(new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}),`Asistencia_Semana_${mon}.xlsx`);
+});
+$('#w-pdf').addEventListener('click',()=>{
+  if(!WK.length){ alert('Sin datos.'); return; } const [mon,sun]=weekRange($('#w-date').value);
+  const {jsPDF}=window.jspdf; const doc=new jsPDF({unit:'pt',format:'a4'}); const PW=doc.internal.pageSize.getWidth(),M=40;
+  doc.setFillColor(12,15,13); doc.rect(0,0,PW,60,'F'); doc.setFont('helvetica','bold'); doc.setFontSize(15); doc.setTextColor(255,255,255); doc.text('Dropper · Asistencia Semanal de Oficina',M,30);
+  doc.setFont('helvetica','normal'); doc.setFontSize(9.5); doc.setTextColor(207,230,211); doc.text(`Semana: ${fmtDate(mon)} al ${fmtDate(sun)}`,M,47);
+  doc.autoTable({ startY:78, head:[['Empleado','Días','Presentes','Ausencias','Puntualidad','Tard. prom','Horas prom']],
+    body:WK.map(r=>[r.emp,r.dias,r.pres,r.aus,pctS(r.punt),Math.round(r.tardProm)+'m',f1(r.horasProm)]),
+    styles:{font:'helvetica',fontSize:8.5,cellPadding:4,textColor:[26,26,26],lineColor:[213,218,222],lineWidth:0.5},
+    headStyles:{fillColor:[31,122,61],textColor:[255,255,255],fontStyle:'bold'}, alternateRowStyles:{fillColor:[221,240,226]},
+    columnStyles:{0:{cellWidth:'auto'},1:{halign:'center'},2:{halign:'center'},3:{halign:'center'},4:{halign:'center'},5:{halign:'center'},6:{halign:'center'}}, margin:{left:M,right:M} });
+  doc.save(`Asistencia_Semana_${mon}.pdf`);
+});
+
+/* ===== pestañas + init ===== */
+document.querySelectorAll('.tabs button').forEach(b=>b.addEventListener('click',()=>{
+  document.querySelectorAll('.tabs button').forEach(x=>x.classList.toggle('active',x===b));
+  const tab=b.dataset.tab; ['registro','dashboard','historial','semanal','empleados'].forEach(t=>$('#v-'+t).hidden=(t!==tab));
+  if(tab==='dashboard') renderDashboard();
+  if(tab==='historial'){ fillEmpSelect(); renderHistorial(); }
+  if(tab==='semanal') renderSemanal();
+  if(tab==='empleados') renderEmpTab();
+}));
+$('#logout').addEventListener('click',e=>{ e.preventDefault(); window.dropperAuth.signOut(); });
+$('#r-fecha').value=todayStr(); $('#w-date').value=todayStr(); SELDAY=todayStr();
+(async function init(){
+  const guard=await window.dropperAuth.requireSession();
+  if(guard===null) return;
+  if(guard.previewMode){ PREVIEW=true; $('#notice').classList.add('show'); renderRegistro(); return; }
+  PREVIEW=false; USER=guard.user; window.dropperNav.setUser(guard.user.email||'');
+  await loadEmp(); await loadDay(); renderRegistro();
+})();
+</script>
+</body>
+</html>

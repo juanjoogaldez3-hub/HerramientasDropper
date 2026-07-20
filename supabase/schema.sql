@@ -248,3 +248,55 @@ create policy "team_update" on public.motorista_dias for update to authenticated
 
 drop policy if exists "team_delete" on public.motorista_dias;
 create policy "team_delete" on public.motorista_dias for delete to authenticated using (true);
+
+-- ============================================================
+-- Asistencia de oficina: empleados (con su horario) y registro diario.
+-- ============================================================
+create table if not exists public.empleados_oficina (
+  id            uuid primary key default gen_random_uuid(),
+  created_at    timestamptz not null default now(),
+  created_by    uuid references auth.users(id) on delete set null,
+  nombre        text not null unique,
+  entrada_prog  text not null default '08:00',
+  salida_prog   text not null default '17:00',
+  activo        boolean not null default true
+);
+alter table public.empleados_oficina enable row level security;
+drop policy if exists "team_select" on public.empleados_oficina;
+create policy "team_select" on public.empleados_oficina for select to authenticated using (true);
+drop policy if exists "team_insert" on public.empleados_oficina;
+create policy "team_insert" on public.empleados_oficina for insert to authenticated with check (auth.uid() = created_by);
+drop policy if exists "team_update" on public.empleados_oficina;
+create policy "team_update" on public.empleados_oficina for update to authenticated using (true) with check (true);
+drop policy if exists "team_delete" on public.empleados_oficina;
+create policy "team_delete" on public.empleados_oficina for delete to authenticated using (true);
+
+create table if not exists public.asistencia_dias (
+  id            uuid primary key default gen_random_uuid(),
+  created_at    timestamptz not null default now(),
+  updated_at    timestamptz not null default now(),
+  created_by    uuid references auth.users(id) on delete set null,
+  created_by_email text,
+  empleado      text not null,
+  fecha         date not null,
+  entrada_prog  text,
+  salida_prog   text,
+  entrada_real  text,
+  salida_real   text,
+  tardanza_min  integer not null default 0,
+  horas         numeric(8,2) not null default 0,
+  ausente       boolean not null default false,
+  nota          text,
+  unique (empleado, fecha)
+);
+create index if not exists asistencia_fecha_idx on public.asistencia_dias (fecha desc);
+create index if not exists asistencia_emp_idx on public.asistencia_dias (empleado);
+alter table public.asistencia_dias enable row level security;
+drop policy if exists "team_select" on public.asistencia_dias;
+create policy "team_select" on public.asistencia_dias for select to authenticated using (true);
+drop policy if exists "team_insert" on public.asistencia_dias;
+create policy "team_insert" on public.asistencia_dias for insert to authenticated with check (auth.uid() = created_by);
+drop policy if exists "team_update" on public.asistencia_dias;
+create policy "team_update" on public.asistencia_dias for update to authenticated using (true) with check (true);
+drop policy if exists "team_delete" on public.asistencia_dias;
+create policy "team_delete" on public.asistencia_dias for delete to authenticated using (true);
