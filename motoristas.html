@@ -39,12 +39,16 @@
   .mcards{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:14px;margin-bottom:16px}
   .mcard{background:var(--white);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);padding:16px 16px 14px;display:flex;flex-direction:column;gap:10px}
   .mc-name{font-family:'Sora',sans-serif;font-weight:700;font-size:1.02rem;display:flex;align-items:center;gap:8px}
-  .mc-metrics{display:flex;flex-wrap:wrap;gap:6px 12px;font-size:.82rem;color:var(--muted)}
+  .mc-metrics{display:flex;flex-wrap:wrap;gap:6px 12px;font-size:.82rem;color:var(--muted);align-items:center}
   .mc-metrics b{color:var(--ink);font-family:'Sora',sans-serif}
+  .est-pill{display:inline-block;font-size:.72rem;font-weight:600;border-radius:8px;padding:1px 7px;white-space:nowrap}
+  .est-pill b{font-family:'Sora',sans-serif}
+  .mc-base{font-size:.72rem;color:var(--muted);margin-top:2px}
   .pill{display:inline-block;font-size:.74rem;font-weight:700;border-radius:20px;padding:2px 9px;white-space:nowrap}
   .ok{color:#14572A;background:#DDF0E2;border:1px solid #c4e3cd}
   .warn{color:#8a5a00;background:#fdf6e3;border:1px solid #f0e2b6}
   .bad{color:#a3261a;background:#fdecea;border:1px solid #f5c6c0}
+  .gray{color:#5b6b60;background:#eef1ef;border:1px solid #dfe4e0}
   .baja{color:#fff;background:#a3261a;border:1px solid #a3261a}
   .mc-in{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:var(--grey);border-radius:10px;padding:9px 11px}
   .mc-in label{font-size:.78rem;font-weight:600;color:var(--muted)}
@@ -140,9 +144,9 @@
     <details class="note">
       <summary>Cómo se calcula el pago</summary>
       <div class="howto" style="margin-top:10px">
-        <b>Del Excel:</b> asignados = todos los envíos con el nombre del motorista ese día · entregados = los "Entregado" · horas = 1ª a última entrega.<br>
+        <b>Del Excel:</b> entregados = estado <b>"Entregado"</b> · base del % = envíos que salieron a ruta (<b>Entregado + Intento de Entrega + Devolución</b>) · horas = 1ª a última entrega. <b>En Bodega, En Tránsito y Sin Asignar no cuentan en el %.</b><br>
         <b>Base por envío</b> (según entregas/hora): &lt;3 → Q12 · 3–3.9 → Q13 · <b>4+ → Q14 (máximo)</b>. Sin bono por encima del estándar.<br>
-        <b>Completación</b> (entregados÷asignados): 90% o más → sin cambio · 80–89% → −Q1/envío · &lt;80% → −Q2/envío.<br>
+        <b>Completación</b> (entregados÷a ruta): 90% o más → sin cambio · 80–89% → −Q1/envío · &lt;80% → −Q2/envío.<br>
         <b>Tardanza de entrada</b> (vs 8:00): ≤15 min → sin descuento · 15–30 → −Q50 · 30–60 → −Q75 · +60 → −Q100.<br>
         <b>Incidencias por orden:</b> queja −Q25 · dañado −Q50 + precio del paquete · sin evidencia −Q25 · reporte falso → baja.<br>
         <b>Pago</b> = base + bono − tardanza − incidencias (base y bono por envío entregado).
@@ -220,6 +224,24 @@ function ephCls(v){ return v>=4?'ok':(v>=3?'warn':'bad'); }
 function compCls(p){ return p>=0.9?'ok':(p>=0.8?'warn':'bad'); }
 function tardCls(m){ return m<=15?'ok':(m<=30?'warn':'bad'); }
 
+/* Clasifica el estado del envío del sistema.
+   Ojo: "Intento de Entrega" contiene "entrega" pero NO es entregado. */
+function claseEstado(s){
+  const n=norm(String(s||'')).trim();
+  if(!n) return 'otro';
+  if(n.includes('intento')) return 'intento';
+  if(n.includes('devoluc')||n.includes('devuelt')||n.includes('returned')||n.includes('rechaz')||n.includes('no entreg')||n.includes('fallid')) return 'devolucion';
+  if(n.startsWith('entregado')||n==='delivered') return 'entregado';
+  if(n.includes('transito')||n.includes('en ruta')||n.includes('reparto')) return 'transito';
+  if(n.includes('bodega')||n.includes('almacen')||n.includes('recolect')) return 'bodega';
+  if(n.includes('sin asignar')||n.includes('asignad')||n.includes('pendiente')||n.includes('creado')) return 'sinasignar';
+  return 'otro';
+}
+const EST_META=[['entregado','Entregado','ok'],['intento','Intento','warn'],['devolucion','Devuelto','bad'],['transito','Tránsito','gray'],['bodega','Bodega','gray'],['sinasignar','Sin asignar','gray'],['otro','Otro','gray']];
+function estadosHTML(d){
+  return EST_META.filter(([k2])=>d.estados[k2]>0).map(([k2,lbl,c])=>`<span class="est-pill ${c}" title="${lbl}">${lbl} <b>${d.estados[k2]}</b></span>`).join('');
+}
+
 /* cálculo del día */
 function calcDia(d,man){
   man=man||{};
@@ -283,15 +305,19 @@ async function parseWorkbook(buf){
     const mot=g(C.mot); if(!mot) return;
     const dt=parseDT(t[C.fecha]??r[C.fecha]); if(!dt) return;
     const fecha=dayKey(dt);
-    const entregado=/entreg/.test(norm(g(C.estado)));
+    const cls=claseEstado(g(C.estado));
     const key=k(mot,fecha);
-    if(!DIAS.has(key)) DIAS.set(key,{motorista:mot,fecha,asignados:0,entregados:0,_times:[],orders:[]});
+    if(!DIAS.has(key)) DIAS.set(key,{motorista:mot,fecha,asignados:0,entregados:0,total:0,estados:{entregado:0,intento:0,devolucion:0,transito:0,bodega:0,sinasignar:0,otro:0},_times:[],orders:[]});
     const d=DIAS.get(key);
-    d.asignados++;
-    d.orders.push({no:g(C.norden)||g(C.idorden)||'—', precio:parseMoney(t[C.precio]??r[C.precio])});
-    if(entregado){ d.entregados++; d._times.push(dt.getHours()*60+dt.getMinutes()+dt.getSeconds()/60); }
+    d.total++; d.estados[cls]++;
+    d.orders.push({no:g(C.norden)||g(C.idorden)||'—', precio:parseMoney(t[C.precio]??r[C.precio]), estado:cls});
+    if(cls==='entregado'){ d.entregados++; d._times.push(dt.getHours()*60+dt.getMinutes()+dt.getSeconds()/60); }
   });
-  DIAS.forEach(d=>{ if(d._times.length){ d._times.sort((a,b)=>a-b); d.horas=(d._times[d._times.length-1]-d._times[0])/60; } else d.horas=0; delete d._times; });
+  // Denominador de completación = envíos que salieron a ruta y se resolvieron (entregado + intento + devolución).
+  DIAS.forEach(d=>{
+    d.asignados = d.estados.entregado + d.estados.intento + d.estados.devolucion;
+    if(d._times.length){ d._times.sort((a,b)=>a-b); d.horas=(d._times[d._times.length-1]-d._times[0])/60; } else d.horas=0; delete d._times;
+  });
 
   DAYS=[...new Set([...DIAS.values()].map(d=>d.fecha))].sort().reverse();
   if(!DAYS.length){ status('No encontré filas válidas.','err'); return; }
@@ -334,10 +360,12 @@ function cardHTML(d,m,c){
   return `
     <div class="mc-name">${esc(d.motorista)} ${m.baja?pill('baja','baja'):''}</div>
     <div class="mc-metrics">
-      <span>Asig <b>${d.asignados}</b></span><span>Entr <b>${d.entregados}</b></span>
-      ${pill(pctS(c.comp),compCls(c.comp))} ${pill(f1(c.eph)+'/h',ephCls(c.eph))}
+      <span title="Total de envíos del día (todos los estados)">Total <b>${d.total}</b></span>
+      ${estadosHTML(d)}
+      ${pill(pctS(c.comp)+' compl.',compCls(c.comp))} ${pill(f1(c.eph)+'/h',ephCls(c.eph))}
       <span>Horas <b>${f1(d.horas)}</b></span>
     </div>
+    <div class="mc-base">Completación = ${d.entregados} / ${d.asignados} a ruta &nbsp;<span style="opacity:.7">(entregado ÷ entregado + intento + devuelto)</span></div>
     <div class="mc-in">
       <label>Entrada real (prog. 8:00)</label>
       <input type="time" class="m-ent" value="${esc(m.entrada||'')}">
@@ -364,7 +392,7 @@ function incListHTML(m){
 function refreshCard(el,d){
   const key=el.dataset.key, m=man(key), c=calcDia(d,m);
   el.querySelector('.mc-name').innerHTML=`${esc(d.motorista)} ${m.baja?pill('baja','baja'):''}`;
-  el.querySelector('.mc-metrics').innerHTML=`<span>Asig <b>${d.asignados}</b></span><span>Entr <b>${d.entregados}</b></span> ${pill(pctS(c.comp),compCls(c.comp))} ${pill(f1(c.eph)+'/h',ephCls(c.eph))} <span>Horas <b>${f1(d.horas)}</b></span>`;
+  el.querySelector('.mc-metrics').innerHTML=`<span title="Total de envíos del día">Total <b>${d.total}</b></span> ${estadosHTML(d)} ${pill(pctS(c.comp)+' compl.',compCls(c.comp))} ${pill(f1(c.eph)+'/h',ephCls(c.eph))} <span>Horas <b>${f1(d.horas)}</b></span>`;
   el.querySelector('.m-tard').innerHTML=c.tard?pill('+'+c.tard+' min · −'+Q(c.descT),tardCls(c.tard)):(m.entrada?pill('A tiempo','ok'):'');
   el.querySelector('.inc-list').innerHTML=incListHTML(m);
   el.querySelector('.mc-calc').innerHTML=calcLine(d,c,man(el.dataset.key));
