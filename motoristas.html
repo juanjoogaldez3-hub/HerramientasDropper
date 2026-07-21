@@ -291,6 +291,7 @@ async function parseWorkbook(buf){
   const C={
     mot:pick(keys,['nombre del mensajero','mensajero','repartidor','motorista','piloto']),
     fecha:pick(keys,['fecha de entrega','fecha']),
+    creacion:pick(keys,['fecha de creacion','fecha creacion','creacion']),
     estado:pick(keys,['estado del envio','estado de entrega','estado']),
     norden:pick(keys,['numero de orden','no. de orden','no de orden','orden']),
     idorden:pick(keys,['id de orden','id']),
@@ -299,19 +300,40 @@ async function parseWorkbook(buf){
   if(!C.mot){ status('No encontré la columna del <b>mensajero</b>.','err'); return; }
   if(!C.fecha){ status('No encontré la columna <b>Fecha de Entrega</b>.','err'); return; }
 
-  DIAS=new Map();
+  // --- Pasada 1: recolectar filas (los NO entregados no traen fecha de entrega, no se descartan) ---
+  const recs=[];
   rowsRaw.forEach((r,i)=>{
     const t=rowsTxt[i]||{}; const g=x=>x?String((t[x]??r[x])||'').trim():'';
     const mot=g(C.mot); if(!mot) return;
-    const dt=parseDT(t[C.fecha]??r[C.fecha]); if(!dt) return;
-    const fecha=dayKey(dt);
-    const cls=claseEstado(g(C.estado));
-    const key=k(mot,fecha);
-    if(!DIAS.has(key)) DIAS.set(key,{motorista:mot,fecha,asignados:0,entregados:0,total:0,estados:{entregado:0,intento:0,devolucion:0,transito:0,bodega:0,sinasignar:0,otro:0},_times:[],orders:[]});
+    recs.push({
+      mot, cls:claseEstado(g(C.estado)),
+      dtE:parseDT(t[C.fecha]??r[C.fecha]),                                  // fecha de entrega (solo entregados)
+      dtC:C.creacion?parseDT(t[C.creacion]??r[C.creacion]):null,           // fecha de creación (respaldo)
+      no:g(C.norden)||g(C.idorden)||'—', precio:parseMoney(t[C.precio]??r[C.precio])
+    });
+  });
+  if(!recs.length){ status('No encontré filas con mensajero.','err'); return; }
+
+  // Día principal de entrega por motorista (moda) y del archivo, para ubicar los pendientes/fallidos.
+  function modeDay(dates){ const c=new Map(); dates.forEach(d=>{const k2=dayKey(d);c.set(k2,(c.get(k2)||0)+1);}); let best=null,n=-1; c.forEach((v,k2)=>{if(v>n){n=v;best=k2;}}); return best; }
+  const delDays=recs.filter(x=>x.cls==='entregado'&&x.dtE).map(x=>x.dtE);
+  let fileDay;
+  if(delDays.length) fileDay=modeDay(delDays);
+  else { const any=recs.map(x=>x.dtE||x.dtC).filter(Boolean).sort((a,b)=>b-a); fileDay=any.length?dayKey(any[0]):dayKey(new Date()); }
+  const motDay=new Map(); const gMot=new Map();
+  recs.forEach(x=>{ if(x.cls==='entregado'&&x.dtE){ if(!gMot.has(x.mot))gMot.set(x.mot,[]); gMot.get(x.mot).push(x.dtE); } });
+  gMot.forEach((arr,mot)=>motDay.set(mot,modeDay(arr)));
+  const dayFor=x=> (x.cls==='entregado'&&x.dtE) ? dayKey(x.dtE) : (motDay.get(x.mot)||fileDay);
+
+  // --- Pasada 2: armar los días ---
+  DIAS=new Map();
+  recs.forEach(x=>{
+    const fecha=dayFor(x); const key=k(x.mot,fecha);
+    if(!DIAS.has(key)) DIAS.set(key,{motorista:x.mot,fecha,asignados:0,entregados:0,total:0,estados:{entregado:0,intento:0,devolucion:0,transito:0,bodega:0,sinasignar:0,otro:0},_times:[],orders:[]});
     const d=DIAS.get(key);
-    d.total++; d.estados[cls]++;
-    d.orders.push({no:g(C.norden)||g(C.idorden)||'—', precio:parseMoney(t[C.precio]??r[C.precio]), estado:cls});
-    if(cls==='entregado'){ d.entregados++; d._times.push(dt.getHours()*60+dt.getMinutes()+dt.getSeconds()/60); }
+    d.total++; d.estados[x.cls]++;
+    d.orders.push({no:x.no, precio:x.precio, estado:x.cls});
+    if(x.cls==='entregado'){ d.entregados++; if(x.dtE) d._times.push(x.dtE.getHours()*60+x.dtE.getMinutes()+x.dtE.getSeconds()/60); }
   });
   // Denominador de completación = envíos a su cargo sin terminar bien (entregado + intento + en tránsito).
   // La devolución NO cuenta (es un resultado válido, no falla del motorista).
