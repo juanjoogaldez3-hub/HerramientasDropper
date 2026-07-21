@@ -82,6 +82,9 @@
   tr.ddetail table.hist th{background:#eef2ee}
   tr.motivo-row td{background:#fbfaf4;font-size:.78rem;color:var(--muted);line-height:1.5;padding:6px 10px}
   tr.motivo-row .motivo-lbl{font-weight:700;color:var(--ink)}
+  table.hist tfoot tr.wtot td{background:#14572A;color:#fff;font-weight:700;border-top:2px solid #0c0f0d}
+  table.hist tfoot tr.wtot .pill{background:rgba(255,255,255,.16);color:#fff;border-color:rgba(255,255,255,.25)}
+  table.hist tfoot tr.wtot .neg{color:#ffd7d2}
   .empty{padding:44px 24px;text-align:center;color:var(--muted)}
   .empty h3{font-family:'Sora',sans-serif;font-weight:700;font-size:1.05rem;color:var(--ink);margin-bottom:4px}
   .howto{font-size:.82rem;color:var(--muted);line-height:1.6}.howto b{color:var(--ink)}
@@ -503,9 +506,16 @@ async function fetchRange(from,to){
 }
 function aggBy(regs){
   const by=new Map();
-  regs.forEach(r=>{ if(!by.has(r.motorista)) by.set(r.motorista,{dias:0,asig:0,entr:0,horas:0,tard:0,inc:0,pago:0});
-    const o=by.get(r.motorista); o.dias++; o.asig+=r.asignados; o.entr+=r.entregados; o.horas+=+r.horas; o.tard+=r.tardanza_min; o.inc+=+r.incidencias_total; o.pago+=+r.pago; });
-  return [...by.entries()].map(([mot,o])=>({mot,...o,comp:o.asig>0?o.entr/o.asig:0,eph:o.horas>0?o.entr/o.horas:0,tardProm:o.dias?o.tard/o.dias:0})).sort((a,b)=>b.pago-a.pago);
+  regs.forEach(r=>{ if(!by.has(r.motorista)) by.set(r.motorista,{dias:0,asig:0,entr:0,horas:0,tard:0,inc:0,pago:0,pbase:0,pbono:0});
+    const o=by.get(r.motorista); o.dias++; o.asig+=r.asignados; o.entr+=r.entregados; o.horas+=+r.horas; o.tard+=r.tardanza_min; o.inc+=+r.incidencias_total; o.pago+=+r.pago; o.pbase+=+r.pago_base||0; o.pbono+=+r.bono||0; });
+  return [...by.entries()].map(([mot,o])=>({mot,...o,comp:o.asig>0?o.entr/o.asig:0,eph:o.horas>0?o.entr/o.horas:0,tardProm:o.dias?o.tard/o.dias:0,qenv:o.entr>0?(o.pbase+o.pbono)/o.entr:0})).sort((a,b)=>b.pago-a.pago);
+}
+// Totales/promedios de un conjunto agregado por motorista.
+function totalsBy(rows){
+  const t={dias:0,entr:0,asig:0,horas:0,inc:0,pago:0,pbase:0,pbono:0};
+  rows.forEach(r=>{ t.dias+=r.dias; t.entr+=r.entr; t.asig+=r.asig; t.horas+=r.horas; t.inc+=r.inc; t.pago+=r.pago; t.pbase+=r.pbase||0; t.pbono+=r.pbono||0; });
+  t.comp=t.asig>0?t.entr/t.asig:0; t.eph=t.horas>0?t.entr/t.horas:0; t.qenv=t.entr>0?(t.pbase+t.pbono)/t.entr:0;
+  return t;
 }
 let DASH_REGS=[]; let DASH_SORT={key:'comp',dir:1};   // por defecto: peor completación arriba
 async function renderDashboard(){
@@ -590,10 +600,10 @@ async function renderSemanal(){
   const [mon,sun]=weekRange($('#w-date').value); $('#w-range').textContent=`${fmtDate(mon)} al ${fmtDate(sun)}`;
   if(PREVIEW){ $('#w-table').innerHTML='<div class="empty"><h3>Configurá Supabase para el resumen</h3></div>'; $('#w-stats').innerHTML=''; WK=[]; return; }
   const rows=aggBy(await fetchRange(mon,sun)); WK=rows;
-  const tE=rows.reduce((s,r)=>s+r.entr,0), tP=rows.reduce((s,r)=>s+r.pago,0);
-  $('#w-stats').innerHTML=`<div class="stat"><div class="k">Motoristas</div><div class="v">${rows.length}</div></div><div class="stat"><div class="k">Entregas</div><div class="v">${tE.toLocaleString('es-GT')}</div></div><div class="stat"><div class="k">Pago total semana</div><div class="v">${Q(tP)}</div></div>`;
+  const T=totalsBy(rows);
+  $('#w-stats').innerHTML=`<div class="stat"><div class="k">Motoristas</div><div class="v">${rows.length}</div></div><div class="stat"><div class="k">Entregas</div><div class="v">${T.entr.toLocaleString('es-GT')}</div></div><div class="stat"><div class="k">Compl. prom</div><div class="v">${pctS(T.comp)}</div></div><div class="stat"><div class="k">Q/envío prom</div><div class="v">${Q(T.qenv)}</div></div><div class="stat"><div class="k">Pago total semana</div><div class="v">${Q(T.pago)}</div></div>`;
   if(!rows.length){ $('#w-table').innerHTML='<div class="empty"><h3>Sin registros esta semana</h3></div>'; return; }
-  $('#w-table').innerHTML=`<div class="tbl-wrap"><table class="hist"><thead><tr><th>Motorista</th><th>Días</th><th>Entregas</th><th>Compl. prom</th><th>Entr/h prom</th><th>Incid.</th><th>Pago semana</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${esc(r.mot)}</td><td class="num">${r.dias}</td><td class="num">${r.entr}</td><td>${pill(pctS(r.comp),compCls(r.comp))}</td><td>${pill(f1(r.eph),ephCls(r.eph))}</td><td class="num neg">${r.inc?'−'+Q(r.inc):'—'}</td><td class="num">${Q(r.pago)}</td></tr>`).join('')}</tbody></table></div>`;
+  $('#w-table').innerHTML=`<div class="tbl-wrap"><table class="hist"><thead><tr><th>Motorista</th><th>Días</th><th>Entregas</th><th>Compl. prom</th><th>Entr/h prom</th><th>Q/envío</th><th>Incid.</th><th>Pago semana</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${esc(r.mot)}</td><td class="num">${r.dias}</td><td class="num">${r.entr}</td><td>${pill(pctS(r.comp),compCls(r.comp))}</td><td>${pill(f1(r.eph),ephCls(r.eph))}</td><td class="num">${Q(r.qenv)}</td><td class="num neg">${r.inc?'−'+Q(r.inc):'—'}</td><td class="num">${Q(r.pago)}</td></tr>`).join('')}</tbody><tfoot><tr class="wtot"><td>TOTAL / Promedio</td><td class="num">${T.dias}</td><td class="num">${T.entr}</td><td>${pill(pctS(T.comp),compCls(T.comp))}</td><td>${pill(f1(T.eph),ephCls(T.eph))}</td><td class="num">${Q(T.qenv)}</td><td class="num neg">${T.inc?'−'+Q(T.inc):'—'}</td><td class="num">${Q(T.pago)}</td></tr></tfoot></table></div>`;
 }
 $('#w-date').addEventListener('change',renderSemanal);
 function dl(blob,name){ const u=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=u; a.download=name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(u),1500); }
@@ -601,12 +611,15 @@ $('#w-xlsx').addEventListener('click',async()=>{
   if(!WK.length){ alert('Sin datos esta semana.'); return; }
   const [mon,sun]=weekRange($('#w-date').value);
   const wb=new ExcelJS.Workbook(); const ws=wb.addWorksheet('Semana',{views:[{showGridLines:false}]});
+  const T=totalsBy(WK);
   const fill=c=>({type:'pattern',pattern:'solid',fgColor:{argb:c}}); const bd={top:{style:'thin',color:{argb:'FFD5DADE'}},bottom:{style:'thin',color:{argb:'FFD5DADE'}},left:{style:'thin',color:{argb:'FFD5DADE'}},right:{style:'thin',color:{argb:'FFD5DADE'}}};
-  [26,8,11,12,12,12,14].forEach((w,i)=>ws.getColumn(i+1).width=w);
-  ws.mergeCells('A1:G1'); ws.getRow(1).height=28; let t=ws.getCell('A1'); t.value='Dropper · Resumen Semanal de Motoristas'; t.font={name:'Arial',bold:true,size:13,color:{argb:'FFFFFFFF'}}; t.fill=fill('FF0C0F0D'); t.alignment={vertical:'middle',horizontal:'left',indent:1};
+  [26,8,11,12,12,11,12,14].forEach((w,i)=>ws.getColumn(i+1).width=w);
+  ws.mergeCells('A1:H1'); ws.getRow(1).height=28; let t=ws.getCell('A1'); t.value='Dropper · Resumen Semanal de Motoristas'; t.font={name:'Arial',bold:true,size:13,color:{argb:'FFFFFFFF'}}; t.fill=fill('FF0C0F0D'); t.alignment={vertical:'middle',horizontal:'left',indent:1};
   ws.getCell('A3').value='Semana:'; ws.getCell('A3').font={name:'Arial',bold:true,size:10}; ws.getCell('B3').value=`${fmtDate(mon)} al ${fmtDate(sun)}`; ws.getCell('B3').font={name:'Arial',size:10};
-  let r=5; ['Motorista','Días','Entregas','Compl. prom','Entr/h prom','Incidencias','Pago semana'].forEach((x,j)=>{ const c=ws.getCell(r,j+1); c.value=x; c.font={name:'Arial',bold:true,size:10}; c.fill=fill('FFF2F4F5'); c.border=bd; c.alignment={horizontal:j===0?'left':'center'}; }); r++;
-  WK.forEach((row,i)=>{ const even=i%2===0; const vals=[row.mot,row.dias,row.entr,r2(row.comp),r2(row.eph),row.inc,r2(row.pago)]; vals.forEach((v,j)=>{ const c=ws.getCell(r,j+1); c.value=v; c.fill=fill(even?'FFFFFFFF':'FFDDF0E2'); c.border=bd; c.font={name:'Arial',size:10,bold:j===6,color:{argb:j===6?'FF14572A':'FF1A1A1A'}}; c.alignment={horizontal:j===0?'left':'center'}; if(j===3) c.numFmt='0%'; if(j===5||j===6) c.numFmt='"Q"#,##0.00'; }); r++; });
+  const money=j=>j===5||j===6||j===7;   // Q/envío, Incid., Pago
+  let r=5; ['Motorista','Días','Entregas','Compl. prom','Entr/h prom','Q/envío','Incidencias','Pago semana'].forEach((x,j)=>{ const c=ws.getCell(r,j+1); c.value=x; c.font={name:'Arial',bold:true,size:10}; c.fill=fill('FFF2F4F5'); c.border=bd; c.alignment={horizontal:j===0?'left':'center'}; }); r++;
+  WK.forEach((row,i)=>{ const even=i%2===0; const vals=[row.mot,row.dias,row.entr,r2(row.comp),r2(row.eph),r2(row.qenv),row.inc,r2(row.pago)]; vals.forEach((v,j)=>{ const c=ws.getCell(r,j+1); c.value=v; c.fill=fill(even?'FFFFFFFF':'FFDDF0E2'); c.border=bd; c.font={name:'Arial',size:10,bold:j===7,color:{argb:j===7?'FF14572A':'FF1A1A1A'}}; c.alignment={horizontal:j===0?'left':'center'}; if(j===3) c.numFmt='0%'; if(money(j)) c.numFmt='"Q"#,##0.00'; }); r++; });
+  const tv=['TOTAL / Promedio',T.dias,T.entr,r2(T.comp),r2(T.eph),r2(T.qenv),r2(T.inc),r2(T.pago)]; tv.forEach((v,j)=>{ const c=ws.getCell(r,j+1); c.value=v; c.fill=fill('FF14572A'); c.border=bd; c.font={name:'Arial',bold:true,size:10,color:{argb:'FFFFFFFF'}}; c.alignment={horizontal:j===0?'left':'center'}; if(j===3) c.numFmt='0%'; if(money(j)) c.numFmt='"Q"#,##0.00'; });
   const buf=await wb.xlsx.writeBuffer(); dl(new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}),`Motoristas_Semana_${mon}.xlsx`);
 });
 $('#w-pdf').addEventListener('click',()=>{
@@ -615,13 +628,13 @@ $('#w-pdf').addEventListener('click',()=>{
   const {jsPDF}=window.jspdf; const doc=new jsPDF({unit:'pt',format:'a4'}); const PW=doc.internal.pageSize.getWidth(),M=40;
   doc.setFillColor(12,15,13); doc.rect(0,0,PW,60,'F'); doc.setFont('helvetica','bold'); doc.setFontSize(15); doc.setTextColor(255,255,255); doc.text('Dropper · Resumen Semanal de Motoristas',M,30);
   doc.setFont('helvetica','normal'); doc.setFontSize(9.5); doc.setTextColor(207,230,211); doc.text(`Semana: ${fmtDate(mon)} al ${fmtDate(sun)}`,M,47);
-  const tP=WK.reduce((s,r)=>s+r.pago,0);
-  doc.autoTable({ startY:78, head:[['Motorista','Días','Entregas','Compl.','Entr/h','Incid.','Pago semana']],
-    body:WK.map(r=>[r.mot,r.dias,r.entr,pctS(r.comp),f1(r.eph),r.inc?'-'+Q(r.inc):'-',Q(r.pago)]),
-    foot:[['TOTAL','','','','','',Q(tP)]],
+  const T=totalsBy(WK);
+  doc.autoTable({ startY:78, head:[['Motorista','Días','Entregas','Compl.','Entr/h','Q/envío','Incid.','Pago semana']],
+    body:WK.map(r=>[r.mot,r.dias,r.entr,pctS(r.comp),f1(r.eph),Q(r.qenv),r.inc?'-'+Q(r.inc):'-',Q(r.pago)]),
+    foot:[['TOTAL / Promedio',T.dias,T.entr,pctS(T.comp),f1(T.eph),Q(T.qenv),T.inc?'-'+Q(T.inc):'-',Q(T.pago)]],
     styles:{font:'helvetica',fontSize:8.5,cellPadding:4,textColor:[26,26,26],lineColor:[213,218,222],lineWidth:0.5},
     headStyles:{fillColor:[31,122,61],textColor:[255,255,255],fontStyle:'bold'}, footStyles:{fillColor:[20,87,42],textColor:[255,255,255],fontStyle:'bold'}, alternateRowStyles:{fillColor:[221,240,226]},
-    columnStyles:{0:{cellWidth:'auto'},5:{halign:'right'},6:{halign:'right'}}, margin:{left:M,right:M} });
+    columnStyles:{0:{cellWidth:'auto'},5:{halign:'right'},6:{halign:'right'},7:{halign:'right'}}, margin:{left:M,right:M} });
   doc.save(`Motoristas_Semana_${mon}.pdf`);
 });
 
