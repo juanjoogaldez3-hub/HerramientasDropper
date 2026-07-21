@@ -144,9 +144,9 @@
     <details class="note">
       <summary>Cómo se calcula el pago</summary>
       <div class="howto" style="margin-top:10px">
-        <b>Del Excel:</b> entregados = estado <b>"Entregado"</b> · base del % = envíos que salieron a ruta (<b>Entregado + Intento de Entrega + Devolución</b>) · horas = 1ª a última entrega. <b>En Bodega, En Tránsito y Sin Asignar no cuentan en el %.</b><br>
+        <b>Del Excel:</b> entregados = estado <b>"Entregado"</b> · base del % = envíos a su cargo (<b>Entregado + Intento de Entrega + En Tránsito</b>) · horas = 1ª a última entrega. <b>Devolución, En Bodega y Sin Asignar no cuentan en el %.</b><br>
         <b>Base por envío</b> (según entregas/hora): &lt;3 → Q12 · 3–3.9 → Q13 · <b>4+ → Q14 (máximo)</b>. Sin bono por encima del estándar.<br>
-        <b>Completación</b> (entregados÷a ruta): 90% o más → sin cambio · 80–89% → −Q1/envío · &lt;80% → −Q2/envío.<br>
+        <b>Completación</b> (entregados÷a cargo): 90% o más → sin cambio · 80–89% → −Q1/envío · &lt;80% → −Q2/envío.<br>
         <b>Tardanza de entrada</b> (vs 8:00): ≤15 min → sin descuento · 15–30 → −Q50 · 30–60 → −Q75 · +60 → −Q100.<br>
         <b>Incidencias por orden:</b> queja −Q25 · dañado −Q50 + precio del paquete · sin evidencia −Q25 · reporte falso → baja.<br>
         <b>Pago</b> = base + bono − tardanza − incidencias (base y bono por envío entregado).
@@ -237,7 +237,7 @@ function claseEstado(s){
   if(n.includes('sin asignar')||n.includes('asignad')||n.includes('pendiente')||n.includes('creado')) return 'sinasignar';
   return 'otro';
 }
-const EST_META=[['entregado','Entregado','ok'],['intento','Intento','warn'],['devolucion','Devuelto','bad'],['transito','Tránsito','gray'],['bodega','Bodega','gray'],['sinasignar','Sin asignar','gray'],['otro','Otro','gray']];
+const EST_META=[['entregado','Entregado','ok'],['intento','Intento','bad'],['transito','Tránsito','warn'],['devolucion','Devuelto','gray'],['bodega','Bodega','gray'],['sinasignar','Sin asignar','gray'],['otro','Otro','gray']];
 function estadosHTML(d){
   return EST_META.filter(([k2])=>d.estados[k2]>0).map(([k2,lbl,c])=>`<span class="est-pill ${c}" title="${lbl}">${lbl} <b>${d.estados[k2]}</b></span>`).join('');
 }
@@ -313,9 +313,10 @@ async function parseWorkbook(buf){
     d.orders.push({no:g(C.norden)||g(C.idorden)||'—', precio:parseMoney(t[C.precio]??r[C.precio]), estado:cls});
     if(cls==='entregado'){ d.entregados++; d._times.push(dt.getHours()*60+dt.getMinutes()+dt.getSeconds()/60); }
   });
-  // Denominador de completación = envíos que salieron a ruta y se resolvieron (entregado + intento + devolución).
+  // Denominador de completación = envíos a su cargo sin terminar bien (entregado + intento + en tránsito).
+  // La devolución NO cuenta (es un resultado válido, no falla del motorista).
   DIAS.forEach(d=>{
-    d.asignados = d.estados.entregado + d.estados.intento + d.estados.devolucion;
+    d.asignados = d.estados.entregado + d.estados.intento + d.estados.transito;
     if(d._times.length){ d._times.sort((a,b)=>a-b); d.horas=(d._times[d._times.length-1]-d._times[0])/60; } else d.horas=0; delete d._times;
   });
 
@@ -365,7 +366,7 @@ function cardHTML(d,m,c){
       ${pill(pctS(c.comp)+' compl.',compCls(c.comp))} ${pill(f1(c.eph)+'/h',ephCls(c.eph))}
       <span>Horas <b>${f1(d.horas)}</b></span>
     </div>
-    <div class="mc-base">Completación = ${d.entregados} / ${d.asignados} a ruta &nbsp;<span style="opacity:.7">(entregado ÷ entregado + intento + devuelto)</span></div>
+    <div class="mc-base">Completación = ${d.entregados} / ${d.asignados} a cargo &nbsp;<span style="opacity:.7">(entregado ÷ entregado + intento + tránsito)</span></div>
     <div class="mc-in">
       <label>Entrada real (prog. 8:00)</label>
       <input type="time" class="m-ent" value="${esc(m.entrada||'')}">
