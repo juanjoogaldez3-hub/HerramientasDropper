@@ -80,6 +80,8 @@
   tr.ddetail td{padding:0;background:#fbfdfb}
   tr.ddetail table.hist{min-width:0;box-shadow:none;border:none;font-size:.84rem}
   tr.ddetail table.hist th{background:#eef2ee}
+  tr.motivo-row td{background:#fbfaf4;font-size:.78rem;color:var(--muted);line-height:1.5;padding:6px 10px}
+  tr.motivo-row .motivo-lbl{font-weight:700;color:var(--ink)}
   .empty{padding:44px 24px;text-align:center;color:var(--muted)}
   .empty h3{font-family:'Sora',sans-serif;font-weight:700;font-size:1.05rem;color:var(--ink);margin-bottom:4px}
   .howto{font-size:.82rem;color:var(--muted);line-height:1.6}.howto b{color:var(--ink)}
@@ -539,9 +541,33 @@ function renderDashTable(){
   $('#d-table').querySelectorAll('th.sortable').forEach(th=>th.addEventListener('click',()=>{ const k2=th.dataset.k; if(DASH_SORT.key===k2) DASH_SORT.dir*=-1; else DASH_SORT={key:k2,dir:(k2==='mot'?1:-1)}; renderDashTable(); }));
   $('#d-table').querySelectorAll('tr.drow').forEach(tr=>tr.addEventListener('click',()=>{ const det=$('#d-table').querySelector(`tr.ddetail[data-i="${tr.dataset.i}"]`); det.hidden=!det.hidden; const cr=tr.querySelector('.dcaret'); cr.style.transform=det.hidden?'':'rotate(90deg)'; }));
 }
+function baseFromEph(eph){ return eph<3?12:(eph<4?13:14); }
+function precioEnv(r){
+  const entr=+r.entregados||0;
+  const base = entr? (+r.pago_base)/entr : baseFromEph(+r.eph||0);
+  const adj  = entr? (+r.bono)/entr : 0;
+  return {base, adj, precio:base+adj};
+}
+function motivoHTML(r){
+  const {base,adj}=precioEnv(r);
+  const comp=r.asignados>0?r.entregados/r.asignados:0;
+  const parts=[`Base <b>${Q(base)}</b>/envío (${f1(+r.eph||0)} entr/h)`];
+  if(adj<0) parts.push(`completación ${pctS(comp)} → <span class="neg">${Q(adj)}</span>/envío`);
+  parts.push(`× ${r.entregados} entregas = <b>${Q((base+adj)*(+r.entregados||0))}</b>`);
+  const culpa=Array.isArray(r.intentos_culpa)?r.intentos_culpa.length:0;
+  if(culpa) parts.push(`${culpa} intento${culpa>1?'s':''} cuenta en contra`);
+  const extra=[];
+  if(+r.desc_tardanza>0) extra.push(`Tardanza ${r.tardanza_min}m <span class="neg">−${Q(r.desc_tardanza)}</span>`);
+  const incs=Array.isArray(r.incidencias)?r.incidencias:[];
+  incs.forEach(it=>extra.push(`${esc(it.label||it.tipo||'incidencia')}${it.orden?' ('+esc(it.orden)+')':''} <span class="neg">−${Q(it.monto)}</span>`));
+  let s=parts.join(' · ');
+  if(extra.length) s+='<br>'+extra.join(' · ');
+  return s;
+}
 function dayDetailHTML(days){
   const ds=[...days].sort((a,b)=>b.fecha.localeCompare(a.fecha));
-  return `<table class="hist"><thead><tr><th>Fecha</th><th>Entrada</th><th>Asig</th><th>Entr</th><th>Compl.</th><th>Entr/h</th><th>Horas</th><th>Incid.</th><th>Pago</th></tr></thead><tbody>${ds.map(r=>{const comp=r.asignados>0?r.entregados/r.asignados:0;return `<tr><td>${fmtDate(r.fecha)}</td><td>${esc(r.entrada_real||'—')} ${r.tardanza_min?pill('+'+r.tardanza_min+'m',tardCls(r.tardanza_min)):''}</td><td class="num">${r.asignados}</td><td class="num">${r.entregados}</td><td>${pill(pctS(comp),compCls(comp))}</td><td>${pill(f1(r.eph),ephCls(r.eph))}</td><td class="num">${f1(r.horas)}</td><td class="num neg">${+r.incidencias_total?'−'+Q(r.incidencias_total):'—'}</td><td class="num">${Q(r.pago)}</td></tr>`}).join('')}</tbody></table>`;
+  return `<table class="hist"><thead><tr><th>Fecha</th><th>Entrada</th><th>Asig</th><th>Entr</th><th>Compl.</th><th>Entr/h</th><th>Horas</th><th>Q/envío</th><th>Incid.</th><th>Pago</th></tr></thead><tbody>${ds.map(r=>{const comp=r.asignados>0?r.entregados/r.asignados:0; const pe=precioEnv(r);return `<tr><td>${fmtDate(r.fecha)}</td><td>${esc(r.entrada_real||'—')} ${r.tardanza_min?pill('+'+r.tardanza_min+'m',tardCls(r.tardanza_min)):''}</td><td class="num">${r.asignados}</td><td class="num">${r.entregados}</td><td>${pill(pctS(comp),compCls(comp))}</td><td>${pill(f1(r.eph),ephCls(r.eph))}</td><td class="num">${f1(r.horas)}</td><td class="num">${Q(pe.precio)}</td><td class="num neg">${+r.incidencias_total?'−'+Q(r.incidencias_total):'—'}</td><td class="num">${Q(r.pago)}</td></tr>
+    <tr class="motivo-row"><td colspan="10"><span class="motivo-lbl">Motivo:</span> ${motivoHTML(r)}</td></tr>`}).join('')}</tbody></table>`;
 }
 $('#d-apply').addEventListener('click',renderDashboard);
 $('#d-clear').addEventListener('click',()=>{ $('#d-from').value=''; $('#d-to').value=''; renderDashboard(); });
