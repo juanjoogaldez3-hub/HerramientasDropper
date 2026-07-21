@@ -44,6 +44,12 @@
   .est-pill{display:inline-block;font-size:.72rem;font-weight:600;border-radius:8px;padding:1px 7px;white-space:nowrap}
   .est-pill b{font-family:'Sora',sans-serif}
   .mc-base{font-size:.72rem;color:var(--muted);margin-top:2px}
+  .mc-intentos{background:#fbfaf4;border:1px solid #f0e2b6;border-radius:10px;padding:8px 10px}
+  .mci-head{font-size:.76rem;color:#6b5a1f;margin-bottom:6px}.mci-head b{color:#5a4a15}
+  .mci-n{color:#a3261a;font-weight:600}
+  .mci-list{display:flex;flex-wrap:wrap;gap:4px 12px}
+  .mci-item{display:inline-flex;align-items:center;gap:5px;font-size:.78rem;color:var(--ink);cursor:pointer}
+  .mci-item input{width:15px;height:15px;cursor:pointer}
   .pill{display:inline-block;font-size:.74rem;font-weight:700;border-radius:20px;padding:2px 9px;white-space:nowrap}
   .ok{color:#14572A;background:#DDF0E2;border:1px solid #c4e3cd}
   .warn{color:#8a5a00;background:#fdf6e3;border:1px solid #f0e2b6}
@@ -144,7 +150,7 @@
     <details class="note">
       <summary>Cómo se calcula el pago</summary>
       <div class="howto" style="margin-top:10px">
-        <b>Del Excel:</b> entregados = estado <b>"Entregado"</b> · base del % = envíos a su cargo (<b>Entregado + Intento de Entrega + En Tránsito</b>) · horas = 1ª a última entrega. <b>Devolución, En Bodega y Sin Asignar no cuentan en el %.</b><br>
+        <b>Del Excel:</b> entregados = estado <b>"Entregado"</b> · base del % = <b>Entregado + En Tránsito</b>. Los <b>Intentos de Entrega NO cuentan</b> por defecto; en cada tarjeta marcás los que sí fueron culpa del motorista y esos bajan el %. <b>Devolución, En Bodega y Sin Asignar no cuentan.</b> Horas = 1ª a última entrega.<br>
         <b>Base por envío</b> (según entregas/hora): &lt;3 → Q12 · 3–3.9 → Q13 · <b>4+ → Q14 (máximo)</b>. Sin bono por encima del estándar.<br>
         <b>Completación</b> (entregados÷a cargo): 90% o más → sin cambio · 80–89% → −Q1/envío · &lt;80% → −Q2/envío.<br>
         <b>Tardanza de entrada</b> (vs 8:00): ≤15 min → sin descuento · 15–30 → −Q50 · 30–60 → −Q75 · +60 → −Q100.<br>
@@ -245,8 +251,10 @@ function estadosHTML(d){
 /* cálculo del día */
 function calcDia(d,man){
   man=man||{};
-  const asig=d.asignados, entr=d.entregados, horas=d.horas;
-  const comp=asig>0?Math.min(1,entr/asig):0;
+  const culpa=(man.intentosCulpa||[]).length;      // intentos marcados como culpa del motorista
+  const denom=d.asignados+culpa;                    // entregado + tránsito + intentos-culpa
+  const entr=d.entregados, horas=d.horas;
+  const comp=denom>0?Math.min(1,entr/denom):0;
   const eph=horas>0?entr/horas:0;
   // Bonos por encima del estándar (Q14) deshabilitados: base tope Q14, sin +Q1 por 100%.
   let base; if(eph<3)base=12;else if(eph<4)base=13;else base=14;
@@ -255,7 +263,7 @@ function calcDia(d,man){
   const descT=tardDesc(tard);
   const incT=(man.incidencias||[]).reduce((s,i)=>s+(+i.monto||0),0);
   const pagoBase=base*entr, bono=adj*entr, pago=pagoBase+bono-descT-incT;
-  return {comp,eph,base,adj,tard,descT,incT,pagoBase,bono,pago,precioEnvio:base+adj};
+  return {comp,eph,base,adj,tard,descT,incT,pagoBase,bono,pago,precioEnvio:base+adj,denom,culpa};
 }
 function calcLine(d,c,m){
   m=m||{};
@@ -335,10 +343,11 @@ async function parseWorkbook(buf){
     d.orders.push({no:x.no, precio:x.precio, estado:x.cls});
     if(x.cls==='entregado'){ d.entregados++; if(x.dtE) d._times.push(x.dtE.getHours()*60+x.dtE.getMinutes()+x.dtE.getSeconds()/60); }
   });
-  // Denominador de completación = envíos a su cargo sin terminar bien (entregado + intento + en tránsito).
-  // La devolución NO cuenta (es un resultado válido, no falla del motorista).
+  // Denominador base = entregado + en tránsito. Los intentos NO cuentan por defecto
+  // (muchas veces no es culpa del motorista); el supervisor marca en la tarjeta los que sí.
+  // La devolución tampoco cuenta (resultado válido).
   DIAS.forEach(d=>{
-    d.asignados = d.estados.entregado + d.estados.intento + d.estados.transito;
+    d.asignados = d.estados.entregado + d.estados.transito;
     if(d._times.length){ d._times.sort((a,b)=>a-b); d.horas=(d._times[d._times.length-1]-d._times[0])/60; } else d.horas=0; delete d._times;
   });
 
@@ -357,15 +366,15 @@ async function loadSaved(days){
   MANUAL={};
   if(!window.sb) return;
   try{
-    const {data,error}=await window.sb.from('motorista_dias').select('motorista,fecha,entrada_real,incidencias,baja').in('fecha',days);
+    const {data,error}=await window.sb.from('motorista_dias').select('motorista,fecha,entrada_real,incidencias,baja,intentos_culpa').in('fecha',days);
     if(error) throw error;
-    (data||[]).forEach(r=>{ MANUAL[k(r.motorista,r.fecha)]={entrada:r.entrada_real||'',incidencias:r.incidencias||[],baja:!!r.baja}; });
+    (data||[]).forEach(r=>{ MANUAL[k(r.motorista,r.fecha)]={entrada:r.entrada_real||'',incidencias:r.incidencias||[],baja:!!r.baja,intentosCulpa:r.intentos_culpa||[]}; });
   }catch(e){ console.error(e); }
 }
 $('#day').addEventListener('change',()=>{ SELDAY=$('#day').value; renderRegistro(); });
 
 /* ========= render tarjetas ========= */
-function man(key){ if(!MANUAL[key]) MANUAL[key]={entrada:'',incidencias:[],baja:false}; return MANUAL[key]; }
+function man(key){ if(!MANUAL[key]) MANUAL[key]={entrada:'',incidencias:[],baja:false,intentosCulpa:[]}; if(!MANUAL[key].intentosCulpa) MANUAL[key].intentosCulpa=[]; return MANUAL[key]; }
 function renderRegistro(){
   const dias=[...DIAS.values()].filter(d=>d.fecha===SELDAY).sort((a,b)=>a.motorista.localeCompare(b.motorista));
   const box=$('#mcards');
@@ -388,7 +397,8 @@ function cardHTML(d,m,c){
       ${pill(pctS(c.comp)+' compl.',compCls(c.comp))} ${pill(f1(c.eph)+'/h',ephCls(c.eph))}
       <span>Horas <b>${f1(d.horas)}</b></span>
     </div>
-    <div class="mc-base">Completación = ${d.entregados} / ${d.asignados} a cargo &nbsp;<span style="opacity:.7">(entregado ÷ entregado + intento + tránsito)</span></div>
+    <div class="mc-base">${baseLine(d,c)}</div>
+    ${intentosHTML(d,m)}
     <div class="mc-in">
       <label>Entrada real (prog. 8:00)</label>
       <input type="time" class="m-ent" value="${esc(m.entrada||'')}">
@@ -408,6 +418,18 @@ function cardHTML(d,m,c){
       <div class="mc-pago">${Q(c.pago)}</div>
     </div>`;
 }
+function baseLine(d,c){
+  return `Completación = ${d.entregados} / ${c.denom} a cargo &nbsp;<span style="opacity:.7">(entregado ÷ entregado + tránsito${c.culpa?' + '+c.culpa+' intento'+(c.culpa>1?'s':''):''})</span>`;
+}
+function intentosHTML(d,m){
+  const ints=d.orders.filter(o=>o.estado==='intento');
+  if(!ints.length) return '';
+  const culpa=new Set(m.intentosCulpa||[]);
+  return `<div class="mc-intentos">
+    <div class="mci-head">Intentos de entrega: <b>${ints.length}</b> · marcá los que <b>sí</b> fueron culpa del motorista <span class="mci-n">(${(m.intentosCulpa||[]).length} cuentan en contra)</span></div>
+    <div class="mci-list">${ints.map(o=>`<label class="mci-item"><input type="checkbox" class="mci-chk" data-no="${esc(o.no)}" ${culpa.has(o.no)?'checked':''}> ${esc(o.no)}</label>`).join('')}</div>
+  </div>`;
+}
 function incListHTML(m){
   if(!m.incidencias.length) return '';
   return m.incidencias.map((it,i)=>`<div class="inc-item"><span>${esc(it.orden)} · ${esc(it.label)} · <b>−${Q(it.monto)}</b></span><button class="x" data-i="${i}">×</button></div>`).join('');
@@ -417,6 +439,8 @@ function refreshCard(el,d){
   el.querySelector('.mc-name').innerHTML=`${esc(d.motorista)} ${m.baja?pill('baja','baja'):''}`;
   el.querySelector('.mc-metrics').innerHTML=`<span title="Total de envíos del día">Total <b>${d.total}</b></span> ${estadosHTML(d)} ${pill(pctS(c.comp)+' compl.',compCls(c.comp))} ${pill(f1(c.eph)+'/h',ephCls(c.eph))} <span>Horas <b>${f1(d.horas)}</b></span>`;
   el.querySelector('.m-tard').innerHTML=c.tard?pill('+'+c.tard+' min · −'+Q(c.descT),tardCls(c.tard)):(m.entrada?pill('A tiempo','ok'):'');
+  const baseEl=el.querySelector('.mc-base'); if(baseEl) baseEl.innerHTML=baseLine(d,c);
+  const nEl=el.querySelector('.mci-n'); if(nEl) nEl.textContent=`(${c.culpa} cuentan en contra)`;
   el.querySelector('.inc-list').innerHTML=incListHTML(m);
   el.querySelector('.mc-calc').innerHTML=calcLine(d,c,man(el.dataset.key));
   el.querySelector('.mc-pago').textContent=Q(c.pago);
@@ -426,6 +450,11 @@ function wireCard(el,d){
   const key=el.dataset.key, m=man(key);
   el.querySelector('.m-ent').addEventListener('input',ev=>{ m.entrada=ev.target.value; refreshCard(el,d); });
   el.querySelector('.m-baja').addEventListener('change',ev=>{ m.baja=ev.target.checked; refreshCard(el,d); });
+  el.querySelectorAll('.mci-chk').forEach(chk=>chk.addEventListener('change',ev=>{
+    const no=ev.target.dataset.no, arr=m.intentosCulpa, i=arr.indexOf(no);
+    if(ev.target.checked){ if(i<0) arr.push(no); } else if(i>=0){ arr.splice(i,1); }
+    refreshCard(el,d);
+  }));
   el.querySelector('.inc-add-btn').addEventListener('click',()=>{
     const orden=el.querySelector('.inc-orden').value, tipo=el.querySelector('.inc-tipo').value, t=INC_TIPOS[tipo];
     let monto=t.base; if(t.sumaProducto){ const o=d.orders.find(x=>x.no===orden); monto+=o?o.precio:0; }
@@ -448,9 +477,9 @@ $('#save-day').addEventListener('click',async()=>{
   try{
     const rows=dias.map(d=>{ const m=man(k(d.motorista,d.fecha)), c=calcDia(d,m);
       return { created_by:USER.id, created_by_email:USER.email||null, motorista:d.motorista, fecha:d.fecha,
-        asignados:d.asignados, entregados:d.entregados, horas:r2(d.horas), eph:r2(c.eph),
+        asignados:c.denom, entregados:d.entregados, horas:r2(d.horas), eph:r2(c.eph),
         entrada_prog:'08:00', entrada_real:m.entrada||null, tardanza_min:c.tard,
-        incidencias:m.incidencias||[], incidencias_total:r2(c.incT),
+        incidencias:m.incidencias||[], incidencias_total:r2(c.incT), intentos_culpa:m.intentosCulpa||[],
         pago_base:r2(c.pagoBase), bono:r2(c.bono), desc_tardanza:r2(c.descT), pago:r2(c.pago), baja:!!m.baja,
         updated_at:new Date().toISOString() };
     });

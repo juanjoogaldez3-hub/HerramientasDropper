@@ -223,6 +223,8 @@ create table if not exists public.motorista_dias (
   tardanza_min       integer not null default 0,
   incidencias        jsonb not null default '[]'::jsonb,   -- [{orden, tipo, monto}]
   incidencias_total  numeric(12,2) not null default 0,
+  intentos_culpa     jsonb not null default '[]'::jsonb,   -- números de orden de intentos marcados como culpa del motorista
+
   pago_base          numeric(12,2) not null default 0,
   bono               numeric(12,2) not null default 0,
   desc_tardanza      numeric(12,2) not null default 0,
