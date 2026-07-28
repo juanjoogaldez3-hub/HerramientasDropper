@@ -45,6 +45,16 @@
   th.sortable{cursor:pointer;user-select:none}th.sortable:hover{color:var(--green-dk)}
   table.hist tfoot tr td{background:#14572A;color:#fff;font-weight:700;border-top:2px solid #0c0f0d}
   .b{font-family:'Sora',sans-serif;font-weight:800}
+  table.matrix{min-width:auto}
+  table.matrix th,table.matrix td{text-align:center;white-space:nowrap}
+  table.matrix .nm{text-align:left;position:sticky;left:0;background:var(--white);z-index:1;font-weight:600;min-width:150px;box-shadow:1px 0 0 var(--line)}
+  table.matrix thead .nm{background:#eef2ee}
+  table.matrix .daycol{font-size:.74rem;line-height:1.15}
+  table.matrix .daycol .wd{display:block;font-size:.62rem;color:var(--muted);font-weight:600}
+  table.matrix .z{color:#cdd8d0}
+  table.matrix tbody .rowtot{background:#f2f7f3}
+  table.matrix tfoot td{background:#14572A;color:#fff;font-weight:700}
+  table.matrix tfoot .nm{background:#14572A;color:#fff}
 </style>
 </head>
 <body>
@@ -116,8 +126,9 @@
 
   <div class="toolbar" id="toolbar">
     <div class="tabs2">
-      <button data-t="resumen" class="active">Por mensajero</button>
-      <button data-t="detalle">Por mensajero y día</button>
+      <button data-m="total" class="active">Total</button>
+      <button data-m="exp">Express</button>
+      <button data-m="est">Estándar</button>
     </div>
     <button class="btn btn-primary" id="btn-xlsx" style="width:auto">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
@@ -134,9 +145,8 @@
 const $=s=>document.querySelector(s);
 const drop=$('#drop'), fileInput=$('#file');
 let RAW=[];      // {mensajero, fecha(Date), express(bool)}  (solo Entregado)
-let RESUMEN=[], DETALLE=[];
-let VIEW='resumen';
-let R_SORT={key:'total',dir:-1};
+let DAYS=[], MENS=[], CELL={};   // CELL[mensajero][dia] = {exp,est}
+let METRIC='total';              // total | exp | est
 
 function status(msg,type){ const s=$('#status'); s.className='status show '+(type||''); s.innerHTML=(type==='work'?'<span class="spin"></span>':'')+msg; }
 function hideStatus(){ $('#status').className='status'; }
@@ -217,53 +227,47 @@ $('#df-clear').addEventListener('click',()=>{ $('#df-from').value=''; $('#df-to'
 function buildView(){
   const [from,to]=currentRange();
   const rows=RAW.filter(r=>inRange(r.fecha,from,to));
-  const byMen=new Map();          // mensajero -> {exp,est}
-  const byDay=new Map();          // mensajero|dia -> {mensajero,fecha,exp,est}
+  const daySet=new Set(), menSet=new Set(); CELL={};
   rows.forEach(r=>{
-    if(!byMen.has(r.mensajero)) byMen.set(r.mensajero,{exp:0,est:0});
-    const m=byMen.get(r.mensajero); if(r.express) m.exp++; else m.est++;
-    const dk=dayKey(r.fecha), key=r.mensajero+'|'+dk;
-    if(!byDay.has(key)) byDay.set(key,{mensajero:r.mensajero,fecha:dk,exp:0,est:0});
-    const d=byDay.get(key); if(r.express) d.exp++; else d.est++;
+    const dk=dayKey(r.fecha); daySet.add(dk); menSet.add(r.mensajero);
+    if(!CELL[r.mensajero]) CELL[r.mensajero]={};
+    if(!CELL[r.mensajero][dk]) CELL[r.mensajero][dk]={exp:0,est:0};
+    if(r.express) CELL[r.mensajero][dk].exp++; else CELL[r.mensajero][dk].est++;
   });
-  RESUMEN=[...byMen.entries()].map(([mensajero,o])=>({mensajero,exp:o.exp,est:o.est,total:o.exp+o.est}));
-  DETALLE=[...byDay.values()].map(d=>({...d,total:d.exp+d.est})).sort((a,b)=> a.fecha!==b.fecha ? b.fecha.localeCompare(a.fecha) : a.mensajero.localeCompare(b.mensajero));
-
+  DAYS=[...daySet].sort();
+  MENS=[...menSet].sort((a,b)=>a.localeCompare(b,'es'));
   const active=!!(from||to);
   $('#df-count').textContent = active ? `Mostrando ${rows.length} de ${RAW.length} entregas` : `${RAW.length} entregas`;
   render();
 }
-function totales(list){ return list.reduce((t,r)=>({exp:t.exp+r.exp,est:t.est+r.est,total:t.total+r.total}),{exp:0,est:0,total:0}); }
+function cellVal(c,metric){ if(!c) return 0; return metric==='exp'?c.exp:(metric==='est'?c.est:c.exp+c.est); }
+function rowTotal(m,metric){ let s=0; DAYS.forEach(d=>s+=cellVal(CELL[m]&&CELL[m][d],metric)); return s; }
+function colTotal(d,metric){ let s=0; MENS.forEach(m=>s+=cellVal(CELL[m]&&CELL[m][d],metric)); return s; }
+function grandTotal(metric){ let s=0; MENS.forEach(m=>s+=rowTotal(m,metric)); return s; }
+const WD=['Do','Lu','Ma','Mi','Ju','Vi','Sá'];
+function fmtDayCol(dk){ const m=dk.match(/(\d{4})-(\d{2})-(\d{2})/); if(!m) return dk; const d=new Date(dk+'T00:00:00'); return `<span class="wd">${WD[d.getDay()]}</span>${m[3]}/${m[2]}`; }
 
 function render(){
-  const T=totales(RESUMEN);
-  $('#s-mens').textContent=RESUMEN.length;
-  $('#s-ent').textContent=nf(T.total);
-  $('#s-exp').textContent=nf(T.exp);
-  $('#s-est').textContent=nf(T.est);
+  $('#s-mens').textContent=MENS.length;
+  $('#s-ent').textContent=nf(grandTotal('total'));
+  $('#s-exp').textContent=nf(grandTotal('exp'));
+  $('#s-est').textContent=nf(grandTotal('est'));
   $('#summary').classList.add('show'); $('#toolbar').classList.add('show');
-  VIEW==='resumen'?renderResumen():renderDetalle();
+  renderMatrix();
 }
-function renderResumen(){
-  let rows=[...RESUMEN];
-  const {key,dir}=R_SORT;
-  rows.sort((a,b)=>{ const av=key==='mensajero'?a.mensajero.toLowerCase():a[key], bv=key==='mensajero'?b.mensajero.toLowerCase():b[key]; return av<bv?-dir:(av>bv?dir:0); });
-  const T=totales(rows);
-  const arrow=k=>R_SORT.key===k?(R_SORT.dir<0?' ▾':' ▴'):'';
-  const cols=[['mensajero','Mensajero'],['exp','Express'],['est','Estándar'],['total','Total']];
-  const head=cols.map(([k,l])=>`<th class="sortable${k==='mensajero'?'':' num'}" data-k="${k}">${l}${arrow(k)}</th>`).join('');
-  const body=rows.map(r=>`<tr><td>${esc(r.mensajero)}</td><td class="num">${r.exp?`<span class="pill exp">${r.exp}</span>`:'—'}</td><td class="num">${r.est?`<span class="pill est">${r.est}</span>`:'—'}</td><td class="num b">${r.total}</td></tr>`).join('');
-  $('#panel').innerHTML=`<div class="tbl-wrap"><table class="hist"><thead><tr>${head}</tr></thead><tbody>${body}</tbody><tfoot><tr><td>TOTAL</td><td class="num">${T.exp}</td><td class="num">${T.est}</td><td class="num">${T.total}</td></tr></tfoot></table></div>`;
-  $('#panel').querySelectorAll('th.sortable').forEach(th=>th.addEventListener('click',()=>{ const k=th.dataset.k; if(R_SORT.key===k) R_SORT.dir*=-1; else R_SORT={key:k,dir:(k==='mensajero'?1:-1)}; renderResumen(); }));
-}
-function renderDetalle(){
-  const T=totales(DETALLE);
-  const body=DETALLE.map(r=>`<tr><td>${fmtDate(r.fecha)}</td><td>${esc(r.mensajero)}</td><td class="num">${r.exp?`<span class="pill exp">${r.exp}</span>`:'—'}</td><td class="num">${r.est?`<span class="pill est">${r.est}</span>`:'—'}</td><td class="num b">${r.total}</td></tr>`).join('');
-  $('#panel').innerHTML=`<div class="tbl-wrap"><table class="hist"><thead><tr><th>Fecha</th><th>Mensajero</th><th class="num">Express</th><th class="num">Estándar</th><th class="num">Total</th></tr></thead><tbody>${body}</tbody><tfoot><tr><td colspan="2">TOTAL</td><td class="num">${T.exp}</td><td class="num">${T.est}</td><td class="num">${T.total}</td></tr></tfoot></table></div>`;
+function renderMatrix(){
+  if(!MENS.length){ $('#panel').innerHTML='<div class="empty" style="padding:40px;text-align:center;color:var(--muted)">Sin entregas en el período.</div>'; return; }
+  const dayHead=DAYS.map(d=>`<th class="num daycol">${fmtDayCol(d)}</th>`).join('');
+  const body=MENS.map(m=>{
+    const cells=DAYS.map(d=>{ const v=cellVal(CELL[m]&&CELL[m][d],METRIC); return `<td class="num">${v?v:'<span class="z">·</span>'}</td>`; }).join('');
+    return `<tr><td class="nm">${esc(m)}</td>${cells}<td class="num b rowtot">${rowTotal(m,METRIC)}</td></tr>`;
+  }).join('');
+  const colTots=DAYS.map(d=>`<td class="num">${colTotal(d,METRIC)}</td>`).join('');
+  $('#panel').innerHTML=`<div class="tbl-wrap"><table class="hist matrix"><thead><tr><th class="nm">Mensajero</th>${dayHead}<th class="num rowtot">Total</th></tr></thead><tbody>${body}</tbody><tfoot><tr><td class="nm">Total</td>${colTots}<td class="num">${grandTotal(METRIC)}</td></tr></tfoot></table></div>`;
 }
 document.querySelectorAll('.tabs2 button').forEach(b=>b.addEventListener('click',()=>{
   document.querySelectorAll('.tabs2 button').forEach(x=>x.classList.toggle('active',x===b));
-  VIEW=b.dataset.t; VIEW==='resumen'?renderResumen():renderDetalle();
+  METRIC=b.dataset.m; renderMatrix();
 }));
 
 /* ---------- Excel ---------- */
@@ -274,35 +278,34 @@ function periodoTexto(){
 }
 function saveBlob(blob,name){ const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download=name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url),1500); }
 $('#btn-xlsx').addEventListener('click',async()=>{
-  if(!RESUMEN.length){ status('Primero cargá un Excel.','err'); return; }
+  if(!MENS.length){ status('Primero cargá un Excel.','err'); return; }
   status('Generando Excel…','work');
   try{
     const wb=new ExcelJS.Workbook();
     const fill=c=>({type:'pattern',pattern:'solid',fgColor:{argb:c}});
     const bd={top:{style:'thin',color:{argb:'FFD5DADE'}},bottom:{style:'thin',color:{argb:'FFD5DADE'}},left:{style:'thin',color:{argb:'FFD5DADE'}},right:{style:'thin',color:{argb:'FFD5DADE'}}};
     const GREY='FFF2F4F5',LIME='FFDDF0E2',WHITE='FFFFFFFF',TXT='FF1A1A1A',BLACK='FF0C0F0D',GD='FF14572A';
-    // Hoja Resumen
-    const rs=[...RESUMEN].sort((a,b)=>b.total-a.total); const TR=totales(rs);
-    const ws1=wb.addWorksheet('Por mensajero',{views:[{showGridLines:false}]});
-    [30,12,12,10].forEach((w,i)=>ws1.getColumn(i+1).width=w);
-    ws1.mergeCells('A1:D1'); ws1.getRow(1).height=28; let h=ws1.getCell('A1'); h.value='Dropper · Entregas por Método (por mensajero)'; h.font={name:'Arial',bold:true,size:13,color:{argb:WHITE}}; h.fill=fill(BLACK); h.alignment={vertical:'middle',horizontal:'left',indent:1};
-    ws1.getCell('A3').value='Período:'; ws1.getCell('A3').font={name:'Arial',bold:true,size:10}; ws1.getCell('B3').value=periodoTexto(); ws1.getCell('B3').font={name:'Arial',size:10};
-    let r=5; ['Mensajero','Express','Estándar','Total'].forEach((x,j)=>{ const c=ws1.getCell(r,j+1); c.value=x; c.font={name:'Arial',bold:true,size:10}; c.fill=fill(GREY); c.border=bd; c.alignment={horizontal:j===0?'left':'center'}; }); r++;
-    rs.forEach((row,i)=>{ const even=i%2===0; [row.mensajero,row.exp,row.est,row.total].forEach((v,j)=>{ const c=ws1.getCell(r,j+1); c.value=v; c.fill=fill(even?WHITE:LIME); c.border=bd; c.font={name:'Arial',size:10,bold:j===3,color:{argb:j===3?GD:TXT}}; c.alignment={horizontal:j===0?'left':'center'}; }); r++; });
-    [ 'TOTAL',TR.exp,TR.est,TR.total ].forEach((v,j)=>{ const c=ws1.getCell(r,j+1); c.value=v; c.fill=fill(GD); c.border=bd; c.font={name:'Arial',bold:true,size:10,color:{argb:WHITE}}; c.alignment={horizontal:j===0?'left':'center'}; });
-    ws1.views=[{state:'frozen',ySplit:5,showGridLines:false}];
-    // Hoja Detalle
-    const TD=totales(DETALLE);
-    const ws2=wb.addWorksheet('Por mensajero y día',{views:[{showGridLines:false}]});
-    [13,30,12,12,10].forEach((w,i)=>ws2.getColumn(i+1).width=w);
-    ws2.mergeCells('A1:E1'); ws2.getRow(1).height=28; let h2=ws2.getCell('A1'); h2.value='Dropper · Entregas por Método (por mensajero y día)'; h2.font={name:'Arial',bold:true,size:13,color:{argb:WHITE}}; h2.fill=fill(BLACK); h2.alignment={vertical:'middle',horizontal:'left',indent:1};
-    let r2=3; ['Fecha','Mensajero','Express','Estándar','Total'].forEach((x,j)=>{ const c=ws2.getCell(r2,j+1); c.value=x; c.font={name:'Arial',bold:true,size:10}; c.fill=fill(GREY); c.border=bd; c.alignment={horizontal:j<2?'left':'center'}; }); r2++;
-    DETALLE.forEach((row,i)=>{ const even=i%2===0; [fmtDate(row.fecha),row.mensajero,row.exp,row.est,row.total].forEach((v,j)=>{ const c=ws2.getCell(r2,j+1); c.value=v; c.fill=fill(even?WHITE:LIME); c.border=bd; c.font={name:'Arial',size:10,bold:j===4,color:{argb:j===4?GD:TXT}}; c.alignment={horizontal:j<2?'left':'center'}; }); r2++; });
-    ['TOTAL','',TD.exp,TD.est,TD.total].forEach((v,j)=>{ const c=ws2.getCell(r2,j+1); c.value=v; c.fill=fill(GD); c.border=bd; c.font={name:'Arial',bold:true,size:10,color:{argb:WHITE}}; c.alignment={horizontal:j<2?'left':'center'}; });
-    ws2.views=[{state:'frozen',ySplit:3,showGridLines:false}];
-
+    const ddmm=dk=>{ const m=dk.match(/\d{4}-(\d{2})-(\d{2})/); return m?`${m[2]}/${m[1]}`:dk; };
+    function matrizSheet(title,metric){
+      const ws=wb.addWorksheet(title,{views:[{showGridLines:false}]});
+      const ncol=DAYS.length+2;
+      ws.getColumn(1).width=26; for(let i=0;i<DAYS.length;i++) ws.getColumn(i+2).width=8; ws.getColumn(ncol).width=9;
+      ws.mergeCells(1,1,1,ncol); ws.getRow(1).height=26;
+      const h=ws.getCell(1,1); h.value=`Dropper · Entregas ${title} — ${periodoTexto()}`; h.font={name:'Arial',bold:true,size:12,color:{argb:WHITE}}; h.fill=fill(BLACK); h.alignment={vertical:'middle',horizontal:'left',indent:1};
+      let r=3;
+      const head=['Mensajero',...DAYS.map(ddmm),'Total'];
+      head.forEach((x,j)=>{ const c=ws.getCell(r,j+1); c.value=x; c.font={name:'Arial',bold:true,size:9,color:{argb:TXT}}; c.fill=fill(GREY); c.border=bd; c.alignment={horizontal:j===0?'left':'center'}; }); r++;
+      MENS.forEach((m,i)=>{ const even=i%2===0;
+        const vals=[m,...DAYS.map(d=>cellVal(CELL[m]&&CELL[m][d],metric)),rowTotal(m,metric)];
+        vals.forEach((v,j)=>{ const last=j===vals.length-1; const c=ws.getCell(r,j+1); c.value=(j>0&&v===0)?null:v; c.fill=fill(even?WHITE:LIME); c.border=bd; c.font={name:'Arial',size:9,bold:last,color:{argb:last?GD:TXT}}; c.alignment={horizontal:j===0?'left':'center'}; }); r++;
+      });
+      const tot=['Total',...DAYS.map(d=>colTotal(d,metric)),grandTotal(metric)];
+      tot.forEach((v,j)=>{ const c=ws.getCell(r,j+1); c.value=v; c.fill=fill(GD); c.border=bd; c.font={name:'Arial',bold:true,size:9,color:{argb:WHITE}}; c.alignment={horizontal:j===0?'left':'center'}; });
+      ws.views=[{state:'frozen',xSplit:1,ySplit:3,showGridLines:false}];
+    }
+    matrizSheet('Total','total'); matrizSheet('Express','exp'); matrizSheet('Estándar','est');
     const buf=await wb.xlsx.writeBuffer();
-    saveBlob(new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}),'Dropper_Entregas_Express_Estandar.xlsx');
+    saveBlob(new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}),'Dropper_Entregas_Metodo_Matriz.xlsx');
     hideStatus();
   }catch(err){ console.error(err); status('Error generando el Excel: '+err.message,'err'); }
 });
