@@ -53,6 +53,8 @@
   table.matrix .daycol .wd{display:block;font-size:.62rem;color:var(--muted);font-weight:600}
   table.matrix .z{color:#cdd8d0}
   table.matrix tbody .rowtot{background:#f2f7f3}
+  table.matrix .prom{background:#eef6f0;font-family:'Sora',sans-serif;font-weight:700;color:var(--green-dk)}
+  table.matrix tfoot .prom{background:#0f3f20;color:#fff}
   table.matrix tfoot td{background:#14572A;color:#fff;font-weight:700}
   table.matrix tfoot .nm{background:#14572A;color:#fff}
 </style>
@@ -153,6 +155,7 @@ function hideStatus(){ $('#status').className='status'; }
 function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
 function norm(s){ return String(s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,''); }
 function nf(n){ return Number(n||0).toLocaleString('es-GT'); }
+function f1(n){ return Number(n||0).toLocaleString('es-GT',{minimumFractionDigits:1,maximumFractionDigits:1}); }
 function toDate(v){ if(v instanceof Date) return isNaN(v)?null:v; if(typeof v==='number') return new Date(Math.round((v-25569)*86400*1000)); const t=Date.parse(v); return isNaN(t)?null:new Date(t); }
 function parseDateTime(v){ if(v instanceof Date) return isNaN(v)?null:v; if(typeof v==='number'){ const d=new Date(Math.round((v-25569)*86400*1000)); return isNaN(d)?null:d; } let s=String(v==null?'':v).trim(); if(!s) return null; let d=new Date(s.replace(' ','T')); if(!isNaN(d)) return d; d=new Date(s); return isNaN(d)?null:d; }
 function dayKey(v){ const d=toDate(v); if(!d) return ''; const p=x=>String(x).padStart(2,'0'); return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}`; }
@@ -244,6 +247,9 @@ function cellVal(c,metric){ if(!c) return 0; return metric==='exp'?c.exp:(metric
 function rowTotal(m,metric){ let s=0; DAYS.forEach(d=>s+=cellVal(CELL[m]&&CELL[m][d],metric)); return s; }
 function colTotal(d,metric){ let s=0; MENS.forEach(m=>s+=cellVal(CELL[m]&&CELL[m][d],metric)); return s; }
 function grandTotal(metric){ let s=0; MENS.forEach(m=>s+=rowTotal(m,metric)); return s; }
+function activeDays(m,metric){ let n=0; DAYS.forEach(d=>{ if(cellVal(CELL[m]&&CELL[m][d],metric)>0) n++; }); return n; }
+function prom(m,metric){ const ad=activeDays(m,metric); return ad>0?rowTotal(m,metric)/ad:0; }
+function promGlobal(metric){ let ad=0; MENS.forEach(m=>ad+=activeDays(m,metric)); return ad>0?grandTotal(metric)/ad:0; }
 const WD=['Do','Lu','Ma','Mi','Ju','Vi','Sá'];
 function fmtDayCol(dk){ const m=dk.match(/(\d{4})-(\d{2})-(\d{2})/); if(!m) return dk; const d=new Date(dk+'T00:00:00'); return `<span class="wd">${WD[d.getDay()]}</span>${m[3]}/${m[2]}`; }
 
@@ -260,10 +266,10 @@ function renderMatrix(){
   const dayHead=DAYS.map(d=>`<th class="num daycol">${fmtDayCol(d)}</th>`).join('');
   const body=MENS.map(m=>{
     const cells=DAYS.map(d=>{ const v=cellVal(CELL[m]&&CELL[m][d],METRIC); return `<td class="num">${v?v:'<span class="z">·</span>'}</td>`; }).join('');
-    return `<tr><td class="nm">${esc(m)}</td>${cells}<td class="num b rowtot">${rowTotal(m,METRIC)}</td></tr>`;
+    return `<tr><td class="nm">${esc(m)}</td>${cells}<td class="num b rowtot">${rowTotal(m,METRIC)}</td><td class="num prom">${f1(prom(m,METRIC))}</td></tr>`;
   }).join('');
   const colTots=DAYS.map(d=>`<td class="num">${colTotal(d,METRIC)}</td>`).join('');
-  $('#panel').innerHTML=`<div class="tbl-wrap"><table class="hist matrix"><thead><tr><th class="nm">Mensajero</th>${dayHead}<th class="num rowtot">Total</th></tr></thead><tbody>${body}</tbody><tfoot><tr><td class="nm">Total</td>${colTots}<td class="num">${grandTotal(METRIC)}</td></tr></tfoot></table></div>`;
+  $('#panel').innerHTML=`<div class="tbl-wrap"><table class="hist matrix"><thead><tr><th class="nm">Mensajero</th>${dayHead}<th class="num rowtot">Total</th><th class="num prom" title="Promedio de envíos por día trabajado">Prom/día</th></tr></thead><tbody>${body}</tbody><tfoot><tr><td class="nm">Total</td>${colTots}<td class="num">${grandTotal(METRIC)}</td><td class="num prom">${f1(promGlobal(METRIC))}</td></tr></tfoot></table></div>`;
 }
 document.querySelectorAll('.tabs2 button').forEach(b=>b.addEventListener('click',()=>{
   document.querySelectorAll('.tabs2 button').forEach(x=>x.classList.toggle('active',x===b));
@@ -288,19 +294,19 @@ $('#btn-xlsx').addEventListener('click',async()=>{
     const ddmm=dk=>{ const m=dk.match(/\d{4}-(\d{2})-(\d{2})/); return m?`${m[2]}/${m[1]}`:dk; };
     function matrizSheet(title,metric){
       const ws=wb.addWorksheet(title,{views:[{showGridLines:false}]});
-      const ncol=DAYS.length+2;
-      ws.getColumn(1).width=26; for(let i=0;i<DAYS.length;i++) ws.getColumn(i+2).width=8; ws.getColumn(ncol).width=9;
+      const ncol=DAYS.length+3, totIdx=DAYS.length+1, promIdx=DAYS.length+2;   // 0-based col indices
+      ws.getColumn(1).width=26; for(let i=0;i<DAYS.length;i++) ws.getColumn(i+2).width=8; ws.getColumn(totIdx+1).width=9; ws.getColumn(promIdx+1).width=10;
       ws.mergeCells(1,1,1,ncol); ws.getRow(1).height=26;
       const h=ws.getCell(1,1); h.value=`Dropper · Entregas ${title} — ${periodoTexto()}`; h.font={name:'Arial',bold:true,size:12,color:{argb:WHITE}}; h.fill=fill(BLACK); h.alignment={vertical:'middle',horizontal:'left',indent:1};
       let r=3;
-      const head=['Mensajero',...DAYS.map(ddmm),'Total'];
+      const head=['Mensajero',...DAYS.map(ddmm),'Total','Prom/día'];
       head.forEach((x,j)=>{ const c=ws.getCell(r,j+1); c.value=x; c.font={name:'Arial',bold:true,size:9,color:{argb:TXT}}; c.fill=fill(GREY); c.border=bd; c.alignment={horizontal:j===0?'left':'center'}; }); r++;
       MENS.forEach((m,i)=>{ const even=i%2===0;
-        const vals=[m,...DAYS.map(d=>cellVal(CELL[m]&&CELL[m][d],metric)),rowTotal(m,metric)];
-        vals.forEach((v,j)=>{ const last=j===vals.length-1; const c=ws.getCell(r,j+1); c.value=(j>0&&v===0)?null:v; c.fill=fill(even?WHITE:LIME); c.border=bd; c.font={name:'Arial',size:9,bold:last,color:{argb:last?GD:TXT}}; c.alignment={horizontal:j===0?'left':'center'}; }); r++;
+        const vals=[m,...DAYS.map(d=>cellVal(CELL[m]&&CELL[m][d],metric)),rowTotal(m,metric),Number(prom(m,metric).toFixed(1))];
+        vals.forEach((v,j)=>{ const strong=j===totIdx||j===promIdx; const c=ws.getCell(r,j+1); c.value=(j>0&&j<totIdx&&v===0)?null:v; c.fill=fill(even?WHITE:LIME); c.border=bd; c.font={name:'Arial',size:9,bold:strong,color:{argb:strong?GD:TXT}}; c.alignment={horizontal:j===0?'left':'center'}; if(j===promIdx) c.numFmt='#,##0.0'; }); r++;
       });
-      const tot=['Total',...DAYS.map(d=>colTotal(d,metric)),grandTotal(metric)];
-      tot.forEach((v,j)=>{ const c=ws.getCell(r,j+1); c.value=v; c.fill=fill(GD); c.border=bd; c.font={name:'Arial',bold:true,size:9,color:{argb:WHITE}}; c.alignment={horizontal:j===0?'left':'center'}; });
+      const tot=['Total',...DAYS.map(d=>colTotal(d,metric)),grandTotal(metric),Number(promGlobal(metric).toFixed(1))];
+      tot.forEach((v,j)=>{ const c=ws.getCell(r,j+1); c.value=v; c.fill=fill(GD); c.border=bd; c.font={name:'Arial',bold:true,size:9,color:{argb:WHITE}}; c.alignment={horizontal:j===0?'left':'center'}; if(j===promIdx) c.numFmt='#,##0.0'; });
       ws.views=[{state:'frozen',xSplit:1,ySplit:3,showGridLines:false}];
     }
     matrizSheet('Total','total'); matrizSheet('Express','exp'); matrizSheet('Estándar','est');
