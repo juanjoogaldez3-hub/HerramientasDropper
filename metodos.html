@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Entregas por Método · Herramientas Dropper</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/css/app.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="assets/js/config.js"></script>
+<script src="assets/js/supabaseClient.js"></script>
+<script src="assets/js/auth-guard.js"></script>
+<script src="assets/js/brand.js"></script>
+<script src="assets/js/nav.js"></script>
+<style>
+  .drop{padding:42px 28px;text-align:center;cursor:pointer;position:relative;border:2px dashed #cdd8cf;border-radius:var(--radius);background:var(--white);transition:.22s ease;overflow:hidden}
+  .drop:hover{border-color:var(--green);background:#fbfdfb}
+  .drop.drag{border-color:var(--green);background:var(--lime-soft);transform:scale(.997)}
+  .drop .ic{width:58px;height:58px;border-radius:50%;margin:0 auto 14px;background:var(--lime-soft);display:grid;place-items:center;color:var(--green-dk);transition:.25s ease}
+  .drop:hover .ic{transform:translateY(-3px)}
+  .drop h2{font-family:'Sora',sans-serif;font-weight:700;font-size:1.15rem;letter-spacing:-.01em}
+  .drop p{color:var(--muted);font-size:.92rem;margin-top:6px}
+  .drop .hint{margin-top:13px;font-size:.78rem;color:#8a988e}
+  input[type=file]{display:none}
+  .status{margin-top:16px;font-size:.9rem;display:none;align-items:center;gap:9px;padding:12px 16px;border-radius:12px}
+  .status.show{display:flex}
+  .status.err{background:#fdecea;color:#a3261a;border:1px solid #f5c6c0}
+  .status.work{background:var(--lime-soft);color:var(--green-dk);border:1px solid #c4e3cd}
+  .spin{width:15px;height:15px;border:2px solid #bcd9c4;border-top-color:var(--green-dk);border-radius:50%;animation:sp .7s linear infinite;flex:none}
+  @keyframes sp{to{transform:rotate(360deg)}}
+  .summary{display:none}.summary.show{display:flex;gap:14px;margin:22px 0 8px;flex-wrap:wrap}
+  .toolbar{display:none;justify-content:space-between;align-items:center;gap:12px;margin:22px 0 12px;flex-wrap:wrap}
+  .toolbar.show{display:flex}
+  .toolbar h3{font-family:'Sora',sans-serif;font-weight:700;font-size:1.05rem}
+  .tabs2{display:flex;gap:8px;margin:0 0 12px}
+  .tabs2 button{font-family:inherit;font-weight:600;font-size:.86rem;border:1px solid var(--line);background:var(--white);color:var(--muted);border-radius:10px;padding:8px 14px;cursor:pointer}
+  .tabs2 button.active{background:var(--green-dk);color:#fff;border-color:var(--green-dk)}
+  .pill{display:inline-block;font-size:.74rem;font-weight:700;border-radius:20px;padding:2px 9px;white-space:nowrap}
+  .exp{color:#0b5aa6;background:#e6f0fb;border:1px solid #bcd8f2}
+  .est{color:#5b6b60;background:#eef1ef;border:1px solid #dfe4e0}
+  th.sortable{cursor:pointer;user-select:none}th.sortable:hover{color:var(--green-dk)}
+  table.hist tfoot tr td{background:#14572A;color:#fff;font-weight:700;border-top:2px solid #0c0f0d}
+  .b{font-family:'Sora',sans-serif;font-weight:800}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="topbar">
+    <a class="brand" href="inicio.html"><img id="brand-logo" alt="Dropper · Herramientas"></a>
+    <nav class="nav">
+      <div class="nav-links">
+        <a href="inicio.html">Inicio</a>
+        <a href="generador.html">Generador</a>
+        <a href="pagos.html">Pagos</a>
+        <a href="comisiones.html">Comisiones</a>
+        <a href="productividad.html">Productividad</a>
+        <a href="metodos.html" class="active">Métodos</a>
+        <a href="distribucion.html">Distribución</a>
+        <a href="motoristas.html">Motoristas</a>
+        <a href="asistencia.html">Asistencia</a>
+        <a href="marcaje.html">Marcaje</a>
+        <a href="historial.html">Historial</a>
+      </div>
+      <span class="nav-sep"></span>
+      <span class="nav-av" id="nav-av"></span>
+      <a href="#" class="nav-logout" id="logout">Salir</a>
+    </nav>
+  </div>
+
+  <div class="notice" id="notice">
+    <b>Modo vista previa.</b> Supabase aún no está configurado: la herramienta funciona, pero no hay login.
+  </div>
+
+  <div class="page-head">
+    <div>
+      <h2>Entregas por Método</h2>
+      <div class="sub">Subí tu Excel y contá las entregas de cada mensajero por día, separadas en <b>Express</b> y <b>Estándar</b>.</div>
+    </div>
+  </div>
+
+  <div class="drop" id="drop">
+    <input type="file" id="file" accept=".xlsx,.xls">
+    <div class="ic">
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>
+    </div>
+    <h2>Subí tu Excel de entregas</h2>
+    <p>Debe incluir <b>Nombre del Mensajero</b>, <b>Fecha de Entrega</b>, <b>Estado</b> y <b>Método de Entrega</b>.</p>
+    <div class="hint">Cuenta solo los envíos <b>Entregados</b>. Express = método con "Express"; el resto es Estándar.</div>
+  </div>
+
+  <div class="status" id="status"></div>
+
+  <div class="datefilter" id="datefilter" style="display:none">
+    <span class="df-label">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+      Período
+    </span>
+    <label>Desde <input type="date" id="df-from"></label>
+    <label>Hasta <input type="date" id="df-to"></label>
+    <button class="btn btn-primary df-btn" id="df-apply">Aplicar</button>
+    <button class="btn btn-ghost df-btn" id="df-clear">Todo</button>
+    <span class="df-count" id="df-count"></span>
+  </div>
+
+  <div class="summary" id="summary">
+    <div class="stat"><div class="k">Mensajeros</div><div class="v" id="s-mens">0</div></div>
+    <div class="stat"><div class="k">Entregas</div><div class="v" id="s-ent">0</div></div>
+    <div class="stat"><div class="k">Express</div><div class="v" id="s-exp">0</div></div>
+    <div class="stat"><div class="k">Estándar</div><div class="v" id="s-est">0</div></div>
+  </div>
+
+  <div class="toolbar" id="toolbar">
+    <div class="tabs2">
+      <button data-t="resumen" class="active">Por mensajero</button>
+      <button data-t="detalle">Por mensajero y día</button>
+    </div>
+    <button class="btn btn-primary" id="btn-xlsx" style="width:auto">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      Descargar Excel
+    </button>
+  </div>
+
+  <div class="panel" id="panel"></div>
+
+  <footer>Dropper · Smart Delivery — procesa todo en tu navegador, ningún archivo se sube a internet.</footer>
+</div>
+
+<script>
+const $=s=>document.querySelector(s);
+const drop=$('#drop'), fileInput=$('#file');
+let RAW=[];      // {mensajero, fecha(Date), express(bool)}  (solo Entregado)
+let RESUMEN=[], DETALLE=[];
+let VIEW='resumen';
+let R_SORT={key:'total',dir:-1};
+
+function status(msg,type){ const s=$('#status'); s.className='status show '+(type||''); s.innerHTML=(type==='work'?'<span class="spin"></span>':'')+msg; }
+function hideStatus(){ $('#status').className='status'; }
+function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+function norm(s){ return String(s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,''); }
+function nf(n){ return Number(n||0).toLocaleString('es-GT'); }
+function toDate(v){ if(v instanceof Date) return isNaN(v)?null:v; if(typeof v==='number') return new Date(Math.round((v-25569)*86400*1000)); const t=Date.parse(v); return isNaN(t)?null:new Date(t); }
+function parseDateTime(v){ if(v instanceof Date) return isNaN(v)?null:v; if(typeof v==='number'){ const d=new Date(Math.round((v-25569)*86400*1000)); return isNaN(d)?null:d; } let s=String(v==null?'':v).trim(); if(!s) return null; let d=new Date(s.replace(' ','T')); if(!isNaN(d)) return d; d=new Date(s); return isNaN(d)?null:d; }
+function dayKey(v){ const d=toDate(v); if(!d) return ''; const p=x=>String(x).padStart(2,'0'); return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}`; }
+function fmtDate(s){ const m=String(s||'').match(/(\d{4})-(\d{2})-(\d{2})/); return m?`${m[3]}/${m[2]}/${m[1]}`:s; }
+
+drop.addEventListener('click',()=>fileInput.click());
+['dragover','dragenter'].forEach(e=>drop.addEventListener(e,ev=>{ev.preventDefault();drop.classList.add('drag')}));
+['dragleave','drop'].forEach(e=>drop.addEventListener(e,ev=>{ev.preventDefault();drop.classList.remove('drag')}));
+drop.addEventListener('drop',ev=>{ if(ev.dataTransfer.files.length) handleFile(ev.dataTransfer.files[0]); });
+fileInput.addEventListener('change',()=>{ if(fileInput.files.length) handleFile(fileInput.files[0]); });
+
+function handleFile(file){
+  status('Leyendo <b style="margin:0 4px">'+esc(file.name)+'</b>…','work');
+  const reader=new FileReader();
+  reader.onload=e=>{ try{ parseWorkbook(e.target.result); }catch(err){ console.error(err); status('No se pudo leer el archivo: '+err.message,'err'); } };
+  reader.onerror=()=>status('Error al abrir el archivo.','err');
+  reader.readAsArrayBuffer(file);
+}
+function pickHeader(keys,cands){ const nk=keys.map(k=>({k,n:norm(k).trim()})); for(const c of cands){ const h=nk.find(o=>o.n===c); if(h) return h.k; } for(const c of cands){ const h=nk.find(o=>o.n.includes(c)); if(h) return h.k; } return null; }
+
+function parseWorkbook(buf){
+  const wb=XLSX.read(buf,{type:'array',cellDates:true});
+  const sheetName=wb.SheetNames.find(n=>/entrega/i.test(n))||wb.SheetNames[0];
+  const ws=wb.Sheets[sheetName];
+  const rowsRaw=XLSX.utils.sheet_to_json(ws,{raw:true,defval:''});
+  const rowsTxt=XLSX.utils.sheet_to_json(ws,{raw:false,defval:''});
+  if(!rowsRaw.length){ status('La hoja está vacía.','err'); return; }
+  const keys=Object.keys(rowsRaw[0]);
+  const C={
+    mensajero:pickHeader(keys,['nombre del mensajero','mensajero','repartidor','motorista','piloto']),
+    fecha:pickHeader(keys,['fecha de entrega','fecha']),
+    estado:pickHeader(keys,['estado del envio','estado de entrega','estado']),
+    metodo:pickHeader(keys,['metodo de entrega','metodo','tipo de envio','tipo de entrega','servicio']),
+  };
+  if(!C.mensajero){ status('No encontré la columna del <b>mensajero</b>.','err'); return; }
+  if(!C.fecha){ status('No encontré la columna <b>Fecha de Entrega</b>.','err'); return; }
+  if(!C.metodo){ status('No encontré la columna <b>Método de Entrega</b>.','err'); return; }
+
+  let sinEstado=0;
+  RAW=rowsRaw.map((r,i)=>{
+    const t=rowsTxt[i]||{}; const g=x=>x?String((t[x]??r[x])||'').trim():'';
+    const mensajero=g(C.mensajero);
+    const estado=norm(g(C.estado));
+    const entregado = estado.startsWith('entregado') || estado==='delivered' || (!C.estado);
+    if(!entregado){ return null; }
+    const fdt=parseDateTime(t[C.fecha]??r[C.fecha]);
+    if(!mensajero || !fdt) { if(mensajero&&!fdt) sinEstado++; return null; }
+    return { mensajero, fecha:fdt, express:/express/.test(norm(g(C.metodo))) };
+  }).filter(Boolean);
+
+  if(!RAW.length){ status('No encontré envíos <b>Entregados</b> con mensajero y fecha.','err'); return; }
+  hideStatus();
+  setupDateFilter();
+  buildView();
+}
+
+/* ---------- filtro período ---------- */
+function currentRange(){ const fv=$('#df-from').value, tv=$('#df-to').value; return [ fv?new Date(fv+'T00:00:00'):null, tv?new Date(tv+'T23:59:59'):null ]; }
+function inRange(d,from,to){ if(!from&&!to) return true; if(!d) return false; if(from&&d<from) return false; if(to&&d>to) return false; return true; }
+function setupDateFilter(){
+  const bar=$('#datefilter'); const dates=RAW.map(r=>r.fecha).filter(d=>d&&d.getFullYear()>1971);
+  if(!dates.length){ bar.style.display='none'; return; }
+  const iso=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  const mn=new Date(Math.min(...dates)), mx=new Date(Math.max(...dates));
+  ['#df-from','#df-to'].forEach(s=>{ const el=$(s); el.min=iso(mn); el.max=iso(mx); el.value=''; });
+  bar.style.display='flex';
+}
+$('#df-apply').addEventListener('click',()=>{ if(RAW.length) buildView(); });
+$('#df-clear').addEventListener('click',()=>{ $('#df-from').value=''; $('#df-to').value=''; if(RAW.length) buildView(); });
+
+/* ---------- cálculo ---------- */
+function buildView(){
+  const [from,to]=currentRange();
+  const rows=RAW.filter(r=>inRange(r.fecha,from,to));
+  const byMen=new Map();          // mensajero -> {exp,est}
+  const byDay=new Map();          // mensajero|dia -> {mensajero,fecha,exp,est}
+  rows.forEach(r=>{
+    if(!byMen.has(r.mensajero)) byMen.set(r.mensajero,{exp:0,est:0});
+    const m=byMen.get(r.mensajero); if(r.express) m.exp++; else m.est++;
+    const dk=dayKey(r.fecha), key=r.mensajero+'|'+dk;
+    if(!byDay.has(key)) byDay.set(key,{mensajero:r.mensajero,fecha:dk,exp:0,est:0});
+    const d=byDay.get(key); if(r.express) d.exp++; else d.est++;
+  });
+  RESUMEN=[...byMen.entries()].map(([mensajero,o])=>({mensajero,exp:o.exp,est:o.est,total:o.exp+o.est}));
+  DETALLE=[...byDay.values()].map(d=>({...d,total:d.exp+d.est})).sort((a,b)=> a.fecha!==b.fecha ? b.fecha.localeCompare(a.fecha) : a.mensajero.localeCompare(b.mensajero));
+
+  const active=!!(from||to);
+  $('#df-count').textContent = active ? `Mostrando ${rows.length} de ${RAW.length} entregas` : `${RAW.length} entregas`;
+  render();
+}
+function totales(list){ return list.reduce((t,r)=>({exp:t.exp+r.exp,est:t.est+r.est,total:t.total+r.total}),{exp:0,est:0,total:0}); }
+
+function render(){
+  const T=totales(RESUMEN);
+  $('#s-mens').textContent=RESUMEN.length;
+  $('#s-ent').textContent=nf(T.total);
+  $('#s-exp').textContent=nf(T.exp);
+  $('#s-est').textContent=nf(T.est);
+  $('#summary').classList.add('show'); $('#toolbar').classList.add('show');
+  VIEW==='resumen'?renderResumen():renderDetalle();
+}
+function renderResumen(){
+  let rows=[...RESUMEN];
+  const {key,dir}=R_SORT;
+  rows.sort((a,b)=>{ const av=key==='mensajero'?a.mensajero.toLowerCase():a[key], bv=key==='mensajero'?b.mensajero.toLowerCase():b[key]; return av<bv?-dir:(av>bv?dir:0); });
+  const T=totales(rows);
+  const arrow=k=>R_SORT.key===k?(R_SORT.dir<0?' ▾':' ▴'):'';
+  const cols=[['mensajero','Mensajero'],['exp','Express'],['est','Estándar'],['total','Total']];
+  const head=cols.map(([k,l])=>`<th class="sortable${k==='mensajero'?'':' num'}" data-k="${k}">${l}${arrow(k)}</th>`).join('');
+  const body=rows.map(r=>`<tr><td>${esc(r.mensajero)}</td><td class="num">${r.exp?`<span class="pill exp">${r.exp}</span>`:'—'}</td><td class="num">${r.est?`<span class="pill est">${r.est}</span>`:'—'}</td><td class="num b">${r.total}</td></tr>`).join('');
+  $('#panel').innerHTML=`<div class="tbl-wrap"><table class="hist"><thead><tr>${head}</tr></thead><tbody>${body}</tbody><tfoot><tr><td>TOTAL</td><td class="num">${T.exp}</td><td class="num">${T.est}</td><td class="num">${T.total}</td></tr></tfoot></table></div>`;
+  $('#panel').querySelectorAll('th.sortable').forEach(th=>th.addEventListener('click',()=>{ const k=th.dataset.k; if(R_SORT.key===k) R_SORT.dir*=-1; else R_SORT={key:k,dir:(k==='mensajero'?1:-1)}; renderResumen(); }));
+}
+function renderDetalle(){
+  const T=totales(DETALLE);
+  const body=DETALLE.map(r=>`<tr><td>${fmtDate(r.fecha)}</td><td>${esc(r.mensajero)}</td><td class="num">${r.exp?`<span class="pill exp">${r.exp}</span>`:'—'}</td><td class="num">${r.est?`<span class="pill est">${r.est}</span>`:'—'}</td><td class="num b">${r.total}</td></tr>`).join('');
+  $('#panel').innerHTML=`<div class="tbl-wrap"><table class="hist"><thead><tr><th>Fecha</th><th>Mensajero</th><th class="num">Express</th><th class="num">Estándar</th><th class="num">Total</th></tr></thead><tbody>${body}</tbody><tfoot><tr><td colspan="2">TOTAL</td><td class="num">${T.exp}</td><td class="num">${T.est}</td><td class="num">${T.total}</td></tr></tfoot></table></div>`;
+}
+document.querySelectorAll('.tabs2 button').forEach(b=>b.addEventListener('click',()=>{
+  document.querySelectorAll('.tabs2 button').forEach(x=>x.classList.toggle('active',x===b));
+  VIEW=b.dataset.t; VIEW==='resumen'?renderResumen():renderDetalle();
+}));
+
+/* ---------- Excel ---------- */
+function periodoTexto(){
+  const ds=RAW.map(r=>r.fecha).filter(d=>d&&d.getFullYear()>1971); const [from,to]=currentRange();
+  const inr=ds.filter(d=>(!from||d>=from)&&(!to||d<=to)); if(!inr.length) return '—';
+  const mn=new Date(Math.min(...inr)), mx=new Date(Math.max(...inr)); return `${fmtDate(dayKey(mn))} al ${fmtDate(dayKey(mx))}`;
+}
+function saveBlob(blob,name){ const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download=name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url),1500); }
+$('#btn-xlsx').addEventListener('click',async()=>{
+  if(!RESUMEN.length){ status('Primero cargá un Excel.','err'); return; }
+  status('Generando Excel…','work');
+  try{
+    const wb=new ExcelJS.Workbook();
+    const fill=c=>({type:'pattern',pattern:'solid',fgColor:{argb:c}});
+    const bd={top:{style:'thin',color:{argb:'FFD5DADE'}},bottom:{style:'thin',color:{argb:'FFD5DADE'}},left:{style:'thin',color:{argb:'FFD5DADE'}},right:{style:'thin',color:{argb:'FFD5DADE'}}};
+    const GREY='FFF2F4F5',LIME='FFDDF0E2',WHITE='FFFFFFFF',TXT='FF1A1A1A',BLACK='FF0C0F0D',GD='FF14572A';
+    // Hoja Resumen
+    const rs=[...RESUMEN].sort((a,b)=>b.total-a.total); const TR=totales(rs);
+    const ws1=wb.addWorksheet('Por mensajero',{views:[{showGridLines:false}]});
+    [30,12,12,10].forEach((w,i)=>ws1.getColumn(i+1).width=w);
+    ws1.mergeCells('A1:D1'); ws1.getRow(1).height=28; let h=ws1.getCell('A1'); h.value='Dropper · Entregas por Método (por mensajero)'; h.font={name:'Arial',bold:true,size:13,color:{argb:WHITE}}; h.fill=fill(BLACK); h.alignment={vertical:'middle',horizontal:'left',indent:1};
+    ws1.getCell('A3').value='Período:'; ws1.getCell('A3').font={name:'Arial',bold:true,size:10}; ws1.getCell('B3').value=periodoTexto(); ws1.getCell('B3').font={name:'Arial',size:10};
+    let r=5; ['Mensajero','Express','Estándar','Total'].forEach((x,j)=>{ const c=ws1.getCell(r,j+1); c.value=x; c.font={name:'Arial',bold:true,size:10}; c.fill=fill(GREY); c.border=bd; c.alignment={horizontal:j===0?'left':'center'}; }); r++;
+    rs.forEach((row,i)=>{ const even=i%2===0; [row.mensajero,row.exp,row.est,row.total].forEach((v,j)=>{ const c=ws1.getCell(r,j+1); c.value=v; c.fill=fill(even?WHITE:LIME); c.border=bd; c.font={name:'Arial',size:10,bold:j===3,color:{argb:j===3?GD:TXT}}; c.alignment={horizontal:j===0?'left':'center'}; }); r++; });
+    [ 'TOTAL',TR.exp,TR.est,TR.total ].forEach((v,j)=>{ const c=ws1.getCell(r,j+1); c.value=v; c.fill=fill(GD); c.border=bd; c.font={name:'Arial',bold:true,size:10,color:{argb:WHITE}}; c.alignment={horizontal:j===0?'left':'center'}; });
+    ws1.views=[{state:'frozen',ySplit:5,showGridLines:false}];
+    // Hoja Detalle
+    const TD=totales(DETALLE);
+    const ws2=wb.addWorksheet('Por mensajero y día',{views:[{showGridLines:false}]});
+    [13,30,12,12,10].forEach((w,i)=>ws2.getColumn(i+1).width=w);
+    ws2.mergeCells('A1:E1'); ws2.getRow(1).height=28; let h2=ws2.getCell('A1'); h2.value='Dropper · Entregas por Método (por mensajero y día)'; h2.font={name:'Arial',bold:true,size:13,color:{argb:WHITE}}; h2.fill=fill(BLACK); h2.alignment={vertical:'middle',horizontal:'left',indent:1};
+    let r2=3; ['Fecha','Mensajero','Express','Estándar','Total'].forEach((x,j)=>{ const c=ws2.getCell(r2,j+1); c.value=x; c.font={name:'Arial',bold:true,size:10}; c.fill=fill(GREY); c.border=bd; c.alignment={horizontal:j<2?'left':'center'}; }); r2++;
+    DETALLE.forEach((row,i)=>{ const even=i%2===0; [fmtDate(row.fecha),row.mensajero,row.exp,row.est,row.total].forEach((v,j)=>{ const c=ws2.getCell(r2,j+1); c.value=v; c.fill=fill(even?WHITE:LIME); c.border=bd; c.font={name:'Arial',size:10,bold:j===4,color:{argb:j===4?GD:TXT}}; c.alignment={horizontal:j<2?'left':'center'}; }); r2++; });
+    ['TOTAL','',TD.exp,TD.est,TD.total].forEach((v,j)=>{ const c=ws2.getCell(r2,j+1); c.value=v; c.fill=fill(GD); c.border=bd; c.font={name:'Arial',bold:true,size:10,color:{argb:WHITE}}; c.alignment={horizontal:j<2?'left':'center'}; });
+    ws2.views=[{state:'frozen',ySplit:3,showGridLines:false}];
+
+    const buf=await wb.xlsx.writeBuffer();
+    saveBlob(new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}),'Dropper_Entregas_Express_Estandar.xlsx');
+    hideStatus();
+  }catch(err){ console.error(err); status('Error generando el Excel: '+err.message,'err'); }
+});
+
+/* sesión */
+$('#logout').addEventListener('click',e=>{ e.preventDefault(); window.dropperAuth.signOut(); });
+(async function init(){
+  const guard=await window.dropperAuth.requireSession();
+  if(guard===null) return;
+  if(guard.previewMode){ $('#notice').classList.add('show'); return; }
+  window.dropperNav.setUser(guard.user.email||'');
+})();
+</script>
+</body>
+</html>
