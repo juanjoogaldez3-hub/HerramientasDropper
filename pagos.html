@@ -53,6 +53,9 @@
 
   .summary{display:none}
   .summary.show{display:flex;gap:14px;margin:22px 0 8px;flex-wrap:wrap;animation:rise .5s ease both}
+  .stat.gan{background:var(--lime-soft);border:1px solid #c4e3cd}
+  .stat.gan .v{color:var(--green-dk)}
+  .stat.gan .v.neg{color:#a3261a}
 
   .toolbar{display:none;justify-content:space-between;align-items:center;gap:12px;margin:24px 0 14px;flex-wrap:wrap}
   .toolbar.show{display:flex}
@@ -177,6 +180,8 @@
     <div class="stat"><div class="k">Recolectas</div><div class="v" id="s-rec">0</div></div>
     <div class="stat"><div class="k">Descuentos</div><div class="v" id="s-desc">Q0</div></div>
     <div class="stat"><div class="k">Total a pagar</div><div class="v" id="s-total">Q0</div></div>
+    <div class="stat"><div class="k">Costo de envíos</div><div class="v" id="s-costo">Q0</div></div>
+    <div class="stat gan"><div class="k">Ganancia</div><div class="v" id="s-gan">Q0</div></div>
   </div>
 
   <div class="toolbar" id="toolbar">
@@ -221,6 +226,7 @@ let DESCUENTOS={};   // descuentos (Q) ingresados a mano, por nombre de mensajer
 let MOTIVOS={};      // motivo del descuento, por nombre de mensajero
 let DESCRIPCIONES={};// descripción del pago, por nombre de mensajero
 let PAID_KEYS=new Set(); // ID de Orden de envíos que YA tienen recibo activo
+let HAS_PRECIO=false;    // el Excel trae columna de precio/costo de envío
 const TARIFA_FMT='"Q"#,##0.00';
 
 // Consulta en la base qué envíos (por ID de Orden) ya tienen recibo activo.
@@ -251,6 +257,7 @@ function status(msg,type){ const s=$('#status'); s.className='status show '+(typ
 function hideStatus(){ $('#status').className='status'; }
 function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
 function norm(s){ return String(s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,''); }
+function numMoney(v){ if(typeof v==='number') return v; let s=String(v==null?'':v).replace(/,/g,'').replace(/[^0-9.\-]/g,''); const n=parseFloat(s); return isNaN(n)?0:n; }
 function fmtQ(n){ return 'Q'+Number(n||0).toLocaleString('es-GT',{minimumFractionDigits:2,maximumFractionDigits:2}); }
 function fmtDate(v){
   let d;
@@ -306,7 +313,9 @@ async function parseWorkbook(buf){
     zona:pickHeader(keys,['localidad','zona']),
     estado:pickHeader(keys,['estado del envio','estado de entrega','estado']),
     metodo:pickHeader(keys,['metodo de entrega','metodo','tipo de envio','tipo','envio']),
+    precio:pickHeader(keys,['costo de envio','costo del envio','costo de entrega','precio de entrega','precio de envio','precio del envio','tarifa de entrega','tarifa de envio']),
   };
+  HAS_PRECIO=!!C.precio;
   if(!C.mensajero){
     status('No encontré la columna del <b>mensajero</b>. Asegurate de que el Excel tenga una columna con el nombre del mensajero (ej. «Mensajero», «Repartidor», «Motorista»).','err');
     return;
@@ -326,6 +335,7 @@ async function parseWorkbook(buf){
       estado:C.estado?String((t[C.estado]??r[C.estado])||'').trim():'',
       metodo:C.metodo?String((t[C.metodo]??r[C.metodo])||'').trim():'',
       tipo:tipoEnvio(C.metodo?(t[C.metodo]??r[C.metodo]):''),
+      costo:C.precio?numMoney(t[C.precio]??r[C.precio]):0,
     };
   }).filter(r=>r.mensajero);
 
@@ -385,12 +395,16 @@ function recompute(){
   MENS.sort((a,b)=>b.pago-a.pago || b.entregas-a.entregas);
 }
 function totals(){
+  const pago=MENS.reduce((s,m)=>s+m.pago,0);
+  const costoEnvios=MENS.reduce((s,m)=>s+m.rows.reduce((a,r)=>a+(+r.costo||0),0),0);
   return {
     mens: MENS.length,
     entregas: MENS.reduce((s,m)=>s+m.entregas,0),
     recolectas: MENS.reduce((s,m)=>s+(m.recolectas||0),0),
     descuentos: MENS.reduce((s,m)=>s+(m.descuento||0),0),
-    pago: MENS.reduce((s,m)=>s+m.pago,0),
+    pago,
+    costoEnvios,
+    ganancia: costoEnvios - pago,
   };
 }
 function updateSummary(){
@@ -400,6 +414,11 @@ function updateSummary(){
   $('#s-rec').textContent=t.recolectas.toLocaleString('es-GT');
   $('#s-desc').textContent=fmtQ(t.descuentos);
   $('#s-total').textContent=fmtQ(t.pago);
+  $('#s-costo').textContent=HAS_PRECIO?fmtQ(t.costoEnvios):'—';
+  const g=$('#s-gan'); g.textContent=HAS_PRECIO?fmtQ(t.ganancia):'—';
+  g.classList.toggle('neg', HAS_PRECIO && t.ganancia<0);
+  $('#s-costo').closest('.stat').style.display=HAS_PRECIO?'':'none';
+  g.closest('.stat').style.display=HAS_PRECIO?'':'none';
 }
 
 /* ---------- render ---------- */
