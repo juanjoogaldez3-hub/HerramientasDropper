@@ -396,15 +396,19 @@ function recompute(){
 }
 function totals(){
   const pago=MENS.reduce((s,m)=>s+m.pago,0);
+  const descuentos=MENS.reduce((s,m)=>s+(m.descuento||0),0);
   const costoEnvios=MENS.reduce((s,m)=>s+m.rows.reduce((a,r)=>a+(+r.costo||0),0),0);
+  const pagoBruto=pago+descuentos;   // total sin descuentos (lo que realmente cuesta la mano de obra)
   return {
     mens: MENS.length,
     entregas: MENS.reduce((s,m)=>s+m.entregas,0),
     recolectas: MENS.reduce((s,m)=>s+(m.recolectas||0),0),
-    descuentos: MENS.reduce((s,m)=>s+(m.descuento||0),0),
+    descuentos,
     pago,
+    pagoBruto,
     costoEnvios,
-    ganancia: costoEnvios - pago,
+    // El descuento NO mejora la ganancia: lo descontado igual es un gasto que va a otro lado.
+    ganancia: costoEnvios - pagoBruto,
   };
 }
 function updateSummary(){
