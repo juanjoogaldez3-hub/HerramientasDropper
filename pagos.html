@@ -509,16 +509,16 @@ async function buildPlanillaWorkbook(sel,rStd,rExp,rr,periodo){
   const G='FF1F7A3D',GD='FF14572A',LIME='FFDDF0E2',GREY='FFF2F4F5',WHITE='FFFFFFFF',TXT='FF1A1A1A',BLACK='FF0C0F0D';
   const fill=c=>({type:'pattern',pattern:'solid',fgColor:{argb:c}});
   const bd={top:{style:'thin',color:{argb:'FFD5DADE'}},bottom:{style:'thin',color:{argb:'FFD5DADE'}},left:{style:'thin',color:{argb:'FFD5DADE'}},right:{style:'thin',color:{argb:'FFD5DADE'}}};
-  ws.getColumn(1).width=32; ws.getColumn(2).width=10; ws.getColumn(3).width=10; ws.getColumn(4).width=11; ws.getColumn(5).width=13; ws.getColumn(6).width=15;
+  ws.getColumn(1).width=32; ws.getColumn(2).width=10; ws.getColumn(3).width=10; ws.getColumn(4).width=11; ws.getColumn(5).width=17; ws.getColumn(6).width=13; ws.getColumn(7).width=15;
 
-  ws.mergeCells('A1:F1'); ws.getRow(1).height=30;
+  ws.mergeCells('A1:G1'); ws.getRow(1).height=30;
   let t=ws.getCell('A1'); t.value='Dropper · Planilla de Pagos a Mensajeros';
   t.font={name:'Arial',bold:true,size:14,color:{argb:WHITE}}; t.fill=fill(BLACK);
   t.alignment={vertical:'middle',horizontal:'left',indent:1};
 
   const totStd=sel.reduce((s,m)=>s+(m.entregasStd||0),0), totExp=sel.reduce((s,m)=>s+(m.entregasExp||0),0),
         totRec=sel.reduce((s,m)=>s+(m.recolectas||0),0), totDesc=sel.reduce((s,m)=>s+(m.descuento||0),0),
-        totalPago=sel.reduce((s,m)=>s+m.pago,0);
+        totalPago=sel.reduce((s,m)=>s+m.pago,0), totBruto=totalPago+totDesc;
   [['Período:',periodo],['Pago entrega estándar:',fmtQ(rStd)],['Pago entrega express:',fmtQ(rExp)],['Pago recolecta:',fmtQ(rr)]].forEach((p,i)=>{
     const r=3+i;
     ws.getCell(`A${r}`).value=p[0]; ws.getCell(`A${r}`).font={name:'Arial',bold:true,size:10,color:{argb:TXT}};
@@ -528,10 +528,10 @@ async function buildPlanillaWorkbook(sel,rStd,rExp,rr,periodo){
   const tc=ws.getCell('B7'); tc.value=totalPago; tc.numFmt=TARIFA_FMT; tc.font={name:'Arial',bold:true,size:11,color:{argb:GD}};
 
   let r=9;
-  ws.mergeCells(`A${r}:F${r}`); let h=ws.getCell(`A${r}`); h.value='Detalle por mensajero';
+  ws.mergeCells(`A${r}:G${r}`); let h=ws.getCell(`A${r}`); h.value='Detalle por mensajero';
   h.font={name:'Arial',bold:true,size:11,color:{argb:WHITE}}; h.fill=fill(G);
   h.alignment={vertical:'middle',horizontal:'left',indent:1}; ws.getRow(r).height=22; r++;
-  ['Mensajero','Estándar','Express','Recolectas','Descuento','Total a pagar'].forEach((x,j)=>{
+  ['Mensajero','Estándar','Express','Recolectas','Total sin descuentos','Descuento','Total a pagar'].forEach((x,j)=>{
     const cell=ws.getCell(r,j+1); cell.value=x;
     cell.font={name:'Arial',bold:true,size:10,color:{argb:TXT}}; cell.fill=fill(GREY); cell.border=bd;
     cell.alignment={horizontal:j===0?'left':'center'};
@@ -540,20 +540,22 @@ async function buildPlanillaWorkbook(sel,rStd,rExp,rr,periodo){
   const fd=r;
   sel.forEach((m,i)=>{
     const even=i%2===0;
+    const brm=(m.entregasStd||0)*rStd+(m.entregasExp||0)*rExp+(m.recolectas||0)*rr;
     ws.getCell(r,1).value=m.name; ws.getCell(r,1).alignment={horizontal:'left'};
     ws.getCell(r,2).value=m.entregasStd||0; ws.getCell(r,2).alignment={horizontal:'center'};
     ws.getCell(r,3).value=m.entregasExp||0; ws.getCell(r,3).alignment={horizontal:'center'};
     ws.getCell(r,4).value=m.recolectas||0; ws.getCell(r,4).alignment={horizontal:'center'};
-    const c5=ws.getCell(r,5); c5.value=m.descuento||0; c5.numFmt=TARIFA_FMT; c5.alignment={horizontal:'center'};
-    const c6=ws.getCell(r,6); c6.value=m.pago; c6.numFmt=TARIFA_FMT; c6.alignment={horizontal:'center'};
-    [1,2,3,4,5,6].forEach(col=>{const x=ws.getCell(r,col); x.fill=fill(even?WHITE:LIME); x.border=bd; x.font={name:'Arial',size:10,color:{argb:TXT}};});
+    const c5=ws.getCell(r,5); c5.value=brm; c5.numFmt=TARIFA_FMT; c5.alignment={horizontal:'center'};
+    const c6=ws.getCell(r,6); c6.value=m.descuento||0; c6.numFmt=TARIFA_FMT; c6.alignment={horizontal:'center'};
+    const c7=ws.getCell(r,7); c7.value=m.pago; c7.numFmt=TARIFA_FMT; c7.alignment={horizontal:'center'};
+    [1,2,3,4,5,6,7].forEach(col=>{const x=ws.getCell(r,col); x.fill=fill(even?WHITE:LIME); x.border=bd; x.font={name:'Arial',size:10,color:{argb:TXT}};});
     r++;
   });
   const ld=r-1;
   ws.getCell(r,1).value='TOTAL'; ws.getCell(r,1).font={name:'Arial',bold:true,size:11,color:{argb:WHITE}};
   const colTot=(col,letra,res,fmt)=>{ const c=ws.getCell(r,col); c.value={formula:`SUM(${letra}${fd}:${letra}${ld})`,result:res}; if(fmt) c.numFmt=fmt; c.font={name:'Arial',bold:true,size:11,color:{argb:WHITE}}; c.alignment={horizontal:'center'}; };
-  colTot(2,'B',totStd); colTot(3,'C',totExp); colTot(4,'D',totRec); colTot(5,'E',totDesc,TARIFA_FMT); colTot(6,'F',totalPago,TARIFA_FMT);
-  [1,2,3,4,5,6].forEach(col=>{ws.getCell(r,col).fill=fill(GD); ws.getCell(r,col).border=bd;});
+  colTot(2,'B',totStd); colTot(3,'C',totExp); colTot(4,'D',totRec); colTot(5,'E',totBruto,TARIFA_FMT); colTot(6,'F',totDesc,TARIFA_FMT); colTot(7,'G',totalPago,TARIFA_FMT);
+  [1,2,3,4,5,6,7].forEach(col=>{ws.getCell(r,col).fill=fill(GD); ws.getCell(r,col).border=bd;});
 
   return wb;
 }
@@ -565,7 +567,7 @@ function buildPlanillaPDF(sel,rStd,rExp,rr,periodo){
   const green=[31,122,61], greenDk=[20,87,42], txt=[26,26,26], lime=[221,240,226], black=[12,15,13];
   const totStd=sel.reduce((s,m)=>s+(m.entregasStd||0),0), totExp=sel.reduce((s,m)=>s+(m.entregasExp||0),0),
         totRec=sel.reduce((s,m)=>s+(m.recolectas||0),0), totDesc=sel.reduce((s,m)=>s+(m.descuento||0),0),
-        totalPago=sel.reduce((s,m)=>s+m.pago,0);
+        totalPago=sel.reduce((s,m)=>s+m.pago,0), totBruto=totalPago+totDesc;
 
   doc.setFillColor(...black); doc.rect(0,0,PW,70,'F');
   doc.setFont('helvetica','bold'); doc.setFontSize(15); doc.setTextColor(255,255,255);
@@ -581,14 +583,14 @@ function buildPlanillaPDF(sel,rStd,rExp,rr,periodo){
 
   doc.autoTable({
     startY:y+30,
-    head:[['Mensajero','Estándar','Express','Recolectas','Descuento','Total a pagar']],
-    body:sel.map(m=>[m.name,m.entregasStd||0,m.entregasExp||0,m.recolectas||0,fmtQ(m.descuento||0),fmtQ(m.pago)]),
-    foot:[['TOTAL',totStd,totExp,totRec,fmtQ(totDesc),fmtQ(totalPago)]],
+    head:[['Mensajero','Estándar','Express','Recolectas','Total sin desc.','Descuento','Total a pagar']],
+    body:sel.map(m=>[m.name,m.entregasStd||0,m.entregasExp||0,m.recolectas||0,fmtQ((m.entregasStd||0)*rStd+(m.entregasExp||0)*rExp+(m.recolectas||0)*rr),fmtQ(m.descuento||0),fmtQ(m.pago)]),
+    foot:[['TOTAL',totStd,totExp,totRec,fmtQ(totBruto),fmtQ(totDesc),fmtQ(totalPago)]],
     styles:{font:'helvetica',fontSize:8.5,cellPadding:4,textColor:txt,lineColor:[213,218,222],lineWidth:0.5},
     headStyles:{fillColor:green,textColor:[255,255,255],fontStyle:'bold'},
     footStyles:{fillColor:greenDk,textColor:[255,255,255],fontStyle:'bold'},
     alternateRowStyles:{fillColor:lime},
-    columnStyles:{0:{cellWidth:'auto'},1:{cellWidth:56,halign:'center'},2:{cellWidth:56,halign:'center'},3:{cellWidth:64,halign:'center'},4:{cellWidth:74,halign:'right'},5:{cellWidth:86,halign:'right'}},
+    columnStyles:{0:{cellWidth:'auto'},1:{cellWidth:50,halign:'center'},2:{cellWidth:50,halign:'center'},3:{cellWidth:58,halign:'center'},4:{cellWidth:78,halign:'right'},5:{cellWidth:66,halign:'right'},6:{cellWidth:78,halign:'right'}},
     margin:{left:M,right:M},
     didDrawPage:()=>{
       const ph=doc.internal.pageSize.getHeight();
