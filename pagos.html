@@ -178,6 +178,7 @@
     <div class="stat"><div class="k">Mensajeros</div><div class="v" id="s-mens">0</div></div>
     <div class="stat"><div class="k">Entregas</div><div class="v" id="s-deliv">0</div></div>
     <div class="stat"><div class="k">Recolectas</div><div class="v" id="s-rec">0</div></div>
+    <div class="stat"><div class="k">Gasto recolectas</div><div class="v" id="s-grec">Q0</div></div>
     <div class="stat"><div class="k">Descuentos</div><div class="v" id="s-desc">Q0</div></div>
     <div class="stat"><div class="k">Total a pagar</div><div class="v" id="s-total">Q0</div></div>
     <div class="stat"><div class="k">Costo de envíos</div><div class="v" id="s-costo">Q0</div></div>
@@ -397,12 +398,14 @@ function recompute(){
 function totals(){
   const pago=MENS.reduce((s,m)=>s+m.pago,0);
   const descuentos=MENS.reduce((s,m)=>s+(m.descuento||0),0);
+  const recolectas=MENS.reduce((s,m)=>s+(m.recolectas||0),0);
   const costoEnvios=MENS.reduce((s,m)=>s+m.rows.reduce((a,r)=>a+(+r.costo||0),0),0);
   const pagoBruto=pago+descuentos;   // total sin descuentos (lo que realmente cuesta la mano de obra)
   return {
     mens: MENS.length,
     entregas: MENS.reduce((s,m)=>s+m.entregas,0),
-    recolectas: MENS.reduce((s,m)=>s+(m.recolectas||0),0),
+    recolectas,
+    gastoRecolectas: recolectas*getRateRec(),
     descuentos,
     pago,
     pagoBruto,
@@ -416,6 +419,7 @@ function updateSummary(){
   $('#s-mens').textContent=t.mens;
   $('#s-deliv').textContent=t.entregas.toLocaleString('es-GT');
   $('#s-rec').textContent=t.recolectas.toLocaleString('es-GT');
+  $('#s-grec').textContent=fmtQ(t.gastoRecolectas);
   $('#s-desc').textContent=fmtQ(t.descuentos);
   $('#s-total').textContent=fmtQ(t.pago);
   $('#s-costo').textContent=HAS_PRECIO?fmtQ(t.costoEnvios):'—';
