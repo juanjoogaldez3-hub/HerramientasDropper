@@ -59,6 +59,14 @@
   .empmgr .trow input:disabled{opacity:.4}
   .empmgr .tlibre{display:inline-flex;align-items:center;gap:4px;font-size:.76rem;color:#8a5a00}.empmgr .tlibre input{width:14px;height:14px}
   .view[hidden]{display:none}
+  .tab-badge{display:inline-block;min-width:18px;padding:0 5px;margin-left:5px;border-radius:20px;background:#a3261a;color:#fff;font-size:.72rem;font-weight:800;line-height:18px;text-align:center;vertical-align:middle}
+  .av-ok{background:var(--lime-soft);border:1px solid #c4e3cd;color:var(--green-dk);border-radius:12px;padding:14px 16px;font-weight:600;margin-bottom:14px}
+  .av-sec{margin-bottom:16px}
+  .av-h{font-family:'Sora',sans-serif;font-weight:700;font-size:.95rem;margin-bottom:8px;padding-bottom:5px;border-bottom:2px solid var(--line)}
+  .av-h.bad{color:#a3261a}.av-h.warn{color:#8a5a00}.av-h.gray{color:#5b6b60}
+  .av-items{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:8px}
+  .av-item{display:flex;justify-content:space-between;align-items:center;gap:10px;background:var(--white);border:1px solid var(--line);border-radius:11px;padding:10px 13px;box-shadow:var(--shadow)}
+  .av-item .nm{font-weight:700;color:var(--ink)}.av-item .d{font-size:.8rem;color:var(--muted);text-align:right}
   .howto{font-size:.82rem;color:var(--muted);line-height:1.6}.howto b{color:var(--ink)}
   details.note{margin-top:14px}details.note summary{cursor:pointer;font-size:.85rem;font-weight:600;color:var(--green-dk)}
   .pgrid{display:flex;flex-wrap:wrap;gap:12px;padding:14px 16px}
@@ -108,6 +116,7 @@
     </div>
     <div class="tabs">
       <button data-tab="puncheos" class="active">Puncheos</button>
+      <button data-tab="avisos">Avisos <span class="tab-badge" id="av-badge" hidden>0</span></button>
       <button data-tab="dashboard">Dashboard</button>
       <button data-tab="historial">Historial</button>
       <button data-tab="semanal">Resumen semanal</button>
@@ -116,6 +125,17 @@
   </div>
 
   <div class="status" id="status"></div>
+
+  <!-- ===== AVISOS ===== -->
+  <div class="view" id="v-avisos" hidden>
+    <div class="selrow">
+      <label style="font-size:.84rem;font-weight:600;color:var(--muted)">Día <input type="date" id="av-fecha"></label>
+      <button class="btn btn-ghost" id="av-hoy" style="width:auto;padding:9px 14px;font-size:.86rem">Hoy</button>
+      <span id="av-when" style="font-size:.82rem;color:var(--muted)"></span>
+    </div>
+    <div class="summary" id="av-stats"></div>
+    <div id="av-list"></div>
+  </div>
 
   <!-- ===== DASHBOARD ===== -->
   <div class="view" id="v-dashboard" hidden>
@@ -465,11 +485,62 @@ $('#p-apply').addEventListener('click',renderPuncheos);
 $('#p-today').addEventListener('click',()=>{ $('#p-from').value=todayStr(); $('#p-to').value=todayStr(); renderPuncheos(); });
 function fillPEmp(){ const cur=$('#p-emp').value; $('#p-emp').innerHTML='<option value="">— todos —</option>'+EMP.map(e=>`<option ${e.nombre===cur?'selected':''}>${esc(e.nombre)}</option>`).join(''); }
 
+/* ===== avisos ===== */
+function nowMin(){ const d=new Date(); return d.getHours()*60+d.getMinutes(); }
+async function computeAvisos(fecha){
+  const {marc,act}=await fetchPunch(fecha,fecha,'');
+  const byEmp={}; aggPunch(marc,act).forEach(d=>byEmp[d.empleado]=d);
+  const hoy=fecha===todayStr(), nm=nowMin();
+  const R={faltaEnt:[],tarde:[],faltaSal:[],libres:[],ok:[]};
+  EMP.filter(e=>e.activo!==false).forEach(e=>{
+    const P=progFor(e,fecha);
+    if(P.libre){ R.libres.push(e.nombre); return; }
+    const d=byEmp[e.nombre];
+    const entH=d&&d.ent?hm(d.ent.hora):null, progEnt=hm(P.ent), progSal=hm(P.sal);
+    if(entH==null){
+      if(!hoy) R.faltaEnt.push({nombre:e.nombre,txt:'No marcó entrada',prog:P.ent});
+      else if(progEnt!=null && nm>progEnt+15) R.faltaEnt.push({nombre:e.nombre,txt:'No ha marcado entrada',prog:P.ent});
+      else R.ok.push(e.nombre);
+      return;
+    }
+    let bien=true;
+    if(d.tard>5){ R.tarde.push({nombre:e.nombre,min:d.tard,hora:d.ent.hora}); bien=false; }
+    const salH=d&&d.sal?hm(d.sal.hora):null;
+    if(salH==null){
+      if(!hoy){ R.faltaSal.push({nombre:e.nombre,txt:'No marcó salida'}); bien=false; }
+      else if(progSal!=null && nm>progSal){ R.faltaSal.push({nombre:e.nombre,txt:'No ha marcado salida',prog:P.sal}); bien=false; }
+    }
+    if(bien) R.ok.push(e.nombre);
+  });
+  return R;
+}
+function setAvBadge(n){ const b=$('#av-badge'); if(!b) return; b.textContent=n; b.hidden=n===0; }
+async function updateAvisosBadge(){ if(PREVIEW){ setAvBadge(0); return; } const R=await computeAvisos(todayStr()); setAvBadge(R.faltaEnt.length+R.tarde.length+R.faltaSal.length); }
+async function renderAvisos(){
+  const fecha=$('#av-fecha').value||todayStr();
+  $('#av-when').textContent = fecha===todayStr() ? '· en vivo' : '';
+  if(PREVIEW){ $('#av-list').innerHTML='<div class="empty"><h3>Configurá Supabase para ver los avisos</h3></div>'; $('#av-stats').innerHTML=''; return; }
+  const R=await computeAvisos(fecha);
+  const nAlert=R.faltaEnt.length+R.tarde.length+R.faltaSal.length; setAvBadge(nAlert);
+  $('#av-stats').innerHTML=`<div class="stat"><div class="k">Sin entrada</div><div class="v">${R.faltaEnt.length}</div></div><div class="stat"><div class="k">Tarde</div><div class="v">${R.tarde.length}</div></div><div class="stat"><div class="k">Sin salida</div><div class="v">${R.faltaSal.length}</div></div><div class="stat"><div class="k">Sin novedad</div><div class="v">${R.ok.length}</div></div>`;
+  const sec=(titulo,cls,items,fmt)=> items.length?`<div class="av-sec"><div class="av-h ${cls}">${titulo} · ${items.length}</div><div class="av-items">${items.map(fmt).join('')}</div></div>`:'';
+  let html='';
+  if(!nAlert && (R.faltaEnt.length+R.tarde.length+R.faltaSal.length)===0) html+='<div class="av-ok">✓ Sin avisos para este día — todo en orden.</div>';
+  html+=sec('🔴 Falta marcar entrada','bad',R.faltaEnt,x=>`<div class="av-item"><span class="nm">${esc(x.nombre)}</span><span class="d">${esc(x.txt)}${x.prog?` · entraba ${esc(x.prog)}`:''}</span></div>`);
+  html+=sec('🟡 Llegaron tarde','warn',R.tarde,x=>`<div class="av-item"><span class="nm">${esc(x.nombre)}</span><span class="d">Entró ${esc(String(x.hora).slice(0,5))} ${pill('Tarde '+x.min+'m',tardCls(x.min))}</span></div>`);
+  html+=sec('🟠 Falta marcar salida','warn',R.faltaSal,x=>`<div class="av-item"><span class="nm">${esc(x.nombre)}</span><span class="d">${esc(x.txt)}${x.prog?` · salía ${esc(x.prog)}`:''}</span></div>`);
+  if(R.libres.length) html+=sec('⬜ Día libre','gray',R.libres,n=>`<div class="av-item"><span class="nm">${esc(n)}</span><span class="d">Descanso</span></div>`);
+  $('#av-list').innerHTML=html || '<div class="empty"><h3>Sin empleados activos</h3></div>';
+}
+$('#av-hoy').addEventListener('click',()=>{ $('#av-fecha').value=todayStr(); renderAvisos(); });
+$('#av-fecha').addEventListener('change',renderAvisos);
+
 /* ===== pestañas + init ===== */
 document.querySelectorAll('.tabs button').forEach(b=>b.addEventListener('click',()=>{
   document.querySelectorAll('.tabs button').forEach(x=>x.classList.toggle('active',x===b));
-  const tab=b.dataset.tab; ['puncheos','dashboard','historial','semanal','empleados'].forEach(t=>$('#v-'+t).hidden=(t!==tab));
+  const tab=b.dataset.tab; ['puncheos','avisos','dashboard','historial','semanal','empleados'].forEach(t=>$('#v-'+t).hidden=(t!==tab));
   if(tab==='puncheos'){ fillPEmp(); renderPuncheos(); }
+  if(tab==='avisos') renderAvisos();
   if(tab==='dashboard') renderDashboard();
   if(tab==='historial'){ fillEmpSelect(); renderHistorial(); }
   if(tab==='semanal') renderSemanal();
@@ -479,12 +550,13 @@ $('#logout').addEventListener('click',e=>{ e.preventDefault(); window.dropperAut
 $('#lightbox').addEventListener('click',()=>$('#lightbox').classList.remove('show'));
 $('#w-date').value=todayStr();
 $('#p-from').value=todayStr(); $('#p-to').value=todayStr();
+$('#av-fecha').value=todayStr();
 (async function init(){
   const guard=await window.dropperAuth.requireSession();
   if(guard===null) return;
   if(guard.previewMode){ PREVIEW=true; $('#notice').classList.add('show'); fillPEmp(); renderPuncheos(); return; }
   PREVIEW=false; USER=guard.user; window.dropperNav.setUser(guard.user.email||'');
-  await loadEmp(); fillPEmp(); renderPuncheos();
+  await loadEmp(); fillPEmp(); renderPuncheos(); updateAvisosBadge();
 })();
 </script>
 </body>
