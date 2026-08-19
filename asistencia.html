@@ -144,7 +144,7 @@
 
   <!-- ===== SOLICITUDES ===== -->
   <div class="view" id="v-solicitudes" hidden>
-    <div class="panel" style="padding:16px 18px;margin-bottom:14px">
+    <div class="panel" id="sol-add-panel" style="padding:16px 18px;margin-bottom:14px">
       <h3 style="font-family:'Sora',sans-serif;font-weight:700;font-size:1.02rem;margin-bottom:4px">Registrar permiso / ausencia</h3>
       <div class="howto" style="margin-bottom:12px">Registrá un permiso o ausencia justificada del personal (queda <b>aprobada</b> y silencia el aviso de «falta» en esas fechas). También aprobás aquí lo que el personal envíe desde <b>Marcaje</b>.</div>
       <div class="solform">
@@ -225,7 +225,7 @@
       <h3 style="font-family:'Sora',sans-serif;font-weight:700;font-size:1.05rem;margin-bottom:6px">Empleados y sus horarios</h3>
       <div class="howto" style="margin-bottom:12px">Definí la hora de entrada y salida <b>por defecto</b> de cada empleado. Si tiene <b>horario rotativo</b>, activá «Turnos por día» y ajustá cada día (o marcalo <b>Libre</b>).</div>
       <div class="empmgr" id="emp-list"></div>
-      <div class="row" style="border:none;margin-top:12px;gap:10px">
+      <div class="row" id="emp-add-row" style="border:none;margin-top:12px;gap:10px">
         <input class="nom" id="emp-nombre" placeholder="Nombre del empleado" maxlength="60">
         <input class="hr" id="emp-ent" type="time" value="08:00" title="Entrada">
         <input class="hr" id="emp-sal" type="time" value="17:00" title="Salida">
@@ -241,7 +241,7 @@
 
 <script>
 const $=s=>document.querySelector(s);
-let USER=null, PREVIEW=true;
+let USER=null, PREVIEW=true, IS_ADMIN=false;
 let EMP=[];        // {id,nombre,entrada_prog,salida_prog,activo}
 
 function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
@@ -308,6 +308,7 @@ function renderEmpTab(){
       await loadEmp(); renderEmpTab();
     });
   });
+  if(!IS_ADMIN){ box.querySelectorAll('input').forEach(i=>i.disabled=true); box.querySelectorAll('.em-save,.em-del,.em-turnos-t').forEach(b=>b.style.display='none'); }
 }
 $('#emp-add').addEventListener('click',async()=>{
   if(!window.sb||!USER){ status('Configurá Supabase para guardar empleados.','err'); return; }
@@ -591,9 +592,9 @@ async function renderSolicitudes(){
   $('#sol-list').innerHTML=`<div class="tbl-wrap"><table class="hist"><thead><tr><th>Empleado</th><th>Tipo</th><th>Fechas</th><th>Motivo</th><th>Estado</th><th>Acción</th></tr></thead><tbody>${rows.map(s=>{
     const fechas=fmtDate(s.fecha)+((s.fecha_fin&&s.fecha_fin!==s.fecha)?(' al '+fmtDate(s.fecha_fin)):'');
     const est=s.estado==='aprobada'?pill('Aprobada','ok'):(s.estado==='rechazada'?pill('Rechazada','bad'):pill('Pendiente','warn'));
-    const acc=s.estado==='pendiente'
+    const acc = !IS_ADMIN ? '<span style="color:var(--muted)">—</span>' : (s.estado==='pendiente'
       ? `<button class="btn btn-primary sol-ok" data-id="${s.id}" style="width:auto;padding:5px 10px;font-size:.76rem">Aprobar</button> <button class="btn btn-ghost sol-no" data-id="${s.id}" style="width:auto;padding:5px 10px;font-size:.76rem">Rechazar</button>`
-      : `<button class="x sol-del" data-id="${s.id}">Quitar</button>`;
+      : `<button class="x sol-del" data-id="${s.id}">Quitar</button>`);
     return `<tr><td>${esc(s.empleado)}</td><td>${esc(TIPO_LBL[s.tipo]||s.tipo)}</td><td>${fechas}</td><td>${esc(s.motivo||'—')}</td><td>${est}</td><td>${acc}</td></tr>`;
   }).join('')}</tbody></table></div>`;
   $('#sol-list').querySelectorAll('.sol-ok').forEach(b=>b.addEventListener('click',()=>resolverSol(b.dataset.id,'aprobada')));
@@ -637,8 +638,21 @@ $('#av-fecha').value=todayStr(); $('#sf-desde').value=todayStr();
   if(guard===null) return;
   if(guard.previewMode){ PREVIEW=true; $('#notice').classList.add('show'); fillPEmp(); renderPuncheos(); return; }
   PREVIEW=false; USER=guard.user; window.dropperNav.setUser(guard.user.email||'');
+  IS_ADMIN=await checkAdmin(); applyRole();
   await loadEmp(); fillPEmp(); renderPuncheos(); updateAvisosBadge(); updateSolBadge();
 })();
+const ADMIN_EMAILS=['juanjoogaldez3@gmail.com'];   // respaldo por si la función RPC no responde
+async function checkAdmin(){
+  const byEmail=ADMIN_EMAILS.includes(((USER&&USER.email)||'').toLowerCase());
+  if(!window.sb) return byEmail;
+  try{ const {data,error}=await window.sb.rpc('is_asis_admin'); if(error) throw error; return !!data || byEmail; }
+  catch(e){ console.warn('checkAdmin rpc',e); return byEmail; }
+}
+function applyRole(){
+  if(IS_ADMIN) return;
+  const p=document.getElementById('sol-add-panel'); if(p) p.hidden=true;
+  const r=document.getElementById('emp-add-row'); if(r) r.hidden=true;
+}
 </script>
 </body>
 </html>
