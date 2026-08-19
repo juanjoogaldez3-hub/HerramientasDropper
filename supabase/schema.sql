@@ -412,3 +412,30 @@ create policy "admin_delete" on public.solicitudes for delete to authenticated u
 drop policy if exists "own_delete_pending" on public.solicitudes;
 create policy "own_delete_pending" on public.solicitudes for delete to authenticated
   using (auth.uid() = created_by and estado = 'pendiente');
+
+-- ============================================================
+--  UBICACIÓN en marcajes + configuración de oficina
+-- ============================================================
+alter table public.asistencia_marcajes add column if not exists lat double precision;
+alter table public.asistencia_marcajes add column if not exists lng double precision;
+alter table public.asistencia_marcajes add column if not exists gps_acc integer;   -- exactitud en metros
+
+-- Configuración única de asistencia (ubicación de oficina, radio, tope de refacción).
+create table if not exists public.asistencia_config (
+  id                 int primary key default 1,
+  office_lat         double precision,
+  office_lng         double precision,
+  radio_m            integer not null default 200,
+  refaccion_max_min  integer not null default 60,
+  updated_at         timestamptz not null default now(),
+  updated_by         text,
+  constraint solo_una_fila check (id = 1)
+);
+insert into public.asistencia_config (id) values (1) on conflict (id) do nothing;
+alter table public.asistencia_config enable row level security;
+drop policy if exists "cfg_select" on public.asistencia_config;
+create policy "cfg_select" on public.asistencia_config for select to authenticated using (true);
+drop policy if exists "cfg_update" on public.asistencia_config;
+create policy "cfg_update" on public.asistencia_config for update to authenticated using (public.is_asis_admin()) with check (public.is_asis_admin());
+drop policy if exists "cfg_insert" on public.asistencia_config;
+create policy "cfg_insert" on public.asistencia_config for insert to authenticated with check (public.is_asis_admin());

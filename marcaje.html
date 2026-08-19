@@ -235,6 +235,7 @@ function progHoy(emp){
 }
 function fmtDateLong(){ const d=new Date(); return d.toLocaleDateString('es-GT',{weekday:'long',day:'numeric',month:'long'}); }
 function fmtDMY(s){ const m=String(s||'').match(/(\d{4})-(\d{2})-(\d{2})/); return m?`${m[3]}/${m[2]}/${m[1]}`:s; }
+function getGeo(){ return new Promise(res=>{ if(!navigator.geolocation) return res(null); navigator.geolocation.getCurrentPosition(p=>res({lat:p.coords.latitude,lng:p.coords.longitude,acc:Math.round(p.coords.accuracy)}), ()=>res(null), {enableHighAccuracy:true,timeout:7000,maximumAge:20000}); }); }
 function pill(t,c){ return `<span class="pill ${c}">${t}</span>`; }
 function status(msg,type){ const s=$('#status'); s.className='status show '+(type||''); s.innerHTML=(type==='work'?'<span class="spin"></span>':'')+msg; if(type==='ok') setTimeout(()=>{ if(s.classList.contains('ok')) s.className='status'; },3000); }
 function tardCls(min){ return min<=5?'ok':(min<=15?'warn':'bad'); }
@@ -342,8 +343,9 @@ function renderButtons(){
 async function punch(tipo){
   if(!allowed()[tipo]) return;
   if(TODAY.some(m=>m.tipo===tipo) && !confirm('Ya marcaste "'+TLABEL[tipo]+'" hoy. ¿Marcar de nuevo?')) return;
-  const hora=nowHMS(), fecha=todayStr(), foto=await grabPhoto();
-  const rec={ empleado:MEMP.nombre, fecha, tipo, hora, ts:new Date().toISOString(), foto };
+  const hora=nowHMS(), fecha=todayStr();
+  const [foto,geo]=await Promise.all([grabPhoto(), getGeo()]);
+  const rec={ empleado:MEMP.nombre, fecha, tipo, hora, ts:new Date().toISOString(), foto, lat:geo?geo.lat:null, lng:geo?geo.lng:null, gps_acc:geo?geo.acc:null };
   if(PREVIEW){ TODAY.push(rec); afterPunch(tipo,hora); return; }
   status('Marcando '+TLABEL[tipo]+'…','work');
   try{
@@ -394,7 +396,7 @@ function renderRefaccion(){
   if(rs.length && !rr.length){                       // en refacción → contador en vivo
     box.hidden=false;
     const start=new Date(rs[rs.length-1].ts).getTime();
-    const tick=()=>{ const el=Date.now()-start, min=el/60000; box.className='refbox '+(min>=45?'bad':(min>=30?'warn':'ok')); box.innerHTML=`<span class="reficon">☕</span> En refacción: <b>${fmtDur(el)}</b>${min>=45?' · pasado del tiempo':(min>=30?' · ojo con el tiempo':'')}`; };
+    const tick=()=>{ const el=Date.now()-start, min=el/60000; box.className='refbox '+(min>=60?'bad':(min>=50?'warn':'ok')); box.innerHTML=`<span class="reficon">☕</span> En refacción: <b>${fmtDur(el)}</b> / 1h${min>=60?' · ¡pasado de tu hora!':(min>=50?' · casi 1h':'')}`; };
     tick(); REF_TIMER=setInterval(tick,1000);
   } else if(rs.length && rr.length){                  // refacción terminada → total del día
     box.hidden=false; const mins=Math.max(0,(hm(rr[rr.length-1].hora)||0)-(hm(rs[0].hora)||0));

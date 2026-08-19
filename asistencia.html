@@ -80,6 +80,7 @@
   .pgrid{display:flex;flex-wrap:wrap;gap:12px;padding:14px 16px}
   .pcell{display:flex;flex-direction:column;gap:6px;align-items:center}
   .pcap{font-size:.74rem;color:var(--muted);text-align:center;line-height:1.3}.pcap b{color:var(--ink);font-size:.82rem}
+  .pubi{font-size:.72rem;text-align:center;line-height:1.4}.pubi a{color:var(--green-dk);font-weight:600;text-decoration:none}.pubi a:hover{text-decoration:underline}
   .pthumb{width:96px;height:72px;object-fit:cover;border-radius:10px;border:1px solid var(--line);cursor:pointer}
   .pthumb:hover{border-color:var(--green)}
   .pnoimg{width:96px;height:72px;border-radius:10px;background:#eef1ef;display:flex;align-items:center;justify-content:center;color:#a9b3ac;font-size:.72rem}
@@ -209,6 +210,17 @@
 
   <!-- ===== EMPLEADOS ===== -->
   <div class="view" id="v-empleados" hidden>
+    <div class="panel" id="cfg-panel" style="padding:16px 20px;margin-bottom:14px">
+      <h3 style="font-family:'Sora',sans-serif;font-weight:700;font-size:1.02rem;margin-bottom:4px">Ubicación de la oficina y reglas</h3>
+      <div class="howto" style="margin-bottom:12px">Definí dónde está la oficina para medir la distancia de cada marca (así ves si alguien marcó lejos). <b>Parate en la oficina</b> y tocá «Usar mi ubicación actual».</div>
+      <div class="solform">
+        <button class="btn btn-ghost" id="cfg-geo" style="width:auto">📍 Usar mi ubicación actual como oficina</button>
+        <span id="cfg-office" style="font-size:.82rem;color:var(--muted)"></span>
+        <label>Radio permitido (m) <input type="number" id="cfg-radio" min="20" step="10" style="width:80px"></label>
+        <label>Refacción máx (min) <input type="number" id="cfg-refmax" min="10" step="5" style="width:80px"></label>
+        <button class="btn btn-primary" id="cfg-save" style="width:auto">Guardar reglas</button>
+      </div>
+    </div>
     <div class="panel" style="padding:18px 20px">
       <h3 style="font-family:'Sora',sans-serif;font-weight:700;font-size:1.05rem;margin-bottom:6px">Empleados y sus horarios</h3>
       <div class="howto" style="margin-bottom:12px">Definí la hora de entrada y salida <b>por defecto</b> de cada empleado. Si tiene <b>horario rotativo</b>, activá «Turnos por día» y ajustá cada día (o marcalo <b>Libre</b>).</div>
@@ -230,7 +242,16 @@
 <script>
 const $=s=>document.querySelector(s);
 let USER=null, PREVIEW=true, IS_ADMIN=false;
+let CONFIG={office_lat:null,office_lng:null,radio_m:200,refaccion_max_min:60};
 let EMP=[];        // {id,nombre,entrada_prog,salida_prog,activo}
+async function loadConfig(){ if(!window.sb) return; try{ const {data}=await window.sb.from('asistencia_config').select('*').eq('id',1).maybeSingle(); if(data) CONFIG={...CONFIG,...data}; }catch(e){ console.warn('config',e); } }
+function distM(lat,lng){ if(CONFIG.office_lat==null||lat==null) return null; const R=6371000,toR=x=>x*Math.PI/180; const dLa=toR(lat-CONFIG.office_lat),dLo=toR(lng-CONFIG.office_lng); const a=Math.sin(dLa/2)**2+Math.cos(toR(CONFIG.office_lat))*Math.cos(toR(lat))*Math.sin(dLo/2)**2; return Math.round(R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a))); }
+function ubiHTML(m){
+  if(m.lat==null) return '<span style="color:#a9b3ac">sin ubicación</span>';
+  const d=distM(m.lat,m.lng); const url=`https://maps.google.com/?q=${m.lat},${m.lng}`;
+  let tag=''; if(d!=null){ const lejos=d>(CONFIG.radio_m||200); tag=' '+`<span class="pill ${lejos?'bad':'ok'}">${lejos?'lejos':'en oficina'} · ${d} m</span>`; }
+  return `<a href="${url}" target="_blank" rel="noopener">📍 ver mapa</a>${tag}${m.gps_acc?` <span style="color:#a9b3ac">±${m.gps_acc}m</span>`:''}`;
+}
 
 function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
 function Q(n){ return 'Q'+Number(n||0).toLocaleString('es-GT',{minimumFractionDigits:2,maximumFractionDigits:2}); }
@@ -305,6 +326,29 @@ $('#emp-add').addEventListener('click',async()=>{
   const {error}=await window.sb.from('empleados_oficina').insert({nombre,entrada_prog:$('#emp-ent').value,salida_prog:$('#emp-sal').value,horario:null,horas_req:8,created_by:USER.id});
   if(error){ status('No se pudo agregar: '+error.message,'err'); return; }
   $('#emp-nombre').value=''; await loadEmp(); renderEmpTab(); status('✓ Empleado agregado.','ok');
+});
+
+/* ===== configuración (oficina + reglas) ===== */
+let CFG_GEO=null;
+function getGeoA(){ return new Promise(res=>{ if(!navigator.geolocation) return res(null); navigator.geolocation.getCurrentPosition(p=>res({lat:p.coords.latitude,lng:p.coords.longitude,acc:Math.round(p.coords.accuracy)}), ()=>res(null), {enableHighAccuracy:true,timeout:8000,maximumAge:10000}); }); }
+function renderCfg(){
+  CFG_GEO=null;
+  $('#cfg-radio').value=CONFIG.radio_m||200;
+  $('#cfg-refmax').value=CONFIG.refaccion_max_min||60;
+  $('#cfg-office').textContent = CONFIG.office_lat!=null ? `Oficina: ${(+CONFIG.office_lat).toFixed(5)}, ${(+CONFIG.office_lng).toFixed(5)}` : 'Oficina: sin definir';
+}
+$('#cfg-geo').addEventListener('click',async()=>{
+  status('Obteniendo ubicación…','work'); const g=await getGeoA();
+  if(!g){ status('No se pudo obtener la ubicación (permiso denegado o sin GPS).','err'); return; }
+  CFG_GEO=g; $('#cfg-office').textContent=`Nueva: ${g.lat.toFixed(5)}, ${g.lng.toFixed(5)} (±${g.acc}m) — tocá Guardar`; status('✓ Ubicación tomada. Guardá para aplicar.','ok');
+});
+$('#cfg-save').addEventListener('click',async()=>{
+  if(!window.sb||!USER){ status('Iniciá sesión.','err'); return; }
+  const upd={ radio_m:parseInt($('#cfg-radio').value)||200, refaccion_max_min:parseInt($('#cfg-refmax').value)||60, updated_at:new Date().toISOString(), updated_by:USER.email||null };
+  if(CFG_GEO){ upd.office_lat=CFG_GEO.lat; upd.office_lng=CFG_GEO.lng; }
+  const {error}=await window.sb.from('asistencia_config').update(upd).eq('id',1);
+  if(error){ status('No se pudo guardar: '+error.message,'err'); return; }
+  CONFIG={...CONFIG,...upd}; renderCfg(); status('✓ Reglas guardadas.','ok');
 });
 
 /* ===== dashboard (deriva de los puncheos) ===== */
@@ -484,7 +528,7 @@ function punchDetail(d){
   const ms=[...d.marc].sort((a,b)=>String(a.ts).localeCompare(String(b.ts)));
   const fotos=ms.map(m=>{
     const img=m.foto?`<img class="pthumb" src="${m.foto}" data-full="${m.foto}" alt="foto">`:`<div class="pnoimg">sin foto</div>`;
-    return `<div class="pcell"><div class="pcap">${P_TEMOJI[m.tipo]||'•'} ${esc(P_TLABEL[m.tipo]||m.tipo)}<br><b>${esc(String(m.hora).slice(0,8))}</b></div>${img}</div>`;
+    return `<div class="pcell"><div class="pcap">${P_TEMOJI[m.tipo]||'•'} ${esc(P_TLABEL[m.tipo]||m.tipo)}<br><b>${esc(String(m.hora).slice(0,8))}</b></div>${img}<div class="pubi">${ubiHTML(m)}</div></div>`;
   }).join('');
   let actInfo=`<div class="pact"><b>Actividad:</b> última señal ${hhmm(d.ultimo)} · inactividad ${d.inact} min`;
   if(d.eventos&&d.eventos.length) actInfo+=' · pausas: '+d.eventos.map(e=>`${hhmm(e.desde)}–${hhmm(e.hasta)} (${e.min}m)`).join(', ');
@@ -510,7 +554,7 @@ async function computeAvisos(fecha){
   const byEmp={}; aggPunch(marc,act).forEach(d=>byEmp[d.empleado]=d);
   const just=await justificadosDe(fecha);
   const hoy=fecha===todayStr(), nm=nowMin();
-  const R={faltaEnt:[],tarde:[],faltaSal:[],incompletas:[],libres:[],justificados:[],ok:[]};
+  const R={faltaEnt:[],tarde:[],faltaSal:[],incompletas:[],refExcedida:[],libres:[],justificados:[],ok:[]};
   EMP.filter(e=>e.activo!==false).forEach(e=>{
     const P=progFor(e,fecha);
     if(P.libre){ R.libres.push(e.nombre); return; }
@@ -533,18 +577,20 @@ async function computeAvisos(fecha){
       const req=(e.horas_req!=null?+e.horas_req:8), faltanH=req-(d.horas||0);
       if(faltanH>0.25 && !just.salida.has(e.nombre)){ R.incompletas.push({nombre:e.nombre,faltan:Math.round(faltanH*60),req,netas:d.horas}); bien=false; }
     }
+    const maxRef=CONFIG.refaccion_max_min||60;
+    if(d.refMin>maxRef){ R.refExcedida.push({nombre:e.nombre,min:d.refMin,max:maxRef}); bien=false; }
     if(bien) R.ok.push(e.nombre);
   });
   return R;
 }
 function setAvBadge(n){ const b=$('#av-badge'); if(!b) return; b.textContent=n; b.hidden=n===0; }
-async function updateAvisosBadge(){ if(PREVIEW){ setAvBadge(0); return; } const R=await computeAvisos(todayStr()); setAvBadge(R.faltaEnt.length+R.tarde.length+R.faltaSal.length+R.incompletas.length); }
+async function updateAvisosBadge(){ if(PREVIEW){ setAvBadge(0); return; } const R=await computeAvisos(todayStr()); setAvBadge(R.faltaEnt.length+R.tarde.length+R.faltaSal.length+R.incompletas.length+R.refExcedida.length); }
 async function renderAvisos(){
   const fecha=$('#p-to').value||todayStr();
   $('#av-when').textContent = 'del '+fmtDate(fecha)+(fecha===todayStr()?' · en vivo':'');
   if(PREVIEW){ $('#av-list').innerHTML='<div class="empty"><h3>Configurá Supabase para ver los avisos</h3></div>'; $('#av-stats').innerHTML=''; return; }
   const R=await computeAvisos(fecha);
-  const nAlert=R.faltaEnt.length+R.tarde.length+R.faltaSal.length+R.incompletas.length; setAvBadge(nAlert);
+  const nAlert=R.faltaEnt.length+R.tarde.length+R.faltaSal.length+R.incompletas.length+R.refExcedida.length; setAvBadge(nAlert);
   $('#av-stats').innerHTML=`<div class="stat"><div class="k">Sin entrada</div><div class="v">${R.faltaEnt.length}</div></div><div class="stat"><div class="k">Tarde</div><div class="v">${R.tarde.length}</div></div><div class="stat"><div class="k">Sin salida</div><div class="v">${R.faltaSal.length}</div></div><div class="stat"><div class="k">Horas incompletas</div><div class="v">${R.incompletas.length}</div></div><div class="stat"><div class="k">Sin novedad</div><div class="v">${R.ok.length}</div></div>`;
   const sec=(titulo,cls,items,fmt)=> items.length?`<div class="av-sec"><div class="av-h ${cls}">${titulo} · ${items.length}</div><div class="av-items">${items.map(fmt).join('')}</div></div>`:'';
   let html='';
@@ -553,6 +599,7 @@ async function renderAvisos(){
   html+=sec('🟡 Llegaron tarde','warn',R.tarde,x=>`<div class="av-item"><span class="nm">${esc(x.nombre)}</span><span class="d">Entró ${esc(String(x.hora).slice(0,5))} ${pill('Tarde '+x.min+'m',tardCls(x.min))}</span></div>`);
   html+=sec('🟠 Falta marcar salida','warn',R.faltaSal,x=>`<div class="av-item"><span class="nm">${esc(x.nombre)}</span><span class="d">${esc(x.txt)}${x.prog?` · salía ${esc(x.prog)}`:''}</span></div>`);
   html+=sec('🔴 Horas incompletas','bad',R.incompletas,x=>`<div class="av-item"><span class="nm">${esc(x.nombre)}</span><span class="d">Hizo ${f1(x.netas)}h de ${f1(x.req)}h ${pill('faltan '+x.faltan+'m','bad')}</span></div>`);
+  html+=sec('🟠 Refacción excedida','warn',R.refExcedida,x=>`<div class="av-item"><span class="nm">${esc(x.nombre)}</span><span class="d">${x.min}m de refacción ${pill('+'+(x.min-x.max)+'m','bad')}</span></div>`);
   if(R.justificados.length) html+=sec('🟢 Justificados (permiso/ausencia)','ok',R.justificados,n=>`<div class="av-item"><span class="nm">${esc(n)}</span><span class="d">Aprobado</span></div>`);
   if(R.libres.length) html+=sec('⬜ Día libre','gray',R.libres,n=>`<div class="av-item"><span class="nm">${esc(n)}</span><span class="d">Descanso</span></div>`);
   $('#av-list').innerHTML=html || '<div class="empty"><h3>Sin empleados activos</h3></div>';
@@ -617,7 +664,7 @@ document.querySelectorAll('.tabs button').forEach(b=>b.addEventListener('click',
   if(tab==='dia'){ fillPEmp(); renderDia(); }
   if(tab==='reportes') renderDashboard();
   if(tab==='solicitudes') renderSolicitudes();
-  if(tab==='empleados') renderEmpTab();
+  if(tab==='empleados'){ renderEmpTab(); renderCfg(); }
 }));
 $('#logout').addEventListener('click',e=>{ e.preventDefault(); window.dropperAuth.signOut(); });
 $('#lightbox').addEventListener('click',()=>$('#lightbox').classList.remove('show'));
@@ -631,6 +678,7 @@ $('#sf-desde').value=todayStr();
   if(guard.previewMode){ PREVIEW=true; $('#notice').classList.add('show'); fillPEmp(); renderDia(); return; }
   PREVIEW=false; USER=guard.user; window.dropperNav.setUser(guard.user.email||'');
   IS_ADMIN=await checkAdmin(); applyRole();
+  await loadConfig();
   await loadEmp(); fillPEmp(); renderDia(); updateSolBadge();
 })();
 const ADMIN_EMAILS=['juanjoogaldez3@gmail.com'];   // respaldo por si la función RPC no responde
@@ -644,6 +692,7 @@ function applyRole(){
   if(IS_ADMIN) return;
   const p=document.getElementById('sol-add-panel'); if(p) p.hidden=true;
   const r=document.getElementById('emp-add-row'); if(r) r.hidden=true;
+  const c=document.getElementById('cfg-panel'); if(c) c.hidden=true;
 }
 </script>
 </body>
