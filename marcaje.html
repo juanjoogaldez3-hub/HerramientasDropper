@@ -47,6 +47,13 @@
   .pbtn.t-in{background:linear-gradient(135deg,#1f7a3d,#2fa356)}
   .pbtn.t-ref{background:linear-gradient(135deg,#c98a00,#e0a500)}
   .pbtn.t-out{background:linear-gradient(135deg,#0c0f0d,#334036)}
+  .refbox{text-align:center;font-size:1rem;font-weight:700;border-radius:12px;padding:11px 14px}
+  .refbox b{font-family:'Sora',sans-serif;font-size:1.15rem}.refbox .reficon{margin-right:4px}
+  .refbox.ok{background:#e6f0fb;color:#0b5aa6;border:1px solid #bcd8f2}
+  .refbox.warn{background:#fdf6e3;color:#8a5a00;border:1px solid #f0e2b6}
+  .refbox.bad{background:#fdecea;color:#a3261a;border:1px solid #f5c6c0;animation:pulse 1.4s infinite}
+  .refbox.done{background:#eef1ef;color:#5b6b60;border:1px solid #dfe4e0;font-size:.88rem;font-weight:600}
+  @keyframes pulse{50%{opacity:.55}}
   .jornada{text-align:center;font-size:.9rem;color:var(--muted);padding:8px}
   .jornada b{color:var(--green-dk)}
 
@@ -155,6 +162,7 @@
         </div>
         <div class="cam-msg" id="cam-msg"></div>
         <div class="btns" id="btns"></div>
+        <div class="refbox" id="refbox" hidden></div>
         <div class="jornada" id="jornada"></div>
       </div>
 
@@ -192,7 +200,7 @@
 <script>
 const $=s=>document.querySelector(s);
 let USER=null, PREVIEW=true, EMP=[], MEMP=null, TODAY=[];
-let STREAM=null, CAM_OK=false;
+let STREAM=null, CAM_OK=false, REF_TIMER=null;
 let ACT={primer_latido:null,ultimo_latido:null,inactividad_min:0,eventos:[]};
 
 const TIPOS=[
@@ -244,7 +252,7 @@ $('#setup-ok').addEventListener('click',async()=>{
   const n=$('#setup-sel').value; if(!n){ status('No hay empleados. Dalos de alta en Asistencia → Empleados.','err'); return; }
   saveEmpName(n); await enterPanel();
 });
-$('#who-change').addEventListener('click',()=>{ stopHeartbeat(); showSetup(); });
+$('#who-change').addEventListener('click',()=>{ stopHeartbeat(); if(REF_TIMER){clearInterval(REF_TIMER);REF_TIMER=null;} showSetup(); });
 
 async function enterPanel(){
   const name=savedEmpName();
@@ -258,7 +266,7 @@ async function enterPanel(){
   $('#ms-desde').value=todayStr();
   await startCam();
   await loadToday();
-  renderButtons(); renderTimeline();
+  renderButtons(); renderTimeline(); renderRefaccion();
   if(!PREVIEW){ await loadAct(); startHeartbeat(); renderAct(); loadMisSol(); }
 }
 
@@ -322,7 +330,7 @@ async function punch(tipo){
   }catch(err){ console.error(err); status('No se pudo marcar: '+err.message,'err'); }
 }
 function afterPunch(tipo,hora){
-  renderButtons(); renderTimeline();
+  renderButtons(); renderTimeline(); renderRefaccion();
   let extra='';
   const ph=progHoy(MEMP); if(tipo==='entrada' && ph.ent && !ph.libre){ const t=Math.max(0,(hm(hora)||0)-(hm(ph.ent)||0)); extra=' · '+(t>0?('llegaste '+t+' min tarde'):'a tiempo'); }
   status('✓ '+TLABEL[tipo]+' marcada a las '+hora.slice(0,5)+extra,'ok');
@@ -351,6 +359,24 @@ function renderTimeline(){
   box.querySelectorAll('.lb-open').forEach(i=>i.addEventListener('click',()=>{ $('#lb-img').src=i.src; $('#lightbox').classList.add('show'); }));
 }
 $('#lightbox').addEventListener('click',()=>$('#lightbox').classList.remove('show'));
+
+/* ===== contador de refacción ===== */
+function fmtDur(ms){ const s=Math.max(0,Math.floor(ms/1000)),p=x=>String(x).padStart(2,'0'); const h=Math.floor(s/3600),m=Math.floor((s%3600)/60),ss=s%60; return (h?h+':':'')+p(m)+':'+p(ss); }
+function renderRefaccion(){
+  const box=$('#refbox'); if(!box) return;
+  if(REF_TIMER){ clearInterval(REF_TIMER); REF_TIMER=null; }
+  const rs=TODAY.filter(m=>m.tipo==='refaccion_salida').sort((a,b)=>String(a.ts).localeCompare(String(b.ts)));
+  const rr=TODAY.filter(m=>m.tipo==='refaccion_regreso').sort((a,b)=>String(a.ts).localeCompare(String(b.ts)));
+  if(rs.length && !rr.length){                       // en refacción → contador en vivo
+    box.hidden=false;
+    const start=new Date(rs[rs.length-1].ts).getTime();
+    const tick=()=>{ const el=Date.now()-start, min=el/60000; box.className='refbox '+(min>=45?'bad':(min>=30?'warn':'ok')); box.innerHTML=`<span class="reficon">☕</span> En refacción: <b>${fmtDur(el)}</b>${min>=45?' · pasado del tiempo':(min>=30?' · ojo con el tiempo':'')}`; };
+    tick(); REF_TIMER=setInterval(tick,1000);
+  } else if(rs.length && rr.length){                  // refacción terminada → total del día
+    box.hidden=false; const mins=Math.max(0,(hm(rr[rr.length-1].hora)||0)-(hm(rs[0].hora)||0));
+    box.className='refbox done'; box.innerHTML=`<span class="reficon">☕</span> Refacción de hoy: <b>${mins} min</b>`;
+  } else { box.hidden=true; }
+}
 
 /* ===== actividad: latido + inactividad ===== */
 const IDLE_MS=5*60*1000;
