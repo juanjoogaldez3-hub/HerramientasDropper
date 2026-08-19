@@ -152,6 +152,7 @@
         <select id="sf-tipo">
           <option value="ausencia">Ausencia justificada</option>
           <option value="permiso">Permiso</option>
+          <option value="entrada_tarde">Entrada tarde</option>
           <option value="cambio_turno">Cambio de turno</option>
           <option value="otro">Otro</option>
         </select>
@@ -519,11 +520,11 @@ function fillPEmp(){ const cur=$('#p-emp').value; $('#p-emp').innerHTML='<option
 /* ===== avisos ===== */
 function nowMin(){ const d=new Date(); return d.getHours()*60+d.getMinutes(); }
 async function justificadosDe(fecha){
-  if(!window.sb) return new Set();
+  if(!window.sb) return {full:new Set(),tarde:new Set()};
   const {data}=await window.sb.from('solicitudes').select('empleado,tipo,fecha,fecha_fin,estado').eq('estado','aprobada').limit(1000);
-  const set=new Set();
-  (data||[]).forEach(s=>{ if(!['ausencia','permiso'].includes(s.tipo)) return; const fin=s.fecha_fin||s.fecha; if(s.fecha<=fecha && fecha<=fin) set.add(s.empleado); });
-  return set;
+  const full=new Set(), tarde=new Set();
+  (data||[]).forEach(s=>{ const fin=s.fecha_fin||s.fecha; if(!(s.fecha<=fecha && fecha<=fin)) return; if(['ausencia','permiso'].includes(s.tipo)) full.add(s.empleado); else if(s.tipo==='entrada_tarde') tarde.add(s.empleado); });
+  return {full,tarde};
 }
 async function computeAvisos(fecha){
   const {marc,act}=await fetchPunch(fecha,fecha,'');
@@ -534,7 +535,7 @@ async function computeAvisos(fecha){
   EMP.filter(e=>e.activo!==false).forEach(e=>{
     const P=progFor(e,fecha);
     if(P.libre){ R.libres.push(e.nombre); return; }
-    if(just.has(e.nombre)){ R.justificados.push(e.nombre); return; }
+    if(just.full.has(e.nombre)){ R.justificados.push(e.nombre); return; }
     const d=byEmp[e.nombre];
     const entH=d&&d.ent?hm(d.ent.hora):null, progEnt=hm(P.ent), progSal=hm(P.sal);
     if(entH==null){
@@ -544,7 +545,7 @@ async function computeAvisos(fecha){
       return;
     }
     let bien=true;
-    if(d.tard>5){ R.tarde.push({nombre:e.nombre,min:d.tard,hora:d.ent.hora}); bien=false; }
+    if(d.tard>5 && !just.tarde.has(e.nombre)){ R.tarde.push({nombre:e.nombre,min:d.tard,hora:d.ent.hora}); bien=false; }
     const salH=d&&d.sal?hm(d.sal.hora):null;
     if(salH==null){
       if(!hoy){ R.faltaSal.push({nombre:e.nombre,txt:'No marcó salida'}); bien=false; }
@@ -577,7 +578,7 @@ $('#av-hoy').addEventListener('click',()=>{ $('#av-fecha').value=todayStr(); ren
 $('#av-fecha').addEventListener('change',renderAvisos);
 
 /* ===== solicitudes ===== */
-const TIPO_LBL={ausencia:'Ausencia justificada',permiso:'Permiso',cambio_turno:'Cambio de turno',otro:'Otro'};
+const TIPO_LBL={ausencia:'Ausencia justificada',permiso:'Permiso',entrada_tarde:'Entrada tarde',cambio_turno:'Cambio de turno',otro:'Otro'};
 let SOL=[];
 async function loadSol(){ SOL=[]; if(!window.sb) return; const {data}=await window.sb.from('solicitudes').select('*').order('created_at',{ascending:false}).limit(500); SOL=data||[]; }
 function solBadge(){ const n=SOL.filter(s=>s.estado==='pendiente').length; const b=$('#sol-badge'); if(b){ b.textContent=n; b.hidden=n===0; } }
