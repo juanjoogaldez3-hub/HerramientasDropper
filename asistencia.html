@@ -304,19 +304,32 @@ $('#emp-add').addEventListener('click',async()=>{
 });
 
 /* ===== dashboard (deriva de los puncheos) ===== */
-function punchDaysToRegs(days){
-  return days.map(d=>({
-    empleado:d.empleado, fecha:d.fecha,
-    entrada_prog: (d.libre?'Libre':progFor(empByName(d.empleado),d.fecha).ent),
-    entrada_real: d.ent?String(d.ent.hora).slice(0,5):null,
-    salida_real: d.sal?String(d.sal.hora).slice(0,5):null,
-    tardanza_min: d.tard, horas: d.horas, ausente:false
-  }));
+// Solicitudes aprobadas que justifican una tardanza (entrada tarde, permiso, ausencia).
+async function loadJustAll(){
+  if(!window.sb) return [];
+  const {data}=await window.sb.from('solicitudes').select('empleado,tipo,fecha,fecha_fin,estado').eq('estado','aprobada').limit(2000);
+  return (data||[]).filter(s=>['ausencia','permiso','entrada_tarde'].includes(s.tipo));
+}
+function justificaTardanza(list,emp,fecha){
+  return (list||[]).some(s=> s.empleado===emp && s.fecha<=fecha && fecha<=(s.fecha_fin||s.fecha));
+}
+function punchDaysToRegs(days,just){
+  return days.map(d=>{
+    const jt=justificaTardanza(just,d.empleado,d.fecha);
+    return {
+      empleado:d.empleado, fecha:d.fecha,
+      entrada_prog: (d.libre?'Libre':progFor(empByName(d.empleado),d.fecha).ent),
+      entrada_real: d.ent?String(d.ent.hora).slice(0,5):null,
+      salida_real: d.sal?String(d.sal.hora).slice(0,5):null,
+      tardanza_min: jt?0:d.tard, horas: d.horas, ausente:false, justificado:jt
+    };
+  });
 }
 async function fetchRange(from,to){
   if(!window.sb) return [];
   const {marc,act}=await fetchPunch(from,to,'');
-  return punchDaysToRegs(aggPunch(marc,act));
+  const just=await loadJustAll();
+  return punchDaysToRegs(aggPunch(marc,act),just);
 }
 let D_REGS=[], D_SORT={key:'punt',dir:1};
 async function renderDashboard(){
@@ -354,7 +367,7 @@ function renderDTable(){
 function dayDetail(days){
   const ds=[...days].sort((a,b)=>b.fecha.localeCompare(a.fecha));
   return `<table class="hist"><thead><tr><th>Fecha</th><th>Entrada</th><th>Salida</th><th>Estado</th><th>Horas</th></tr></thead><tbody>${ds.map(r=>{
-    const est=r.ausente?pill('Ausente','gray'):(r.entrada_real?pill(r.tardanza_min>0?'Tarde '+r.tardanza_min+'m':'A tiempo',tardCls(r.tardanza_min)):pill('Sin marcar','gray'));
+    const est=r.ausente?pill('Ausente','gray'):(r.entrada_real?(r.justificado?pill('Justificado','ok'):pill(r.tardanza_min>0?'Tarde '+r.tardanza_min+'m':'A tiempo',tardCls(r.tardanza_min))):pill('Sin marcar','gray'));
     return `<tr><td>${fmtDate(r.fecha)}</td><td>${esc(r.entrada_real||'—')}</td><td>${esc(r.salida_real||'—')}</td><td>${est}</td><td class="num">${f1(r.horas)}</td></tr>`;
   }).join('')}</tbody></table>`;
 }
@@ -441,11 +454,13 @@ async function renderPuncheos(){
   if(PREVIEW){ $('#p-table').innerHTML='<div class="empty"><h3>Configurá Supabase para ver los puncheos</h3></div>'; $('#p-stats').innerHTML=''; return; }
   const {marc,act}=await fetchPunch($('#p-from').value,$('#p-to').value,$('#p-emp').value);
   P_DAYS=aggPunch(marc,act);
-  const totH=P_DAYS.reduce((s,d)=>s+d.horas,0), tardN=P_DAYS.filter(d=>d.tard>5).length, inN=P_DAYS.reduce((s,d)=>s+d.inact,0);
+  const just=await loadJustAll();
+  P_DAYS.forEach(d=>{ d.jt=justificaTardanza(just,d.empleado,d.fecha); });
+  const totH=P_DAYS.reduce((s,d)=>s+d.horas,0), tardN=P_DAYS.filter(d=>d.tard>5 && !d.jt).length, inN=P_DAYS.reduce((s,d)=>s+d.inact,0);
   $('#p-stats').innerHTML=`<div class="stat"><div class="k">Jornadas</div><div class="v">${P_DAYS.length}</div></div><div class="stat"><div class="k">Horas netas</div><div class="v">${f1(totH)}</div></div><div class="stat"><div class="k">Días con tardanza</div><div class="v">${tardN}</div></div><div class="stat"><div class="k">Inactividad total</div><div class="v">${inN}m</div></div>`;
   if(!P_DAYS.length){ $('#p-table').innerHTML='<div class="empty"><h3>Sin puncheos en el período</h3><p>Las marcas se registran desde la herramienta <b>Marcaje</b>.</p></div>'; return; }
   const body=P_DAYS.map((d,i)=>{
-    const estT=d.ent?pill(d.tard>0?('Tarde '+d.tard+'m'):'A tiempo',tardCls(d.tard)):pill('Sin entrada','gray');
+    const estT=d.ent?(d.jt?pill('Justificado','ok'):pill(d.tard>0?('Tarde '+d.tard+'m'):'A tiempo',tardCls(d.tard))):pill('Sin entrada','gray');
     const inact=d.inact>0?pill(d.inact+'m',d.inact<=15?'ok':(d.inact<=45?'warn':'bad')):'—';
     const cierre=d.cerrada?'':pill('sin salida','warn');
     return `<tr class="drow" data-i="${i}"><td><span class="dcaret">▸</span>${fmtDate(d.fecha)}</td>
