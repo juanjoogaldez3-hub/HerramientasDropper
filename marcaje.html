@@ -81,6 +81,8 @@
   .solform input[type=text]{min-width:170px;flex:1}
   .ms-list{margin-top:12px;display:flex;flex-direction:column;gap:6px}
   .ms-item{display:flex;justify-content:space-between;align-items:center;gap:10px;font-size:.84rem;color:var(--ink);border-top:1px solid var(--line);padding-top:7px}
+  .ms-right{display:inline-flex;align-items:center;gap:8px;white-space:nowrap}
+  .ms-cancel{border:none;background:#fdecea;color:#a3261a;border-radius:8px;padding:4px 9px;cursor:pointer;font-weight:600;font-size:.76rem}
   .ms-empty{font-size:.82rem;color:var(--muted)}
   .view[hidden]{display:none}
 </style>
@@ -409,8 +411,15 @@ async function loadMisSol(){
   $('#ms-list').innerHTML=rows.map(s=>{
     const fechas=fmtDMY(s.fecha)+((s.fecha_fin&&s.fecha_fin!==s.fecha)?(' al '+fmtDMY(s.fecha_fin)):'');
     const est=s.estado==='aprobada'?pill('Aprobada','ok'):(s.estado==='rechazada'?pill('Rechazada','bad'):pill('Pendiente','warn'));
-    return `<div class="ms-item"><span>${esc(MS_TIPO[s.tipo]||s.tipo)} · ${fechas}${s.motivo?(' · '+esc(s.motivo)):''}</span>${est}</div>`;
+    const cancel=s.estado==='pendiente'?` <button class="ms-cancel" data-id="${s.id}">Cancelar</button>`:'';
+    return `<div class="ms-item"><span>${esc(MS_TIPO[s.tipo]||s.tipo)} · ${fechas}${s.motivo?(' · '+esc(s.motivo)):''}</span><span class="ms-right">${est}${cancel}</span></div>`;
   }).join('');
+  $('#ms-list').querySelectorAll('.ms-cancel').forEach(b=>b.addEventListener('click',async()=>{
+    if(!confirm('¿Cancelar esta solicitud?')) return;
+    const {error}=await window.sb.from('solicitudes').delete().eq('id',b.dataset.id);
+    if(error){ status('No se pudo cancelar: '+error.message,'err'); return; }
+    status('✓ Solicitud cancelada.','ok'); loadMisSol();
+  }));
 }
 $('#ms-send').addEventListener('click',async()=>{
   if(PREVIEW||!window.sb||!USER){ status('No se puede enviar en modo vista previa.','err'); return; }

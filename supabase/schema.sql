@@ -406,3 +406,8 @@ drop policy if exists "admin_update" on public.solicitudes;
 create policy "admin_update" on public.solicitudes for update to authenticated using (public.is_asis_admin()) with check (public.is_asis_admin());
 drop policy if exists "admin_delete" on public.solicitudes;
 create policy "admin_delete" on public.solicitudes for delete to authenticated using (public.is_asis_admin());
+
+-- El empleado puede cancelar (borrar) SOLO su propia solicitud si aún está pendiente.
+drop policy if exists "own_delete_pending" on public.solicitudes;
+create policy "own_delete_pending" on public.solicitudes for delete to authenticated
+  using (auth.uid() = created_by and estado = 'pendiente');

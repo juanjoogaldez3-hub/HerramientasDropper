@@ -592,9 +592,11 @@ async function renderSolicitudes(){
   $('#sol-list').innerHTML=`<div class="tbl-wrap"><table class="hist"><thead><tr><th>Empleado</th><th>Tipo</th><th>Fechas</th><th>Motivo</th><th>Estado</th><th>Acción</th></tr></thead><tbody>${rows.map(s=>{
     const fechas=fmtDate(s.fecha)+((s.fecha_fin&&s.fecha_fin!==s.fecha)?(' al '+fmtDate(s.fecha_fin)):'');
     const est=s.estado==='aprobada'?pill('Aprobada','ok'):(s.estado==='rechazada'?pill('Rechazada','bad'):pill('Pendiente','warn'));
-    const acc = !IS_ADMIN ? '<span style="color:var(--muted)">—</span>' : (s.estado==='pendiente'
-      ? `<button class="btn btn-primary sol-ok" data-id="${s.id}" style="width:auto;padding:5px 10px;font-size:.76rem">Aprobar</button> <button class="btn btn-ghost sol-no" data-id="${s.id}" style="width:auto;padding:5px 10px;font-size:.76rem">Rechazar</button>`
-      : `<button class="x sol-del" data-id="${s.id}">Quitar</button>`);
+    const bOk=`<button class="btn btn-primary sol-ok" data-id="${s.id}" style="width:auto;padding:5px 10px;font-size:.76rem">Aprobar</button>`;
+    const bNo=`<button class="btn btn-ghost sol-no" data-id="${s.id}" style="width:auto;padding:5px 10px;font-size:.76rem">Rechazar</button>`;
+    const bDel=`<button class="x sol-del" data-id="${s.id}">Quitar</button>`;
+    let acc='<span style="color:var(--muted)">—</span>';
+    if(IS_ADMIN){ if(s.estado==='pendiente') acc=bOk+' '+bNo+' '+bDel; else if(s.estado==='aprobada') acc=bNo+' '+bDel; else acc=bOk+' '+bDel; }
     return `<tr><td>${esc(s.empleado)}</td><td>${esc(TIPO_LBL[s.tipo]||s.tipo)}</td><td>${fechas}</td><td>${esc(s.motivo||'—')}</td><td>${est}</td><td>${acc}</td></tr>`;
   }).join('')}</tbody></table></div>`;
   $('#sol-list').querySelectorAll('.sol-ok').forEach(b=>b.addEventListener('click',()=>resolverSol(b.dataset.id,'aprobada')));
