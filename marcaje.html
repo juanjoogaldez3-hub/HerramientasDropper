@@ -73,6 +73,15 @@
   .setup select{width:100%;font-family:inherit;font-size:1rem;border:1px solid #cdd8cf;border-radius:11px;padding:12px 14px;background:#fcfdfc;margin-bottom:14px}
   .lightbox{position:fixed;inset:0;background:rgba(0,0,0,.82);display:none;align-items:center;justify-content:center;z-index:50;padding:24px}
   .lightbox.show{display:flex}.lightbox img{max-width:92vw;max-height:88vh;border-radius:14px;box-shadow:0 20px 60px rgba(0,0,0,.5)}
+  .solpanel{background:var(--white);border:1px solid var(--line);border-radius:16px;box-shadow:var(--shadow);padding:16px 18px;margin-top:18px}
+  .solpanel h3{font-family:'Sora',sans-serif;font-weight:700;font-size:1rem;margin-bottom:12px}
+  .solform{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+  .solform select,.solform input{font-family:inherit;font-size:.9rem;border:1px solid #cdd8cf;border-radius:9px;padding:8px 10px;background:#fcfdfc}
+  .solform label{font-size:.82rem;font-weight:600;color:var(--muted)}
+  .solform input[type=text]{min-width:170px;flex:1}
+  .ms-list{margin-top:12px;display:flex;flex-direction:column;gap:6px}
+  .ms-item{display:flex;justify-content:space-between;align-items:center;gap:10px;font-size:.84rem;color:var(--ink);border-top:1px solid var(--line);padding-top:7px}
+  .ms-empty{font-size:.82rem;color:var(--muted)}
   .view[hidden]{display:none}
 </style>
 </head>
@@ -153,6 +162,23 @@
         <div class="act" id="act-box" hidden></div>
       </div>
     </div>
+
+    <div class="solpanel">
+      <h3>Solicitar permiso o ausencia</h3>
+      <div class="solform">
+        <select id="ms-tipo">
+          <option value="ausencia">Ausencia justificada</option>
+          <option value="permiso">Permiso</option>
+          <option value="cambio_turno">Cambio de turno</option>
+          <option value="otro">Otro</option>
+        </select>
+        <label>Desde <input type="date" id="ms-desde"></label>
+        <label>Hasta <input type="date" id="ms-hasta"></label>
+        <input type="text" id="ms-motivo" placeholder="Motivo (opcional)" maxlength="140">
+        <button class="btn btn-primary" id="ms-send" style="width:auto">Enviar</button>
+      </div>
+      <div id="ms-list" class="ms-list"></div>
+    </div>
   </div>
 
   <footer>Dropper · Smart Delivery — Marcaje</footer>
@@ -186,6 +212,7 @@ function progHoy(emp){
   return {ent:emp.entrada_prog, sal:emp.salida_prog, libre:false};
 }
 function fmtDateLong(){ const d=new Date(); return d.toLocaleDateString('es-GT',{weekday:'long',day:'numeric',month:'long'}); }
+function fmtDMY(s){ const m=String(s||'').match(/(\d{4})-(\d{2})-(\d{2})/); return m?`${m[3]}/${m[2]}/${m[1]}`:s; }
 function pill(t,c){ return `<span class="pill ${c}">${t}</span>`; }
 function status(msg,type){ const s=$('#status'); s.className='status show '+(type||''); s.innerHTML=(type==='work'?'<span class="spin"></span>':'')+msg; if(type==='ok') setTimeout(()=>{ if(s.classList.contains('ok')) s.className='status'; },3000); }
 function tardCls(min){ return min<=5?'ok':(min<=15?'warn':'bad'); }
@@ -225,10 +252,11 @@ async function enterPanel(){
   const ph=progHoy(MEMP); $('#who-turno').innerHTML = ph.libre ? '<span class="turno-libre">Hoy es tu día libre</span>' : (ph.ent?`Horario hoy: <b>${esc(ph.ent)} – ${esc(ph.sal||'')}</b>`:'');
   $('#tl-date').textContent=fmtDateLong();
   $('#clock-date').textContent=fmtDateLong();
+  $('#ms-desde').value=todayStr();
   await startCam();
   await loadToday();
   renderButtons(); renderTimeline();
-  if(!PREVIEW){ await loadAct(); startHeartbeat(); renderAct(); }
+  if(!PREVIEW){ await loadAct(); startHeartbeat(); renderAct(); loadMisSol(); }
 }
 
 /* ===== cámara ===== */
@@ -371,6 +399,29 @@ function renderAct(){
 window.addEventListener('beforeunload',()=>{ if(!PREVIEW){ ACT.ultimo_latido=iso(Date.now()); try{ saveAct(); }catch(e){} } });
 
 /* ===== init ===== */
+/* ===== solicitudes del empleado ===== */
+const MS_TIPO={ausencia:'Ausencia justificada',permiso:'Permiso',cambio_turno:'Cambio de turno',otro:'Otro'};
+async function loadMisSol(){
+  if(PREVIEW||!MEMP||!window.sb){ $('#ms-list').innerHTML=''; return; }
+  const {data}=await window.sb.from('solicitudes').select('*').eq('empleado',MEMP.nombre).order('created_at',{ascending:false}).limit(20);
+  const rows=data||[];
+  if(!rows.length){ $('#ms-list').innerHTML='<div class="ms-empty">No has enviado solicitudes.</div>'; return; }
+  $('#ms-list').innerHTML=rows.map(s=>{
+    const fechas=fmtDMY(s.fecha)+((s.fecha_fin&&s.fecha_fin!==s.fecha)?(' al '+fmtDMY(s.fecha_fin)):'');
+    const est=s.estado==='aprobada'?pill('Aprobada','ok'):(s.estado==='rechazada'?pill('Rechazada','bad'):pill('Pendiente','warn'));
+    return `<div class="ms-item"><span>${esc(MS_TIPO[s.tipo]||s.tipo)} · ${fechas}${s.motivo?(' · '+esc(s.motivo)):''}</span>${est}</div>`;
+  }).join('');
+}
+$('#ms-send').addEventListener('click',async()=>{
+  if(PREVIEW||!window.sb||!USER){ status('No se puede enviar en modo vista previa.','err'); return; }
+  if(!MEMP) return;
+  const tipo=$('#ms-tipo').value, desde=$('#ms-desde').value, hasta=$('#ms-hasta').value||null, motivo=$('#ms-motivo').value.trim();
+  if(!desde){ status('Elegí la fecha «Desde».','err'); return; }
+  const {error}=await window.sb.from('solicitudes').insert({empleado:MEMP.nombre,tipo,fecha:desde,fecha_fin:hasta,motivo:motivo||null,estado:'pendiente',created_by:USER.id,created_by_email:USER.email||null});
+  if(error){ status('No se pudo enviar: '+error.message,'err'); return; }
+  $('#ms-motivo').value=''; status('✓ Solicitud enviada. Queda pendiente de aprobación.','ok'); loadMisSol();
+});
+
 $('#logout').addEventListener('click',e=>{ e.preventDefault(); stopHeartbeat(); window.dropperAuth.signOut(); });
 tickClock(); setInterval(tickClock,15000);
 (async function init(){

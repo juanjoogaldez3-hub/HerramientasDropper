@@ -67,6 +67,10 @@
   .av-items{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:8px}
   .av-item{display:flex;justify-content:space-between;align-items:center;gap:10px;background:var(--white);border:1px solid var(--line);border-radius:11px;padding:10px 13px;box-shadow:var(--shadow)}
   .av-item .nm{font-weight:700;color:var(--ink)}.av-item .d{font-size:.8rem;color:var(--muted);text-align:right}
+  .solform{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+  .solform select,.solform input{font-family:inherit;font-size:.9rem;border:1px solid #cdd8cf;border-radius:9px;padding:8px 10px;background:#fcfdfc}
+  .solform label{font-size:.82rem;font-weight:600;color:var(--muted)}
+  .solform input[type=text]{min-width:180px;flex:1}
   .howto{font-size:.82rem;color:var(--muted);line-height:1.6}.howto b{color:var(--ink)}
   details.note{margin-top:14px}details.note summary{cursor:pointer;font-size:.85rem;font-weight:600;color:var(--green-dk)}
   .pgrid{display:flex;flex-wrap:wrap;gap:12px;padding:14px 16px}
@@ -117,6 +121,7 @@
     <div class="tabs">
       <button data-tab="puncheos" class="active">Puncheos</button>
       <button data-tab="avisos">Avisos <span class="tab-badge" id="av-badge" hidden>0</span></button>
+      <button data-tab="solicitudes">Solicitudes <span class="tab-badge" id="sol-badge" hidden>0</span></button>
       <button data-tab="dashboard">Dashboard</button>
       <button data-tab="historial">Historial</button>
       <button data-tab="semanal">Resumen semanal</button>
@@ -135,6 +140,31 @@
     </div>
     <div class="summary" id="av-stats"></div>
     <div id="av-list"></div>
+  </div>
+
+  <!-- ===== SOLICITUDES ===== -->
+  <div class="view" id="v-solicitudes" hidden>
+    <div class="panel" style="padding:16px 18px;margin-bottom:14px">
+      <h3 style="font-family:'Sora',sans-serif;font-weight:700;font-size:1.02rem;margin-bottom:4px">Registrar permiso / ausencia</h3>
+      <div class="howto" style="margin-bottom:12px">Registrá un permiso o ausencia justificada del personal (queda <b>aprobada</b> y silencia el aviso de «falta» en esas fechas). También aprobás aquí lo que el personal envíe desde <b>Marcaje</b>.</div>
+      <div class="solform">
+        <select id="sf-emp"></select>
+        <select id="sf-tipo">
+          <option value="ausencia">Ausencia justificada</option>
+          <option value="permiso">Permiso</option>
+          <option value="cambio_turno">Cambio de turno</option>
+          <option value="otro">Otro</option>
+        </select>
+        <label>Desde <input type="date" id="sf-desde"></label>
+        <label>Hasta <input type="date" id="sf-hasta"></label>
+        <input type="text" id="sf-motivo" placeholder="Motivo (opcional)" maxlength="140">
+        <button class="btn btn-primary" id="sf-add" style="width:auto">Agregar</button>
+      </div>
+    </div>
+    <div class="selrow">
+      <label style="font-size:.84rem;font-weight:600;color:var(--muted)">Ver <select id="sol-filtro"><option value="pendiente">Pendientes</option><option value="all">Todas</option></select></label>
+    </div>
+    <div id="sol-list"></div>
   </div>
 
   <!-- ===== DASHBOARD ===== -->
@@ -487,14 +517,23 @@ function fillPEmp(){ const cur=$('#p-emp').value; $('#p-emp').innerHTML='<option
 
 /* ===== avisos ===== */
 function nowMin(){ const d=new Date(); return d.getHours()*60+d.getMinutes(); }
+async function justificadosDe(fecha){
+  if(!window.sb) return new Set();
+  const {data}=await window.sb.from('solicitudes').select('empleado,tipo,fecha,fecha_fin,estado').eq('estado','aprobada').limit(1000);
+  const set=new Set();
+  (data||[]).forEach(s=>{ if(!['ausencia','permiso'].includes(s.tipo)) return; const fin=s.fecha_fin||s.fecha; if(s.fecha<=fecha && fecha<=fin) set.add(s.empleado); });
+  return set;
+}
 async function computeAvisos(fecha){
   const {marc,act}=await fetchPunch(fecha,fecha,'');
   const byEmp={}; aggPunch(marc,act).forEach(d=>byEmp[d.empleado]=d);
+  const just=await justificadosDe(fecha);
   const hoy=fecha===todayStr(), nm=nowMin();
-  const R={faltaEnt:[],tarde:[],faltaSal:[],libres:[],ok:[]};
+  const R={faltaEnt:[],tarde:[],faltaSal:[],libres:[],justificados:[],ok:[]};
   EMP.filter(e=>e.activo!==false).forEach(e=>{
     const P=progFor(e,fecha);
     if(P.libre){ R.libres.push(e.nombre); return; }
+    if(just.has(e.nombre)){ R.justificados.push(e.nombre); return; }
     const d=byEmp[e.nombre];
     const entH=d&&d.ent?hm(d.ent.hora):null, progEnt=hm(P.ent), progSal=hm(P.sal);
     if(entH==null){
@@ -529,18 +568,60 @@ async function renderAvisos(){
   html+=sec('🔴 Falta marcar entrada','bad',R.faltaEnt,x=>`<div class="av-item"><span class="nm">${esc(x.nombre)}</span><span class="d">${esc(x.txt)}${x.prog?` · entraba ${esc(x.prog)}`:''}</span></div>`);
   html+=sec('🟡 Llegaron tarde','warn',R.tarde,x=>`<div class="av-item"><span class="nm">${esc(x.nombre)}</span><span class="d">Entró ${esc(String(x.hora).slice(0,5))} ${pill('Tarde '+x.min+'m',tardCls(x.min))}</span></div>`);
   html+=sec('🟠 Falta marcar salida','warn',R.faltaSal,x=>`<div class="av-item"><span class="nm">${esc(x.nombre)}</span><span class="d">${esc(x.txt)}${x.prog?` · salía ${esc(x.prog)}`:''}</span></div>`);
+  if(R.justificados.length) html+=sec('🟢 Justificados (permiso/ausencia)','ok',R.justificados,n=>`<div class="av-item"><span class="nm">${esc(n)}</span><span class="d">Aprobado</span></div>`);
   if(R.libres.length) html+=sec('⬜ Día libre','gray',R.libres,n=>`<div class="av-item"><span class="nm">${esc(n)}</span><span class="d">Descanso</span></div>`);
   $('#av-list').innerHTML=html || '<div class="empty"><h3>Sin empleados activos</h3></div>';
 }
 $('#av-hoy').addEventListener('click',()=>{ $('#av-fecha').value=todayStr(); renderAvisos(); });
 $('#av-fecha').addEventListener('change',renderAvisos);
 
+/* ===== solicitudes ===== */
+const TIPO_LBL={ausencia:'Ausencia justificada',permiso:'Permiso',cambio_turno:'Cambio de turno',otro:'Otro'};
+let SOL=[];
+async function loadSol(){ SOL=[]; if(!window.sb) return; const {data}=await window.sb.from('solicitudes').select('*').order('created_at',{ascending:false}).limit(500); SOL=data||[]; }
+function solBadge(){ const n=SOL.filter(s=>s.estado==='pendiente').length; const b=$('#sol-badge'); if(b){ b.textContent=n; b.hidden=n===0; } }
+async function updateSolBadge(){ if(PREVIEW){ return; } await loadSol(); solBadge(); }
+function fillSolEmp(){ const cur=$('#sf-emp').value; $('#sf-emp').innerHTML=EMP.map(e=>`<option ${e.nombre===cur?'selected':''}>${esc(e.nombre)}</option>`).join(''); }
+async function renderSolicitudes(){
+  if(PREVIEW){ $('#sol-list').innerHTML='<div class="empty"><h3>Configurá Supabase para gestionar solicitudes</h3></div>'; return; }
+  await loadSol(); fillSolEmp(); solBadge();
+  const filt=$('#sol-filtro').value;
+  const rows=filt==='pendiente'?SOL.filter(s=>s.estado==='pendiente'):SOL;
+  if(!rows.length){ $('#sol-list').innerHTML='<div class="empty" style="padding:30px"><h3>Sin solicitudes'+(filt==='pendiente'?' pendientes':'')+'</h3></div>'; return; }
+  $('#sol-list').innerHTML=`<div class="tbl-wrap"><table class="hist"><thead><tr><th>Empleado</th><th>Tipo</th><th>Fechas</th><th>Motivo</th><th>Estado</th><th>Acción</th></tr></thead><tbody>${rows.map(s=>{
+    const fechas=fmtDate(s.fecha)+((s.fecha_fin&&s.fecha_fin!==s.fecha)?(' al '+fmtDate(s.fecha_fin)):'');
+    const est=s.estado==='aprobada'?pill('Aprobada','ok'):(s.estado==='rechazada'?pill('Rechazada','bad'):pill('Pendiente','warn'));
+    const acc=s.estado==='pendiente'
+      ? `<button class="btn btn-primary sol-ok" data-id="${s.id}" style="width:auto;padding:5px 10px;font-size:.76rem">Aprobar</button> <button class="btn btn-ghost sol-no" data-id="${s.id}" style="width:auto;padding:5px 10px;font-size:.76rem">Rechazar</button>`
+      : `<button class="x sol-del" data-id="${s.id}">Quitar</button>`;
+    return `<tr><td>${esc(s.empleado)}</td><td>${esc(TIPO_LBL[s.tipo]||s.tipo)}</td><td>${fechas}</td><td>${esc(s.motivo||'—')}</td><td>${est}</td><td>${acc}</td></tr>`;
+  }).join('')}</tbody></table></div>`;
+  $('#sol-list').querySelectorAll('.sol-ok').forEach(b=>b.addEventListener('click',()=>resolverSol(b.dataset.id,'aprobada')));
+  $('#sol-list').querySelectorAll('.sol-no').forEach(b=>b.addEventListener('click',()=>resolverSol(b.dataset.id,'rechazada')));
+  $('#sol-list').querySelectorAll('.sol-del').forEach(b=>b.addEventListener('click',async()=>{ if(!confirm('¿Quitar esta solicitud?')) return; await window.sb.from('solicitudes').delete().eq('id',b.dataset.id); renderSolicitudes(); updateAvisosBadge(); }));
+}
+async function resolverSol(id,estado){
+  const {error}=await window.sb.from('solicitudes').update({estado,resuelto_por:USER.email||null,resuelto_at:new Date().toISOString()}).eq('id',id);
+  if(error){ status('No se pudo: '+error.message,'err'); return; }
+  status('✓ '+(estado==='aprobada'?'Aprobada':'Rechazada')+'.','ok'); renderSolicitudes(); updateAvisosBadge();
+}
+$('#sf-add').addEventListener('click',async()=>{
+  if(!window.sb||!USER){ status('Iniciá sesión para registrar.','err'); return; }
+  const empn=$('#sf-emp').value, tipo=$('#sf-tipo').value, desde=$('#sf-desde').value, hasta=$('#sf-hasta').value||null, motivo=$('#sf-motivo').value.trim();
+  if(!empn||!desde){ status('Elegí empleado y fecha «Desde».','err'); return; }
+  const {error}=await window.sb.from('solicitudes').insert({empleado:empn,tipo,fecha:desde,fecha_fin:hasta,motivo:motivo||null,estado:'aprobada',resuelto_por:USER.email||null,resuelto_at:new Date().toISOString(),created_by:USER.id,created_by_email:USER.email||null});
+  if(error){ status('No se pudo: '+error.message,'err'); return; }
+  $('#sf-motivo').value=''; status('✓ Registrada (aprobada).','ok'); renderSolicitudes(); updateAvisosBadge();
+});
+$('#sol-filtro').addEventListener('change',renderSolicitudes);
+
 /* ===== pestañas + init ===== */
 document.querySelectorAll('.tabs button').forEach(b=>b.addEventListener('click',()=>{
   document.querySelectorAll('.tabs button').forEach(x=>x.classList.toggle('active',x===b));
-  const tab=b.dataset.tab; ['puncheos','avisos','dashboard','historial','semanal','empleados'].forEach(t=>$('#v-'+t).hidden=(t!==tab));
+  const tab=b.dataset.tab; ['puncheos','avisos','solicitudes','dashboard','historial','semanal','empleados'].forEach(t=>$('#v-'+t).hidden=(t!==tab));
   if(tab==='puncheos'){ fillPEmp(); renderPuncheos(); }
   if(tab==='avisos') renderAvisos();
+  if(tab==='solicitudes') renderSolicitudes();
   if(tab==='dashboard') renderDashboard();
   if(tab==='historial'){ fillEmpSelect(); renderHistorial(); }
   if(tab==='semanal') renderSemanal();
@@ -550,13 +631,13 @@ $('#logout').addEventListener('click',e=>{ e.preventDefault(); window.dropperAut
 $('#lightbox').addEventListener('click',()=>$('#lightbox').classList.remove('show'));
 $('#w-date').value=todayStr();
 $('#p-from').value=todayStr(); $('#p-to').value=todayStr();
-$('#av-fecha').value=todayStr();
+$('#av-fecha').value=todayStr(); $('#sf-desde').value=todayStr();
 (async function init(){
   const guard=await window.dropperAuth.requireSession();
   if(guard===null) return;
   if(guard.previewMode){ PREVIEW=true; $('#notice').classList.add('show'); fillPEmp(); renderPuncheos(); return; }
   PREVIEW=false; USER=guard.user; window.dropperNav.setUser(guard.user.email||'');
-  await loadEmp(); fillPEmp(); renderPuncheos(); updateAvisosBadge();
+  await loadEmp(); fillPEmp(); renderPuncheos(); updateAvisosBadge(); updateSolBadge();
 })();
 </script>
 </body>

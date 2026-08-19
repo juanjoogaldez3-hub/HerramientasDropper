@@ -376,3 +376,33 @@ create policy "own_update" on public.asistencia_actividad for update to authenti
 drop policy if exists "team_delete" on public.asistencia_actividad;
 drop policy if exists "admin_delete" on public.asistencia_actividad;
 create policy "admin_delete" on public.asistencia_actividad for delete to authenticated using (public.is_asis_admin());
+
+-- ============================================================
+--  SOLICITUDES DEL PERSONAL — permisos, ausencias, cambios de turno
+-- ============================================================
+create table if not exists public.solicitudes (
+  id            uuid primary key default gen_random_uuid(),
+  created_at    timestamptz not null default now(),
+  created_by    uuid references auth.users(id) on delete set null,
+  created_by_email text,
+  empleado      text not null,
+  tipo          text not null,          -- ausencia | permiso | cambio_turno | otro
+  fecha         date not null,          -- desde
+  fecha_fin     date,                   -- hasta (null = un solo día)
+  motivo        text,
+  estado        text not null default 'pendiente',  -- pendiente | aprobada | rechazada
+  resuelto_por  text,
+  resuelto_at   timestamptz
+);
+create index if not exists solicitudes_fecha_idx on public.solicitudes (fecha desc);
+create index if not exists solicitudes_emp_idx on public.solicitudes (empleado);
+create index if not exists solicitudes_estado_idx on public.solicitudes (estado);
+alter table public.solicitudes enable row level security;
+drop policy if exists "team_select" on public.solicitudes;
+create policy "team_select" on public.solicitudes for select to authenticated using (true);
+drop policy if exists "team_insert" on public.solicitudes;
+create policy "team_insert" on public.solicitudes for insert to authenticated with check (auth.uid() = created_by);
+drop policy if exists "admin_update" on public.solicitudes;
+create policy "admin_update" on public.solicitudes for update to authenticated using (public.is_asis_admin()) with check (public.is_asis_admin());
+drop policy if exists "admin_delete" on public.solicitudes;
+create policy "admin_delete" on public.solicitudes for delete to authenticated using (public.is_asis_admin());
