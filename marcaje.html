@@ -190,6 +190,7 @@
           <option value="ausencia">Ausencia justificada</option>
           <option value="permiso">Permiso</option>
           <option value="entrada_tarde">Entrada tarde</option>
+          <option value="salida_temprano">Salida temprano</option>
           <option value="cambio_turno">Cambio de turno</option>
           <option value="otro">Otro</option>
         </select>
@@ -452,7 +453,7 @@ window.addEventListener('beforeunload',()=>{ if(!PREVIEW){ ACT.ultimo_latido=iso
 
 /* ===== init ===== */
 /* ===== solicitudes del empleado ===== */
-const MS_TIPO={ausencia:'Ausencia justificada',permiso:'Permiso',entrada_tarde:'Entrada tarde',cambio_turno:'Cambio de turno',otro:'Otro'};
+const MS_TIPO={ausencia:'Ausencia justificada',permiso:'Permiso',entrada_tarde:'Entrada tarde',salida_temprano:'Salida temprano',cambio_turno:'Cambio de turno',otro:'Otro'};
 async function loadMisSol(){
   if(PREVIEW||!MEMP||!window.sb){ $('#ms-list').innerHTML=''; return; }
   const {data}=await window.sb.from('solicitudes').select('*').eq('empleado',MEMP.nombre).order('created_at',{ascending:false}).limit(20);

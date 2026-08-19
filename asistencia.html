@@ -48,6 +48,8 @@
   .empmgr .row:last-child{border-bottom:none}
   .empmgr input{font-family:inherit;font-size:.9rem;border:1px solid #cdd8cf;border-radius:9px;padding:8px 10px}
   .empmgr .nom{min-width:160px;flex:1}.empmgr .hr{width:110px}
+  .empmgr .em-req-l{display:inline-flex;align-items:center;gap:5px;font-size:.8rem;color:var(--muted);font-weight:600}
+  .empmgr .em-req{width:58px}
   .empmgr .x{border:none;background:#fdecea;color:#a3261a;border-radius:8px;padding:6px 10px;cursor:pointer;font-weight:600}
   .empmgr .emp-item{border-bottom:1px solid var(--line)}.empmgr .emp-item:last-child{border-bottom:none}
   .empmgr .emp-item .row{border-bottom:none}
@@ -143,6 +145,7 @@
           <option value="ausencia">Ausencia justificada</option>
           <option value="permiso">Permiso</option>
           <option value="entrada_tarde">Entrada tarde</option>
+          <option value="salida_temprano">Salida temprano</option>
           <option value="cambio_turno">Cambio de turno</option>
           <option value="otro">Otro</option>
         </select>
@@ -268,6 +271,7 @@ function renderEmpTab(){
         <input class="nom em-nom" value="${esc(e.nombre)}">
         <input class="hr em-ent" type="time" value="${esc(e.entrada_prog)}" title="Entrada por defecto">
         <input class="hr em-sal" type="time" value="${esc(e.salida_prog)}" title="Salida por defecto">
+        <label class="em-req-l">Hrs/día <input class="em-req" type="number" min="0" step="0.5" value="${e.horas_req!=null?e.horas_req:8}" title="Horas que debe cumplir por día"></label>
         <label class="em-turnos-t"><input type="checkbox" class="em-usar-turnos" ${hasH?'checked':''}> Turnos por día</label>
         <button class="btn btn-ghost em-save" style="width:auto;padding:6px 12px;font-size:.8rem">Guardar</button>
         <button class="x em-del">Quitar</button>
@@ -280,11 +284,11 @@ function renderEmpTab(){
     usar.addEventListener('change',()=>{ item.querySelector('.turnos').hidden=!usar.checked; });
     item.querySelectorAll('.t-libre').forEach(chk=>chk.addEventListener('change',()=>{ const tr=chk.closest('.trow'); tr.querySelector('.t-ent').disabled=chk.checked; tr.querySelector('.t-sal').disabled=chk.checked; }));
     item.querySelector('.em-save').addEventListener('click',async()=>{
-      const nombre=item.querySelector('.em-nom').value.trim(), ent=item.querySelector('.em-ent').value, sal=item.querySelector('.em-sal').value;
+      const nombre=item.querySelector('.em-nom').value.trim(), ent=item.querySelector('.em-ent').value, sal=item.querySelector('.em-sal').value, req=parseFloat(item.querySelector('.em-req').value)||8;
       if(!nombre) return;
       let horario=null;
       if(usar.checked){ horario=[null,null,null,null,null,null,null]; item.querySelectorAll('.trow').forEach(tr=>{ const wd=+tr.dataset.wd; horario[wd]=tr.querySelector('.t-libre').checked?{libre:true}:{ent:tr.querySelector('.t-ent').value,sal:tr.querySelector('.t-sal').value}; }); }
-      await window.sb.from('empleados_oficina').update({nombre,entrada_prog:ent,salida_prog:sal,horario}).eq('id',id);
+      await window.sb.from('empleados_oficina').update({nombre,entrada_prog:ent,salida_prog:sal,horario,horas_req:req}).eq('id',id);
       await loadEmp(); renderEmpTab(); status('✓ Guardado.','ok');
     });
     item.querySelector('.em-del').addEventListener('click',async()=>{
@@ -298,7 +302,7 @@ function renderEmpTab(){
 $('#emp-add').addEventListener('click',async()=>{
   if(!window.sb||!USER){ status('Configurá Supabase para guardar empleados.','err'); return; }
   const nombre=$('#emp-nombre').value.trim(); if(!nombre) return;
-  const {error}=await window.sb.from('empleados_oficina').insert({nombre,entrada_prog:$('#emp-ent').value,salida_prog:$('#emp-sal').value,horario:null,created_by:USER.id});
+  const {error}=await window.sb.from('empleados_oficina').insert({nombre,entrada_prog:$('#emp-ent').value,salida_prog:$('#emp-sal').value,horario:null,horas_req:8,created_by:USER.id});
   if(error){ status('No se pudo agregar: '+error.message,'err'); return; }
   $('#emp-nombre').value=''; await loadEmp(); renderEmpTab(); status('✓ Empleado agregado.','ok');
 });
@@ -495,18 +499,18 @@ function fillPEmp(){ const cur=$('#p-emp').value; $('#p-emp').innerHTML='<option
 /* ===== avisos ===== */
 function nowMin(){ const d=new Date(); return d.getHours()*60+d.getMinutes(); }
 async function justificadosDe(fecha){
-  if(!window.sb) return {full:new Set(),tarde:new Set()};
+  if(!window.sb) return {full:new Set(),tarde:new Set(),salida:new Set()};
   const {data}=await window.sb.from('solicitudes').select('empleado,tipo,fecha,fecha_fin,estado').eq('estado','aprobada').limit(1000);
-  const full=new Set(), tarde=new Set();
-  (data||[]).forEach(s=>{ const fin=s.fecha_fin||s.fecha; if(!(s.fecha<=fecha && fecha<=fin)) return; if(['ausencia','permiso'].includes(s.tipo)) full.add(s.empleado); else if(s.tipo==='entrada_tarde') tarde.add(s.empleado); });
-  return {full,tarde};
+  const full=new Set(), tarde=new Set(), salida=new Set();
+  (data||[]).forEach(s=>{ const fin=s.fecha_fin||s.fecha; if(!(s.fecha<=fecha && fecha<=fin)) return; if(['ausencia','permiso'].includes(s.tipo)) full.add(s.empleado); else if(s.tipo==='entrada_tarde') tarde.add(s.empleado); else if(s.tipo==='salida_temprano') salida.add(s.empleado); });
+  return {full,tarde,salida};
 }
 async function computeAvisos(fecha){
   const {marc,act}=await fetchPunch(fecha,fecha,'');
   const byEmp={}; aggPunch(marc,act).forEach(d=>byEmp[d.empleado]=d);
   const just=await justificadosDe(fecha);
   const hoy=fecha===todayStr(), nm=nowMin();
-  const R={faltaEnt:[],tarde:[],faltaSal:[],libres:[],justificados:[],ok:[]};
+  const R={faltaEnt:[],tarde:[],faltaSal:[],incompletas:[],libres:[],justificados:[],ok:[]};
   EMP.filter(e=>e.activo!==false).forEach(e=>{
     const P=progFor(e,fecha);
     if(P.libre){ R.libres.push(e.nombre); return; }
@@ -525,33 +529,37 @@ async function computeAvisos(fecha){
     if(salH==null){
       if(!hoy){ R.faltaSal.push({nombre:e.nombre,txt:'No marcó salida'}); bien=false; }
       else if(progSal!=null && nm>progSal){ R.faltaSal.push({nombre:e.nombre,txt:'No ha marcado salida',prog:P.sal}); bien=false; }
+    } else {
+      const req=(e.horas_req!=null?+e.horas_req:8), faltanH=req-(d.horas||0);
+      if(faltanH>0.25 && !just.salida.has(e.nombre)){ R.incompletas.push({nombre:e.nombre,faltan:Math.round(faltanH*60),req,netas:d.horas}); bien=false; }
     }
     if(bien) R.ok.push(e.nombre);
   });
   return R;
 }
 function setAvBadge(n){ const b=$('#av-badge'); if(!b) return; b.textContent=n; b.hidden=n===0; }
-async function updateAvisosBadge(){ if(PREVIEW){ setAvBadge(0); return; } const R=await computeAvisos(todayStr()); setAvBadge(R.faltaEnt.length+R.tarde.length+R.faltaSal.length); }
+async function updateAvisosBadge(){ if(PREVIEW){ setAvBadge(0); return; } const R=await computeAvisos(todayStr()); setAvBadge(R.faltaEnt.length+R.tarde.length+R.faltaSal.length+R.incompletas.length); }
 async function renderAvisos(){
   const fecha=$('#p-to').value||todayStr();
   $('#av-when').textContent = 'del '+fmtDate(fecha)+(fecha===todayStr()?' · en vivo':'');
   if(PREVIEW){ $('#av-list').innerHTML='<div class="empty"><h3>Configurá Supabase para ver los avisos</h3></div>'; $('#av-stats').innerHTML=''; return; }
   const R=await computeAvisos(fecha);
-  const nAlert=R.faltaEnt.length+R.tarde.length+R.faltaSal.length; setAvBadge(nAlert);
-  $('#av-stats').innerHTML=`<div class="stat"><div class="k">Sin entrada</div><div class="v">${R.faltaEnt.length}</div></div><div class="stat"><div class="k">Tarde</div><div class="v">${R.tarde.length}</div></div><div class="stat"><div class="k">Sin salida</div><div class="v">${R.faltaSal.length}</div></div><div class="stat"><div class="k">Sin novedad</div><div class="v">${R.ok.length}</div></div>`;
+  const nAlert=R.faltaEnt.length+R.tarde.length+R.faltaSal.length+R.incompletas.length; setAvBadge(nAlert);
+  $('#av-stats').innerHTML=`<div class="stat"><div class="k">Sin entrada</div><div class="v">${R.faltaEnt.length}</div></div><div class="stat"><div class="k">Tarde</div><div class="v">${R.tarde.length}</div></div><div class="stat"><div class="k">Sin salida</div><div class="v">${R.faltaSal.length}</div></div><div class="stat"><div class="k">Horas incompletas</div><div class="v">${R.incompletas.length}</div></div><div class="stat"><div class="k">Sin novedad</div><div class="v">${R.ok.length}</div></div>`;
   const sec=(titulo,cls,items,fmt)=> items.length?`<div class="av-sec"><div class="av-h ${cls}">${titulo} · ${items.length}</div><div class="av-items">${items.map(fmt).join('')}</div></div>`:'';
   let html='';
-  if(!nAlert && (R.faltaEnt.length+R.tarde.length+R.faltaSal.length)===0) html+='<div class="av-ok">✓ Sin avisos para este día — todo en orden.</div>';
+  if(!nAlert) html+='<div class="av-ok">✓ Sin avisos para este día — todo en orden.</div>';
   html+=sec('🔴 Falta marcar entrada','bad',R.faltaEnt,x=>`<div class="av-item"><span class="nm">${esc(x.nombre)}</span><span class="d">${esc(x.txt)}${x.prog?` · entraba ${esc(x.prog)}`:''}</span></div>`);
   html+=sec('🟡 Llegaron tarde','warn',R.tarde,x=>`<div class="av-item"><span class="nm">${esc(x.nombre)}</span><span class="d">Entró ${esc(String(x.hora).slice(0,5))} ${pill('Tarde '+x.min+'m',tardCls(x.min))}</span></div>`);
   html+=sec('🟠 Falta marcar salida','warn',R.faltaSal,x=>`<div class="av-item"><span class="nm">${esc(x.nombre)}</span><span class="d">${esc(x.txt)}${x.prog?` · salía ${esc(x.prog)}`:''}</span></div>`);
+  html+=sec('🔴 Horas incompletas','bad',R.incompletas,x=>`<div class="av-item"><span class="nm">${esc(x.nombre)}</span><span class="d">Hizo ${f1(x.netas)}h de ${f1(x.req)}h ${pill('faltan '+x.faltan+'m','bad')}</span></div>`);
   if(R.justificados.length) html+=sec('🟢 Justificados (permiso/ausencia)','ok',R.justificados,n=>`<div class="av-item"><span class="nm">${esc(n)}</span><span class="d">Aprobado</span></div>`);
   if(R.libres.length) html+=sec('⬜ Día libre','gray',R.libres,n=>`<div class="av-item"><span class="nm">${esc(n)}</span><span class="d">Descanso</span></div>`);
   $('#av-list').innerHTML=html || '<div class="empty"><h3>Sin empleados activos</h3></div>';
 }
 
 /* ===== solicitudes ===== */
-const TIPO_LBL={ausencia:'Ausencia justificada',permiso:'Permiso',entrada_tarde:'Entrada tarde',cambio_turno:'Cambio de turno',otro:'Otro'};
+const TIPO_LBL={ausencia:'Ausencia justificada',permiso:'Permiso',entrada_tarde:'Entrada tarde',salida_temprano:'Salida temprano',cambio_turno:'Cambio de turno',otro:'Otro'};
 let SOL=[];
 async function loadSol(){ SOL=[]; if(!window.sb) return; const {data}=await window.sb.from('solicitudes').select('*').order('created_at',{ascending:false}).limit(500); SOL=data||[]; }
 function solBadge(){ const n=SOL.filter(s=>s.estado==='pendiente').length; const b=$('#sol-badge'); if(b){ b.textContent=n; b.hidden=n===0; } }

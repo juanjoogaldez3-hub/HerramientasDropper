@@ -269,6 +269,7 @@ create table if not exists public.empleados_oficina (
   entrada_prog  text not null default '08:00',
   salida_prog   text not null default '17:00',
   horario       jsonb,        -- [7]{ent,sal,libre} por día (0=Dom..6=Sáb); null = usa entrada_prog/salida_prog todos los días
+  horas_req     numeric(4,1) not null default 8,   -- horas netas que debe cumplir por día
   activo        boolean not null default true
 );
 alter table public.empleados_oficina enable row level security;
