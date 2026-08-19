@@ -59,6 +59,8 @@
   .empmgr .trow input:disabled{opacity:.4}
   .empmgr .tlibre{display:inline-flex;align-items:center;gap:4px;font-size:.76rem;color:#8a5a00}.empmgr .tlibre input{width:14px;height:14px}
   .view[hidden]{display:none}
+  .tab-help{margin:-4px 0 16px;font-size:.85rem;color:var(--muted);line-height:1.5;max-width:860px}
+  .sec-h{font-family:'Sora',sans-serif;font-weight:700;font-size:1rem;color:var(--ink);margin:6px 0 10px}
   .tab-badge{display:inline-block;min-width:18px;padding:0 5px;margin-left:5px;border-radius:20px;background:#a3261a;color:#fff;font-size:.72rem;font-weight:800;line-height:18px;text-align:center;vertical-align:middle}
   .av-ok{background:var(--lime-soft);border:1px solid #c4e3cd;color:var(--green-dk);border-radius:12px;padding:14px 16px;font-weight:600;margin-bottom:14px}
   .av-sec{margin-bottom:16px}
@@ -119,28 +121,16 @@
       <div class="sub">Revisá los puncheos, la puntualidad y las horas del personal. El personal marca desde <b>Marcaje</b>.</div>
     </div>
     <div class="tabs">
-      <button data-tab="puncheos" class="active">Puncheos</button>
-      <button data-tab="avisos">Avisos <span class="tab-badge" id="av-badge" hidden>0</span></button>
+      <button data-tab="dia" class="active">Día a día <span class="tab-badge" id="av-badge" hidden>0</span></button>
+      <button data-tab="reportes">Reportes</button>
       <button data-tab="solicitudes">Solicitudes <span class="tab-badge" id="sol-badge" hidden>0</span></button>
-      <button data-tab="dashboard">Dashboard</button>
-      <button data-tab="historial">Historial</button>
-      <button data-tab="semanal">Resumen semanal</button>
       <button data-tab="empleados">Empleados</button>
     </div>
   </div>
+  <div class="tab-help" id="tab-help"></div>
 
   <div class="status" id="status"></div>
 
-  <!-- ===== AVISOS ===== -->
-  <div class="view" id="v-avisos" hidden>
-    <div class="selrow">
-      <label style="font-size:.84rem;font-weight:600;color:var(--muted)">Día <input type="date" id="av-fecha"></label>
-      <button class="btn btn-ghost" id="av-hoy" style="width:auto;padding:9px 14px;font-size:.86rem">Hoy</button>
-      <span id="av-when" style="font-size:.82rem;color:var(--muted)"></span>
-    </div>
-    <div class="summary" id="av-stats"></div>
-    <div id="av-list"></div>
-  </div>
 
   <!-- ===== SOLICITUDES ===== -->
   <div class="view" id="v-solicitudes" hidden>
@@ -168,20 +158,26 @@
     <div id="sol-list"></div>
   </div>
 
-  <!-- ===== DASHBOARD ===== -->
+  <!-- ===== REPORTES (dashboard + export) ===== -->
   <div class="view" id="v-dashboard" hidden>
     <div class="selrow">
       <label style="font-size:.84rem;font-weight:600;color:var(--muted)">Desde <input type="date" id="d-from"></label>
       <label style="font-size:.84rem;font-weight:600;color:var(--muted)">Hasta <input type="date" id="d-to"></label>
       <button class="btn btn-ghost" id="d-apply" style="width:auto;padding:9px 14px;font-size:.86rem">Aplicar</button>
+      <button class="btn btn-ghost" id="d-semana" style="width:auto;padding:9px 14px;font-size:.86rem">Semana</button>
+      <button class="btn btn-ghost" id="d-mes" style="width:auto;padding:9px 14px;font-size:.86rem">Mes</button>
       <button class="btn btn-ghost" id="d-clear" style="width:auto;padding:9px 14px;font-size:.86rem">Todo</button>
+      <span style="flex:1"></span>
+      <button class="btn btn-ghost" id="d-xlsx" style="width:auto;padding:9px 14px;font-size:.86rem">Excel</button>
+      <button class="btn btn-primary" id="d-pdf" style="width:auto;padding:9px 14px;font-size:.86rem">PDF</button>
     </div>
     <div class="summary" id="d-stats"></div>
     <div id="d-table"></div>
+    <div class="howto" style="margin-top:12px;font-size:.82rem;color:var(--muted)">Tocá un empleado para ver el detalle de sus días. El período de arriba manda; «Semana» y «Mes» son atajos.</div>
   </div>
 
-  <!-- ===== PUNCHEOS (marcaje) ===== -->
-  <div class="view" id="v-puncheos" hidden>
+  <!-- ===== DÍA A DÍA (avisos + puncheos) ===== -->
+  <div class="view" id="v-dia" hidden>
     <div class="selrow">
       <label style="font-size:.84rem;font-weight:600;color:var(--muted)">Desde <input type="date" id="p-from"></label>
       <label style="font-size:.84rem;font-weight:600;color:var(--muted)">Hasta <input type="date" id="p-to"></label>
@@ -189,6 +185,12 @@
       <button class="btn btn-ghost" id="p-apply" style="width:auto;padding:9px 14px;font-size:.86rem">Aplicar</button>
       <button class="btn btn-ghost" id="p-today" style="width:auto;padding:9px 14px;font-size:.86rem">Hoy</button>
     </div>
+
+    <h3 class="sec-h">Avisos <span id="av-when" style="font-size:.78rem;color:var(--muted);font-weight:500"></span></h3>
+    <div class="summary" id="av-stats"></div>
+    <div id="av-list"></div>
+
+    <h3 class="sec-h" style="margin-top:20px">Puncheos del período</h3>
     <div class="summary" id="p-stats"></div>
     <div id="p-table"></div>
     <details class="note">
@@ -201,24 +203,6 @@
     </details>
   </div>
 
-  <!-- ===== HISTORIAL ===== -->
-  <div class="view" id="v-historial" hidden>
-    <div class="selrow"><label style="font-size:.84rem;font-weight:600;color:var(--muted)">Empleado <select id="h-emp"></select></label></div>
-    <div id="h-table"></div>
-  </div>
-
-  <!-- ===== SEMANAL ===== -->
-  <div class="view" id="v-semanal" hidden>
-    <div class="selrow">
-      <label style="font-size:.84rem;font-weight:600;color:var(--muted)">Semana de <input type="date" id="w-date"></label>
-      <span id="w-range" style="font-size:.85rem;color:var(--muted);font-weight:600"></span>
-      <span style="flex:1"></span>
-      <button class="btn btn-ghost" id="w-xlsx" style="width:auto;padding:9px 14px;font-size:.86rem">Excel</button>
-      <button class="btn btn-primary" id="w-pdf" style="width:auto;padding:9px 14px;font-size:.86rem">PDF</button>
-    </div>
-    <div class="summary" id="w-stats"></div>
-    <div id="w-table"></div>
-  </div>
 
   <!-- ===== EMPLEADOS ===== -->
   <div class="view" id="v-empleados" hidden>
@@ -377,61 +361,36 @@ function dayDetail(days){
 $('#d-apply').addEventListener('click',renderDashboard);
 $('#d-clear').addEventListener('click',()=>{ $('#d-from').value=''; $('#d-to').value=''; renderDashboard(); });
 
-/* ===== historial ===== */
-async function fillEmpSelect(){
-  if(!window.sb) return;
-  const names=EMP.map(e=>e.nombre);
-  $('#h-emp').innerHTML='<option value="">— elegí —</option>'+names.map(n=>`<option>${esc(n)}</option>`).join('');
-}
-async function renderHistorial(){
-  if(PREVIEW){ $('#h-table').innerHTML='<div class="empty"><h3>Configurá Supabase</h3></div>'; return; }
-  const emp=$('#h-emp').value;
-  if(!emp){ $('#h-table').innerHTML='<div class="empty"><h3>Elegí un empleado</h3></div>'; return; }
-  const {marc,act}=await fetchPunch(null,null,emp);
-  const regs=punchDaysToRegs(aggPunch(marc,act));
-  if(!regs.length){ $('#h-table').innerHTML='<div class="empty"><h3>Sin registros de '+esc(emp)+'</h3></div>'; return; }
-  $('#h-table').innerHTML=`<div class="tbl-wrap"><table class="hist"><thead><tr><th>Fecha</th><th>Prog.</th><th>Entrada</th><th>Salida</th><th>Estado</th><th>Horas</th></tr></thead><tbody>${regs.map(r=>{
-    const est=r.ausente?pill('Ausente','gray'):(r.entrada_real?pill(r.tardanza_min>0?'Tarde '+r.tardanza_min+'m':'A tiempo',tardCls(r.tardanza_min)):pill('Sin marcar','gray'));
-    return `<tr><td>${fmtDate(r.fecha)}</td><td>${esc(r.entrada_prog||'—')}</td><td>${esc(r.entrada_real||'—')}</td><td>${esc(r.salida_real||'—')}</td><td>${est}</td><td class="num">${f1(r.horas)}</td></tr>`;
-  }).join('')}</tbody></table></div>`;
-}
-$('#h-emp').addEventListener('change',renderHistorial);
 
 /* ===== semanal ===== */
 function weekRange(dstr){ const d=dstr?new Date(dstr+'T00:00:00'):new Date(); const dow=(d.getDay()+6)%7; const mon=new Date(d); mon.setDate(d.getDate()-dow); const sun=new Date(mon); sun.setDate(mon.getDate()+6); const iso=x=>{const p=n=>String(n).padStart(2,'0');return `${x.getFullYear()}-${p(x.getMonth()+1)}-${p(x.getDate())}`;}; return [iso(mon),iso(sun)]; }
-let WK=[];
-async function renderSemanal(){
-  const [mon,sun]=weekRange($('#w-date').value); $('#w-range').textContent=`${fmtDate(mon)} al ${fmtDate(sun)}`;
-  if(PREVIEW){ $('#w-table').innerHTML='<div class="empty"><h3>Configurá Supabase</h3></div>'; $('#w-stats').innerHTML=''; WK=[]; return; }
-  WK=aggEmp(await fetchRange(mon,sun));
-  $('#w-stats').innerHTML=`<div class="stat"><div class="k">Empleados</div><div class="v">${WK.length}</div></div><div class="stat"><div class="k">Días</div><div class="v">${WK.reduce((s,r)=>s+r.dias,0)}</div></div><div class="stat"><div class="k">Ausencias</div><div class="v">${WK.reduce((s,r)=>s+r.aus,0)}</div></div>`;
-  if(!WK.length){ $('#w-table').innerHTML='<div class="empty"><h3>Sin registros esta semana</h3></div>'; return; }
-  $('#w-table').innerHTML=`<div class="tbl-wrap"><table class="hist"><thead><tr><th>Empleado</th><th>Días</th><th>Presentes</th><th>Ausencias</th><th>Puntualidad</th><th>Tard. prom</th><th>Horas prom</th></tr></thead><tbody>${WK.map(r=>`<tr><td>${esc(r.emp)}</td><td class="num">${r.dias}</td><td class="num">${r.pres}</td><td class="num">${r.aus||'—'}</td><td>${pill(pctS(r.punt),puntCls(r.punt))}</td><td>${pill(Math.round(r.tardProm)+'m',tardCls(r.tardProm))}</td><td class="num">${f1(r.horasProm)}</td></tr>`).join('')}</tbody></table></div>`;
-}
-$('#w-date').addEventListener('change',renderSemanal);
+function monthRange(){ const d=new Date(),y=d.getFullYear(),m=d.getMonth(); const iso=x=>{const p=n=>String(n).padStart(2,'0');return `${x.getFullYear()}-${p(x.getMonth()+1)}-${p(x.getDate())}`;}; return [iso(new Date(y,m,1)), iso(new Date(y,m+1,0))]; }
 function dl(blob,name){ const u=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=u; a.download=name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(u),1500); }
-$('#w-xlsx').addEventListener('click',async()=>{
-  if(!WK.length){ alert('Sin datos.'); return; } const [mon,sun]=weekRange($('#w-date').value);
-  const wb=new ExcelJS.Workbook(); const ws=wb.addWorksheet('Semana',{views:[{showGridLines:false}]});
+function periodoDash(){ const f=$('#d-from').value, t=$('#d-to').value; if(f&&t) return `${fmtDate(f)} al ${fmtDate(t)}`; if(f) return `desde ${fmtDate(f)}`; if(t) return `hasta ${fmtDate(t)}`; return 'Todo el historial'; }
+$('#d-semana').addEventListener('click',()=>{ const [a,b]=weekRange(); $('#d-from').value=a; $('#d-to').value=b; renderDashboard(); });
+$('#d-mes').addEventListener('click',()=>{ const [a,b]=monthRange(); $('#d-from').value=a; $('#d-to').value=b; renderDashboard(); });
+$('#d-xlsx').addEventListener('click',async()=>{
+  const rows=aggEmp(D_REGS); if(!rows.length){ alert('Sin datos en el período.'); return; } const periodo=periodoDash();
+  const wb=new ExcelJS.Workbook(); const ws=wb.addWorksheet('Asistencia',{views:[{showGridLines:false}]});
   const fill=c=>({type:'pattern',pattern:'solid',fgColor:{argb:c}}); const bd={top:{style:'thin',color:{argb:'FFD5DADE'}},bottom:{style:'thin',color:{argb:'FFD5DADE'}},left:{style:'thin',color:{argb:'FFD5DADE'}},right:{style:'thin',color:{argb:'FFD5DADE'}}};
   [26,8,11,11,13,12,11].forEach((w,i)=>ws.getColumn(i+1).width=w);
-  ws.mergeCells('A1:G1'); ws.getRow(1).height=28; let t=ws.getCell('A1'); t.value='Dropper · Asistencia Semanal de Oficina'; t.font={name:'Arial',bold:true,size:13,color:{argb:'FFFFFFFF'}}; t.fill=fill('FF0C0F0D'); t.alignment={vertical:'middle',horizontal:'left',indent:1};
-  ws.getCell('A3').value='Semana:'; ws.getCell('A3').font={name:'Arial',bold:true,size:10}; ws.getCell('B3').value=`${fmtDate(mon)} al ${fmtDate(sun)}`; ws.getCell('B3').font={name:'Arial',size:10};
+  ws.mergeCells('A1:G1'); ws.getRow(1).height=28; let t=ws.getCell('A1'); t.value='Dropper · Reporte de Asistencia'; t.font={name:'Arial',bold:true,size:13,color:{argb:'FFFFFFFF'}}; t.fill=fill('FF0C0F0D'); t.alignment={vertical:'middle',horizontal:'left',indent:1};
+  ws.getCell('A3').value='Período:'; ws.getCell('A3').font={name:'Arial',bold:true,size:10}; ws.getCell('B3').value=periodo; ws.getCell('B3').font={name:'Arial',size:10};
   let r=5; ['Empleado','Días','Presentes','Ausencias','Puntualidad','Tard. prom','Horas prom'].forEach((x,j)=>{ const c=ws.getCell(r,j+1); c.value=x; c.font={name:'Arial',bold:true,size:10}; c.fill=fill('FFF2F4F5'); c.border=bd; c.alignment={horizontal:j===0?'left':'center'}; }); r++;
-  WK.forEach((row,i)=>{ const even=i%2===0; const vals=[row.emp,row.dias,row.pres,row.aus,r2(row.punt),Math.round(row.tardProm),r2(row.horasProm)]; vals.forEach((v,j)=>{ const c=ws.getCell(r,j+1); c.value=v; c.fill=fill(even?'FFFFFFFF':'FFDDF0E2'); c.border=bd; c.font={name:'Arial',size:10}; c.alignment={horizontal:j===0?'left':'center'}; if(j===4) c.numFmt='0%'; }); r++; });
-  const buf=await wb.xlsx.writeBuffer(); dl(new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}),`Asistencia_Semana_${mon}.xlsx`);
+  rows.forEach((row,i)=>{ const even=i%2===0; const vals=[row.emp,row.dias,row.pres,row.aus,r2(row.punt),Math.round(row.tardProm),r2(row.horasProm)]; vals.forEach((v,j)=>{ const c=ws.getCell(r,j+1); c.value=v; c.fill=fill(even?'FFFFFFFF':'FFDDF0E2'); c.border=bd; c.font={name:'Arial',size:10}; c.alignment={horizontal:j===0?'left':'center'}; if(j===4) c.numFmt='0%'; }); r++; });
+  const buf=await wb.xlsx.writeBuffer(); dl(new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}),`Asistencia_${$('#d-from').value||'todo'}.xlsx`);
 });
-$('#w-pdf').addEventListener('click',()=>{
-  if(!WK.length){ alert('Sin datos.'); return; } const [mon,sun]=weekRange($('#w-date').value);
+$('#d-pdf').addEventListener('click',()=>{
+  const rows=aggEmp(D_REGS); if(!rows.length){ alert('Sin datos en el período.'); return; } const periodo=periodoDash();
   const {jsPDF}=window.jspdf; const doc=new jsPDF({unit:'pt',format:'a4'}); const PW=doc.internal.pageSize.getWidth(),M=40;
-  doc.setFillColor(12,15,13); doc.rect(0,0,PW,60,'F'); doc.setFont('helvetica','bold'); doc.setFontSize(15); doc.setTextColor(255,255,255); doc.text('Dropper · Asistencia Semanal de Oficina',M,30);
-  doc.setFont('helvetica','normal'); doc.setFontSize(9.5); doc.setTextColor(207,230,211); doc.text(`Semana: ${fmtDate(mon)} al ${fmtDate(sun)}`,M,47);
+  doc.setFillColor(12,15,13); doc.rect(0,0,PW,60,'F'); doc.setFont('helvetica','bold'); doc.setFontSize(15); doc.setTextColor(255,255,255); doc.text('Dropper · Reporte de Asistencia',M,30);
+  doc.setFont('helvetica','normal'); doc.setFontSize(9.5); doc.setTextColor(207,230,211); doc.text(`Período: ${periodo}`,M,47);
   doc.autoTable({ startY:78, head:[['Empleado','Días','Presentes','Ausencias','Puntualidad','Tard. prom','Horas prom']],
-    body:WK.map(r=>[r.emp,r.dias,r.pres,r.aus,pctS(r.punt),Math.round(r.tardProm)+'m',f1(r.horasProm)]),
+    body:rows.map(r=>[r.emp,r.dias,r.pres,r.aus,pctS(r.punt),Math.round(r.tardProm)+'m',f1(r.horasProm)]),
     styles:{font:'helvetica',fontSize:8.5,cellPadding:4,textColor:[26,26,26],lineColor:[213,218,222],lineWidth:0.5},
     headStyles:{fillColor:[31,122,61],textColor:[255,255,255],fontStyle:'bold'}, alternateRowStyles:{fillColor:[221,240,226]},
     columnStyles:{0:{cellWidth:'auto'},1:{halign:'center'},2:{halign:'center'},3:{halign:'center'},4:{halign:'center'},5:{halign:'center'},6:{halign:'center'}}, margin:{left:M,right:M} });
-  doc.save(`Asistencia_Semana_${mon}.pdf`);
+  doc.save('Reporte_Asistencia.pdf');
 });
 
 /* ===== puncheos (marcaje) ===== */
@@ -513,8 +472,9 @@ function punchDetail(d){
   actInfo+='</div>';
   return `<div class="pgrid">${fotos}</div>${actInfo}`;
 }
-$('#p-apply').addEventListener('click',renderPuncheos);
-$('#p-today').addEventListener('click',()=>{ $('#p-from').value=todayStr(); $('#p-to').value=todayStr(); renderPuncheos(); });
+function renderDia(){ renderPuncheos(); renderAvisos(); }
+$('#p-apply').addEventListener('click',renderDia);
+$('#p-today').addEventListener('click',()=>{ $('#p-from').value=todayStr(); $('#p-to').value=todayStr(); renderDia(); });
 function fillPEmp(){ const cur=$('#p-emp').value; $('#p-emp').innerHTML='<option value="">— todos —</option>'+EMP.map(e=>`<option ${e.nombre===cur?'selected':''}>${esc(e.nombre)}</option>`).join(''); }
 
 /* ===== avisos ===== */
@@ -558,8 +518,8 @@ async function computeAvisos(fecha){
 function setAvBadge(n){ const b=$('#av-badge'); if(!b) return; b.textContent=n; b.hidden=n===0; }
 async function updateAvisosBadge(){ if(PREVIEW){ setAvBadge(0); return; } const R=await computeAvisos(todayStr()); setAvBadge(R.faltaEnt.length+R.tarde.length+R.faltaSal.length); }
 async function renderAvisos(){
-  const fecha=$('#av-fecha').value||todayStr();
-  $('#av-when').textContent = fecha===todayStr() ? '· en vivo' : '';
+  const fecha=$('#p-to').value||todayStr();
+  $('#av-when').textContent = 'del '+fmtDate(fecha)+(fecha===todayStr()?' · en vivo':'');
   if(PREVIEW){ $('#av-list').innerHTML='<div class="empty"><h3>Configurá Supabase para ver los avisos</h3></div>'; $('#av-stats').innerHTML=''; return; }
   const R=await computeAvisos(fecha);
   const nAlert=R.faltaEnt.length+R.tarde.length+R.faltaSal.length; setAvBadge(nAlert);
@@ -574,8 +534,6 @@ async function renderAvisos(){
   if(R.libres.length) html+=sec('⬜ Día libre','gray',R.libres,n=>`<div class="av-item"><span class="nm">${esc(n)}</span><span class="d">Descanso</span></div>`);
   $('#av-list').innerHTML=html || '<div class="empty"><h3>Sin empleados activos</h3></div>';
 }
-$('#av-hoy').addEventListener('click',()=>{ $('#av-fecha').value=todayStr(); renderAvisos(); });
-$('#av-fecha').addEventListener('change',renderAvisos);
 
 /* ===== solicitudes ===== */
 const TIPO_LBL={ausencia:'Ausencia justificada',permiso:'Permiso',entrada_tarde:'Entrada tarde',cambio_turno:'Cambio de turno',otro:'Otro'};
@@ -620,29 +578,37 @@ $('#sf-add').addEventListener('click',async()=>{
 $('#sol-filtro').addEventListener('change',renderSolicitudes);
 
 /* ===== pestañas + init ===== */
+const TAB_VIEWS={ dia:['dia'], reportes:['dashboard'], solicitudes:['solicitudes'], empleados:['empleados'] };
+const TAB_HELP={
+  dia:'Lo que pasa cada día: avisos (quién no marcó, llegó tarde o no cerró) y el detalle de puncheos con fotos. Cambiá la fecha o el rango arriba.',
+  reportes:'Resumen por empleado en el período: días, puntualidad, tardanza y horas promedio. Tocá un empleado para ver sus días. Descargá Excel o PDF.',
+  solicitudes:'Permisos, ausencias y entradas tarde del personal. Aprobá o rechazá; las aprobadas silencian los avisos.',
+  empleados:'Dá de alta al personal y definí sus horarios (por defecto o turnos por día, con días libres).'
+};
+const ALL_VIEWS=['dia','dashboard','solicitudes','empleados'];
 document.querySelectorAll('.tabs button').forEach(b=>b.addEventListener('click',()=>{
   document.querySelectorAll('.tabs button').forEach(x=>x.classList.toggle('active',x===b));
-  const tab=b.dataset.tab; ['puncheos','avisos','solicitudes','dashboard','historial','semanal','empleados'].forEach(t=>$('#v-'+t).hidden=(t!==tab));
-  if(tab==='puncheos'){ fillPEmp(); renderPuncheos(); }
-  if(tab==='avisos') renderAvisos();
+  const tab=b.dataset.tab, shown=TAB_VIEWS[tab]||[];
+  ALL_VIEWS.forEach(v=>$('#v-'+v).hidden=!shown.includes(v));
+  $('#tab-help').textContent=TAB_HELP[tab]||'';
+  if(tab==='dia'){ fillPEmp(); renderDia(); }
+  if(tab==='reportes') renderDashboard();
   if(tab==='solicitudes') renderSolicitudes();
-  if(tab==='dashboard') renderDashboard();
-  if(tab==='historial'){ fillEmpSelect(); renderHistorial(); }
-  if(tab==='semanal') renderSemanal();
   if(tab==='empleados') renderEmpTab();
 }));
 $('#logout').addEventListener('click',e=>{ e.preventDefault(); window.dropperAuth.signOut(); });
 $('#lightbox').addEventListener('click',()=>$('#lightbox').classList.remove('show'));
-$('#w-date').value=todayStr();
+$('#tab-help').textContent=TAB_HELP.dia;
 $('#p-from').value=todayStr(); $('#p-to').value=todayStr();
-$('#av-fecha').value=todayStr(); $('#sf-desde').value=todayStr();
+$('#sf-desde').value=todayStr();
 (async function init(){
   const guard=await window.dropperAuth.requireSession();
   if(guard===null) return;
-  if(guard.previewMode){ PREVIEW=true; $('#notice').classList.add('show'); fillPEmp(); renderPuncheos(); return; }
+  $('#v-dia').hidden=false;
+  if(guard.previewMode){ PREVIEW=true; $('#notice').classList.add('show'); fillPEmp(); renderDia(); return; }
   PREVIEW=false; USER=guard.user; window.dropperNav.setUser(guard.user.email||'');
   IS_ADMIN=await checkAdmin(); applyRole();
-  await loadEmp(); fillPEmp(); renderPuncheos(); updateAvisosBadge(); updateSolBadge();
+  await loadEmp(); fillPEmp(); renderDia(); updateSolBadge();
 })();
 const ADMIN_EMAILS=['juanjoogaldez3@gmail.com'];   // respaldo por si la función RPC no responde
 async function checkAdmin(){
