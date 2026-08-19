@@ -37,6 +37,11 @@
   .camwrap .dot{position:absolute;top:10px;left:10px;display:flex;align-items:center;gap:6px;font-size:.72rem;font-weight:700;color:#fff;background:rgba(0,0,0,.45);padding:4px 9px;border-radius:20px}
   .camwrap .dot i{width:9px;height:9px;border-radius:50%;background:#ff5b5b;box-shadow:0 0 0 0 rgba(255,91,91,.6);animation:pl 1.6s infinite}
   @keyframes pl{0%{box-shadow:0 0 0 0 rgba(255,91,91,.6)}70%{box-shadow:0 0 0 8px rgba(255,91,91,0)}100%{box-shadow:0 0 0 0 rgba(255,91,91,0)}}
+  .camwrap:not(.live) .dot{display:none}
+  .camwrap:not(.live) video{visibility:hidden}
+  .camwrap.live .cam-off{display:none}
+  .cam-off{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;color:#8794b0;text-align:center;font-size:.82rem;line-height:1.3}
+  .cam-shot{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;background:rgba(0,0,0,.6);color:#fff;font-weight:700;font-size:1rem;text-align:center}
   .cam-msg{display:none;font-size:.82rem;color:#8a5a00;background:#fdf6e3;border:1px solid #f0e2b6;border-radius:10px;padding:10px 12px;line-height:1.5}
 
   .btns{display:grid;grid-template-columns:1fr 1fr;gap:12px}
@@ -156,9 +161,14 @@
 
     <div class="grid2">
       <div class="campanel">
-        <div class="camwrap">
+        <div class="camwrap" id="camwrap">
           <video id="cam" autoplay playsinline muted></video>
           <div class="dot"><i></i> EN VIVO</div>
+          <div class="cam-off">
+            <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+            <span>La cámara se enciende<br>solo al marcar</span>
+          </div>
+          <div class="cam-shot" id="cam-shot" hidden>📸<br>Tomando foto…</div>
         </div>
         <div class="cam-msg" id="cam-msg"></div>
         <div class="btns" id="btns"></div>
@@ -264,22 +274,35 @@ async function enterPanel(){
   $('#tl-date').textContent=fmtDateLong();
   $('#clock-date').textContent=fmtDateLong();
   $('#ms-desde').value=todayStr();
-  await startCam();
+  stopCam();
   await loadToday();
   renderButtons(); renderTimeline(); renderRefaccion();
   if(!PREVIEW){ await loadAct(); startHeartbeat(); renderAct(); loadMisSol(); }
 }
 
-/* ===== cámara ===== */
-async function startCam(){
-  if(STREAM) return;
+/* ===== cámara (solo se enciende al marcar) ===== */
+async function startCamOn(){
+  if(STREAM){ CAM_OK=true; return true; }
   try{
     STREAM=await navigator.mediaDevices.getUserMedia({video:{facingMode:'user',width:{ideal:640},height:{ideal:480}},audio:false});
     const v=$('#cam'); v.srcObject=STREAM; await v.play(); CAM_OK=true; $('#cam-msg').style.display='none';
+    $('#camwrap').classList.add('live'); return true;
   }catch(e){
-    CAM_OK=false; const m=$('#cam-msg'); m.style.display='block';
-    m.textContent='No se pudo abrir la cámara ('+(e.name||'error')+'). Podés marcar igual, pero sin foto. Revisá el permiso de cámara del navegador.';
+    STREAM=null; CAM_OK=false; const m=$('#cam-msg'); m.style.display='block';
+    m.textContent='No se pudo abrir la cámara ('+(e.name||'error')+'). Se marcará sin foto. Revisá el permiso de cámara.';
+    return false;
   }
+}
+function stopCam(){ if(STREAM){ STREAM.getTracks().forEach(t=>t.stop()); STREAM=null; } const v=$('#cam'); if(v) v.srcObject=null; CAM_OK=false; const w=$('#camwrap'); if(w) w.classList.remove('live'); }
+function waitFrames(v){ return new Promise(res=>{ let n=0; const id=setInterval(()=>{ n++; if((v.videoWidth>0 && v.readyState>=2)||n>25){ clearInterval(id); res(v.videoWidth>0); } },80); }); }
+async function grabPhoto(){
+  const shot=$('#cam-shot'); if(shot) shot.hidden=false;
+  const ok=await startCamOn();
+  if(!ok){ if(shot) shot.hidden=true; return null; }
+  const v=$('#cam'); await waitFrames(v); await new Promise(r=>setTimeout(r,450));   // deja que ajuste exposición
+  const foto=capture();
+  stopCam(); if(shot) shot.hidden=true;
+  return foto;
 }
 function capture(){
   if(!CAM_OK) return null;
@@ -318,7 +341,7 @@ function renderButtons(){
 async function punch(tipo){
   if(!allowed()[tipo]) return;
   if(TODAY.some(m=>m.tipo===tipo) && !confirm('Ya marcaste "'+TLABEL[tipo]+'" hoy. ¿Marcar de nuevo?')) return;
-  const foto=capture(), hora=nowHMS(), fecha=todayStr();
+  const hora=nowHMS(), fecha=todayStr(), foto=await grabPhoto();
   const rec={ empleado:MEMP.nombre, fecha, tipo, hora, ts:new Date().toISOString(), foto };
   if(PREVIEW){ TODAY.push(rec); afterPunch(tipo,hora); return; }
   status('Marcando '+TLABEL[tipo]+'…','work');
