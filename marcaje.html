@@ -22,6 +22,8 @@
   .who{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;background:var(--white);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);padding:14px 18px;margin-bottom:16px}
   .who .lbl{font-size:.78rem;color:var(--muted);font-weight:600}
   .who .nm{font-family:'Sora',sans-serif;font-weight:800;font-size:1.25rem;color:var(--ink)}
+  .who-turno{font-size:.8rem;color:var(--muted);margin-top:2px}.who-turno b{color:var(--ink)}
+  .who-turno .turno-libre{color:#8a5a00;background:#fdf6e3;border:1px solid #f0e2b6;border-radius:20px;padding:2px 10px;font-weight:700}
   .who .chg{font-size:.82rem;font-weight:600;color:var(--green-dk);border:1px solid #cdd8cf;background:#fff;border-radius:9px;padding:8px 12px;cursor:pointer}
   .who .chg:hover{border-color:var(--green)}
   .clock{font-family:'Sora',sans-serif;font-weight:800;font-size:1.6rem;color:var(--ink);letter-spacing:.5px}
@@ -128,6 +130,7 @@
       <div>
         <div class="lbl">Esta computadora es de</div>
         <div class="nm" id="who-name">—</div>
+        <div class="who-turno" id="who-turno"></div>
       </div>
       <div class="clock" id="clock" style="text-align:right">--:--<small id="clock-date"></small></div>
       <button class="chg" id="who-change">Cambiar persona</button>
@@ -176,6 +179,12 @@ function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;',
 function todayStr(){ const d=new Date(),p=x=>String(x).padStart(2,'0'); return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}`; }
 function nowHMS(){ const d=new Date(),p=x=>String(x).padStart(2,'0'); return `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`; }
 function hm(t){ const m=String(t||'').match(/(\d{1,2}):(\d{2})/); return m?(+m[1])*60+(+m[2]):null; }
+function progHoy(emp){
+  if(!emp) return {ent:null,sal:null,libre:false};
+  const h=emp.horario;
+  if(Array.isArray(h)&&h.length===7){ const d=h[new Date().getDay()]||{}; if(d.libre) return {ent:null,sal:null,libre:true}; return {ent:d.ent||emp.entrada_prog, sal:d.sal||emp.salida_prog, libre:false}; }
+  return {ent:emp.entrada_prog, sal:emp.salida_prog, libre:false};
+}
 function fmtDateLong(){ const d=new Date(); return d.toLocaleDateString('es-GT',{weekday:'long',day:'numeric',month:'long'}); }
 function pill(t,c){ return `<span class="pill ${c}">${t}</span>`; }
 function status(msg,type){ const s=$('#status'); s.className='status show '+(type||''); s.innerHTML=(type==='work'?'<span class="spin"></span>':'')+msg; if(type==='ok') setTimeout(()=>{ if(s.classList.contains('ok')) s.className='status'; },3000); }
@@ -213,6 +222,7 @@ async function enterPanel(){
   if(!MEMP){ showSetup(); return; }
   $('#v-setup').hidden=true; $('#v-panel').hidden=false;
   $('#who-name').textContent=MEMP.nombre;
+  const ph=progHoy(MEMP); $('#who-turno').innerHTML = ph.libre ? '<span class="turno-libre">Hoy es tu día libre</span>' : (ph.ent?`Horario hoy: <b>${esc(ph.ent)} – ${esc(ph.sal||'')}</b>`:'');
   $('#tl-date').textContent=fmtDateLong();
   $('#clock-date').textContent=fmtDateLong();
   await startCam();
@@ -283,7 +293,7 @@ async function punch(tipo){
 function afterPunch(tipo,hora){
   renderButtons(); renderTimeline();
   let extra='';
-  if(tipo==='entrada' && MEMP.entrada_prog){ const t=Math.max(0,(hm(hora)||0)-(hm(MEMP.entrada_prog)||0)); extra=' · '+(t>0?('llegaste '+t+' min tarde'):'a tiempo'); }
+  const ph=progHoy(MEMP); if(tipo==='entrada' && ph.ent && !ph.libre){ const t=Math.max(0,(hm(hora)||0)-(hm(ph.ent)||0)); extra=' · '+(t>0?('llegaste '+t+' min tarde'):'a tiempo'); }
   status('✓ '+TLABEL[tipo]+' marcada a las '+hora.slice(0,5)+extra,'ok');
 }
 
@@ -301,7 +311,7 @@ function renderTimeline(){
   const ms=[...TODAY].sort((a,b)=>String(a.ts).localeCompare(String(b.ts)));
   box.innerHTML=ms.map(m=>{
     const img=m.foto?`<img src="${m.foto}" class="lb-open" alt="foto">`:`<div class="noimg">—</div>`;
-    let pl=''; if(m.tipo==='entrada' && MEMP.entrada_prog){ const t=Math.max(0,(hm(m.hora)||0)-(hm(MEMP.entrada_prog)||0)); pl=pill(t>0?('Tarde '+t+'m'):'A tiempo',tardCls(t)); }
+    let pl=''; const ph=progHoy(MEMP); if(m.tipo==='entrada' && ph.ent && !ph.libre){ const t=Math.max(0,(hm(m.hora)||0)-(hm(ph.ent)||0)); pl=pill(t>0?('Tarde '+t+'m'):'A tiempo',tardCls(t)); }
     return `<div class="tl-item">
       <div class="tl-badge ${clsOf(m.tipo)}">${TEMOJI[m.tipo]||'•'}</div>
       <div class="tl-txt"><div class="lb">${esc(TLABEL[m.tipo]||m.tipo)}</div><div class="hr">${esc(String(m.hora).slice(0,8))}</div></div>

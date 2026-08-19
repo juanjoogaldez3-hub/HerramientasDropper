@@ -49,6 +49,15 @@
   .empmgr input{font-family:inherit;font-size:.9rem;border:1px solid #cdd8cf;border-radius:9px;padding:8px 10px}
   .empmgr .nom{min-width:160px;flex:1}.empmgr .hr{width:110px}
   .empmgr .x{border:none;background:#fdecea;color:#a3261a;border-radius:8px;padding:6px 10px;cursor:pointer;font-weight:600}
+  .empmgr .emp-item{border-bottom:1px solid var(--line)}.empmgr .emp-item:last-child{border-bottom:none}
+  .empmgr .emp-item .row{border-bottom:none}
+  .empmgr .em-turnos-t{display:inline-flex;align-items:center;gap:6px;font-size:.82rem;color:var(--muted);font-weight:600;cursor:pointer}.empmgr .em-turnos-t input{width:15px;height:15px}
+  .empmgr .turnos{display:flex;flex-wrap:wrap;gap:8px 16px;padding:6px 0 14px 2px}
+  .empmgr .trow{display:flex;align-items:center;gap:6px;background:#f7faf8;border:1px solid var(--line);border-radius:10px;padding:6px 9px}
+  .empmgr .trow .tw{font-weight:700;font-size:.78rem;color:var(--ink);min-width:30px}
+  .empmgr .trow input[type=time]{width:88px;padding:5px 6px;font-size:.82rem}
+  .empmgr .trow input:disabled{opacity:.4}
+  .empmgr .tlibre{display:inline-flex;align-items:center;gap:4px;font-size:.76rem;color:#8a5a00}.empmgr .tlibre input{width:14px;height:14px}
   .view[hidden]{display:none}
   .howto{font-size:.82rem;color:var(--muted);line-height:1.6}.howto b{color:var(--ink)}
   details.note{margin-top:14px}details.note summary{cursor:pointer;font-size:.85rem;font-weight:600;color:var(--green-dk)}
@@ -164,7 +173,7 @@
   <div class="view" id="v-empleados" hidden>
     <div class="panel" style="padding:18px 20px">
       <h3 style="font-family:'Sora',sans-serif;font-weight:700;font-size:1.05rem;margin-bottom:6px">Empleados y sus horarios</h3>
-      <div class="howto" style="margin-bottom:12px">Definí cada empleado con su hora de entrada y salida. Podés poner el mismo horario para todos o distinto por persona.</div>
+      <div class="howto" style="margin-bottom:12px">Definí la hora de entrada y salida <b>por defecto</b> de cada empleado. Si tiene <b>horario rotativo</b>, activá «Turnos por día» y ajustá cada día (o marcalo <b>Libre</b>).</div>
       <div class="empmgr" id="emp-list"></div>
       <div class="row" style="border:none;margin-top:12px;gap:10px">
         <input class="nom" id="emp-nombre" placeholder="Nombre del empleado" maxlength="60">
@@ -209,22 +218,41 @@ async function loadEmp(){
 function renderEmpTab(){
   const box=$('#emp-list');
   if(!EMP.length){ box.innerHTML='<div class="empty" style="padding:24px"><h3>Sin empleados</h3><p>Agregá el primero abajo.</p></div>'; return; }
-  box.innerHTML=EMP.map(e=>`<div class="row" data-id="${e.id}">
-    <input class="nom em-nom" value="${esc(e.nombre)}">
-    <input class="hr em-ent" type="time" value="${esc(e.entrada_prog)}">
-    <input class="hr em-sal" type="time" value="${esc(e.salida_prog)}">
-    <button class="btn btn-ghost em-save" style="width:auto;padding:6px 12px;font-size:.8rem">Guardar</button>
-    <button class="x em-del">Quitar</button>
-  </div>`).join('');
-  box.querySelectorAll('.row').forEach(row=>{
-    const id=row.dataset.id;
-    row.querySelector('.em-save').addEventListener('click',async()=>{
-      const nombre=row.querySelector('.em-nom').value.trim(), ent=row.querySelector('.em-ent').value, sal=row.querySelector('.em-sal').value;
+  const ORDEN=[1,2,3,4,5,6,0];
+  box.innerHTML=EMP.map(e=>{
+    const hasH=Array.isArray(e.horario)&&e.horario.length===7;
+    const turnos=ORDEN.map(wd=>{
+      const d=(hasH&&e.horario[wd])||{}; const ent=d.ent||e.entrada_prog, sal=d.sal||e.salida_prog, libre=!!d.libre;
+      return `<div class="trow" data-wd="${wd}"><span class="tw">${DIAS_SEM[wd]}</span>
+        <input type="time" class="t-ent" value="${esc(ent)}" ${libre?'disabled':''}>
+        <input type="time" class="t-sal" value="${esc(sal)}" ${libre?'disabled':''}>
+        <label class="tlibre"><input type="checkbox" class="t-libre" ${libre?'checked':''}> Libre</label></div>`;
+    }).join('');
+    return `<div class="emp-item" data-id="${e.id}">
+      <div class="row">
+        <input class="nom em-nom" value="${esc(e.nombre)}">
+        <input class="hr em-ent" type="time" value="${esc(e.entrada_prog)}" title="Entrada por defecto">
+        <input class="hr em-sal" type="time" value="${esc(e.salida_prog)}" title="Salida por defecto">
+        <label class="em-turnos-t"><input type="checkbox" class="em-usar-turnos" ${hasH?'checked':''}> Turnos por día</label>
+        <button class="btn btn-ghost em-save" style="width:auto;padding:6px 12px;font-size:.8rem">Guardar</button>
+        <button class="x em-del">Quitar</button>
+      </div>
+      <div class="turnos" ${hasH?'':'hidden'}>${turnos}</div>
+    </div>`;
+  }).join('');
+  box.querySelectorAll('.emp-item').forEach(item=>{
+    const id=item.dataset.id, usar=item.querySelector('.em-usar-turnos');
+    usar.addEventListener('change',()=>{ item.querySelector('.turnos').hidden=!usar.checked; });
+    item.querySelectorAll('.t-libre').forEach(chk=>chk.addEventListener('change',()=>{ const tr=chk.closest('.trow'); tr.querySelector('.t-ent').disabled=chk.checked; tr.querySelector('.t-sal').disabled=chk.checked; }));
+    item.querySelector('.em-save').addEventListener('click',async()=>{
+      const nombre=item.querySelector('.em-nom').value.trim(), ent=item.querySelector('.em-ent').value, sal=item.querySelector('.em-sal').value;
       if(!nombre) return;
-      await window.sb.from('empleados_oficina').update({nombre,entrada_prog:ent,salida_prog:sal}).eq('id',id);
+      let horario=null;
+      if(usar.checked){ horario=[null,null,null,null,null,null,null]; item.querySelectorAll('.trow').forEach(tr=>{ const wd=+tr.dataset.wd; horario[wd]=tr.querySelector('.t-libre').checked?{libre:true}:{ent:tr.querySelector('.t-ent').value,sal:tr.querySelector('.t-sal').value}; }); }
+      await window.sb.from('empleados_oficina').update({nombre,entrada_prog:ent,salida_prog:sal,horario}).eq('id',id);
       await loadEmp(); renderEmpTab(); status('✓ Guardado.','ok');
     });
-    row.querySelector('.em-del').addEventListener('click',async()=>{
+    item.querySelector('.em-del').addEventListener('click',async()=>{
       if(!confirm('¿Quitar a este empleado? (sus registros no se borran)')) return;
       await window.sb.from('empleados_oficina').delete().eq('id',id);
       await loadEmp(); renderEmpTab();
@@ -234,7 +262,7 @@ function renderEmpTab(){
 $('#emp-add').addEventListener('click',async()=>{
   if(!window.sb||!USER){ status('Configurá Supabase para guardar empleados.','err'); return; }
   const nombre=$('#emp-nombre').value.trim(); if(!nombre) return;
-  const {error}=await window.sb.from('empleados_oficina').insert({nombre,entrada_prog:$('#emp-ent').value,salida_prog:$('#emp-sal').value,created_by:USER.id});
+  const {error}=await window.sb.from('empleados_oficina').insert({nombre,entrada_prog:$('#emp-ent').value,salida_prog:$('#emp-sal').value,horario:null,created_by:USER.id});
   if(error){ status('No se pudo agregar: '+error.message,'err'); return; }
   $('#emp-nombre').value=''; await loadEmp(); renderEmpTab(); status('✓ Empleado agregado.','ok');
 });
@@ -243,7 +271,7 @@ $('#emp-add').addEventListener('click',async()=>{
 function punchDaysToRegs(days){
   return days.map(d=>({
     empleado:d.empleado, fecha:d.fecha,
-    entrada_prog: progOf(d.empleado),
+    entrada_prog: (d.libre?'Libre':progFor(empByName(d.empleado),d.fecha).ent),
     entrada_real: d.ent?String(d.ent.hora).slice(0,5):null,
     salida_real: d.sal?String(d.sal.hora).slice(0,5):null,
     tardanza_min: d.tard, horas: d.horas, ausente:false
@@ -357,7 +385,16 @@ $('#w-pdf').addEventListener('click',()=>{
 /* ===== puncheos (marcaje) ===== */
 const P_TLABEL={entrada:'Entrada',refaccion_salida:'Salida refacción',refaccion_regreso:'Regreso refacción',salida:'Salida'};
 const P_TEMOJI={entrada:'▶',refaccion_salida:'☕',refaccion_regreso:'↩',salida:'■'};
-function progOf(nombre){ const e=EMP.find(x=>x.nombre===nombre); return e?e.entrada_prog:null; }
+const DIAS_SEM=['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
+function empByName(n){ return EMP.find(x=>x.nombre===n)||null; }
+function diaSemana(f){ return new Date(String(f)+'T00:00:00').getDay(); }   // 0=Dom..6=Sáb
+function progFor(emp,f){
+  if(!emp) return {ent:null,sal:null,libre:false};
+  const h=emp.horario;
+  if(Array.isArray(h)&&h.length===7){ const d=h[diaSemana(f)]||{}; if(d.libre) return {ent:null,sal:null,libre:true}; return {ent:d.ent||emp.entrada_prog, sal:d.sal||emp.salida_prog, libre:false}; }
+  return {ent:emp.entrada_prog, sal:emp.salida_prog, libre:false};
+}
+function progOf(nombre){ const e=empByName(nombre); return e?e.entrada_prog:null; }
 function fmtHora(s){ return s?String(s).slice(0,5):'—'; }
 function hhmm(iso){ if(!iso) return '—'; const d=new Date(iso),p=x=>String(x).padStart(2,'0'); return `${p(d.getHours())}:${p(d.getMinutes())}`; }
 function aggPunch(marc,act){
@@ -370,11 +407,11 @@ function aggPunch(marc,act){
     const ent=g('entrada')[0], salA=g('salida'), sal=salA[salA.length-1], rout=g('refaccion_salida')[0], rin=g('refaccion_regreso')[0];
     const entH=ent?hm(ent.hora):null, salH=sal?hm(sal.hora):null;
     const refMin=(rout&&rin)?Math.max(0,hm(rin.hora)-hm(rout.hora)):0;
-    const prog=hm(progOf(d.empleado));
-    const tard=(entH!=null&&prog!=null)?Math.max(0,entH-prog):0;
+    const P=progFor(empByName(d.empleado),d.fecha); const prog=hm(P.ent);
+    const tard=(!P.libre && entH!=null&&prog!=null)?Math.max(0,entH-prog):0;
     let horas=0; if(entH!=null&&salH!=null) horas=Math.max(0,(salH-entH)/60 - refMin/60);
     const a=actMap.get(key(d.empleado,d.fecha));
-    return {empleado:d.empleado,fecha:d.fecha,ent,sal,rout,rin,refMin,tard,horas,marc:d.marc,cerrada:!!sal,
+    return {empleado:d.empleado,fecha:d.fecha,ent,sal,rout,rin,refMin,tard,horas,marc:d.marc,cerrada:!!sal,libre:P.libre,
             inact:a?(a.inactividad_min||0):0, ultimo:a?a.ultimo_latido:null, eventos:a&&Array.isArray(a.eventos)?a.eventos:[]};
   }).sort((a,b)=> a.fecha!==b.fecha ? b.fecha.localeCompare(a.fecha) : a.empleado.localeCompare(b.empleado));
 }
