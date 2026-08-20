@@ -77,6 +77,25 @@
   .evcard .evn{font-weight:700;color:var(--ink);font-size:.94rem;margin-bottom:6px}
   .evcard .evrow{display:flex;align-items:center;justify-content:space-between;gap:8px}
   .evcard .evh{font-size:.78rem;color:var(--muted);font-variant-numeric:tabular-nums;white-space:nowrap}
+  .cal-nav{display:flex;align-items:center;gap:12px;margin-bottom:14px}
+  .cal-label{font-family:'Sora',sans-serif;font-weight:800;font-size:1.15rem;text-transform:capitalize;min-width:180px;text-align:center}
+  .cal-head{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;margin-bottom:6px}
+  .cal-head div{font-size:.74rem;font-weight:700;color:var(--muted);text-align:center;text-transform:uppercase;letter-spacing:.03em}
+  .cal-body{display:grid;grid-template-columns:repeat(7,1fr);gap:6px}
+  .cal-cell{min-height:78px;border:1px solid var(--line);border-radius:10px;background:var(--white);padding:6px 8px;position:relative;overflow:hidden}
+  .cal-cell.out{background:transparent;border:none}
+  .cal-cell.has{cursor:pointer}.cal-cell.has:hover{border-color:var(--green);background:#fbfdfb}
+  .cal-cell.today{border-color:var(--green);box-shadow:inset 0 0 0 1px var(--green)}
+  .cal-cell.fut{opacity:.5}
+  .cal-num{font-family:'Sora',sans-serif;font-weight:700;font-size:.9rem;color:var(--ink)}
+  .cal-cell.today .cal-num{color:var(--green-dk)}
+  .cal-pres{display:block;font-size:.74rem;color:var(--green-dk);font-weight:600;margin-top:4px}
+  .cal-none{display:block;font-size:.8rem;color:#cdd8cf;margin-top:6px}
+  .cal-dots{display:flex;flex-wrap:wrap;gap:3px;margin-top:4px}
+  .cal-dot{font-size:.64rem;font-weight:700;border-radius:6px;padding:1px 5px}
+  .cal-dot.warn{color:#8a5a00;background:#fdf6e3;border:1px solid #f0e2b6}
+  .cal-dot.bad{color:#a3261a;background:#fdecea;border:1px solid #f5c6c0}
+  @media(max-width:560px){.cal-cell{min-height:58px;padding:4px 5px}.cal-pres,.cal-dot{font-size:.62rem}}
   .solform{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
   .solform select,.solform input{font-family:inherit;font-size:.9rem;border:1px solid #cdd8cf;border-radius:9px;padding:8px 10px;background:#fcfdfc}
   .solform label{font-size:.82rem;font-weight:600;color:var(--muted)}
@@ -131,6 +150,7 @@
     </div>
     <div class="tabs">
       <button data-tab="dia" class="active">Día a día <span class="tab-badge" id="av-badge" hidden>0</span></button>
+      <button data-tab="calendario">Calendario</button>
       <button data-tab="reportes">Reportes</button>
       <button data-tab="solicitudes">Solicitudes <span class="tab-badge" id="sol-badge" hidden>0</span></button>
       <button data-tab="empleados">Empleados</button>
@@ -166,6 +186,17 @@
       <label style="font-size:.84rem;font-weight:600;color:var(--muted)">Ver <select id="sol-filtro"><option value="pendiente">Pendientes</option><option value="all">Todas</option></select></label>
     </div>
     <div id="sol-list"></div>
+  </div>
+
+  <!-- ===== CALENDARIO ===== -->
+  <div class="view" id="v-calendario" hidden>
+    <div class="cal-nav">
+      <button class="btn btn-ghost" id="cal-prev" style="width:auto">◀</button>
+      <span class="cal-label" id="cal-label"></span>
+      <button class="btn btn-ghost" id="cal-next" style="width:auto">▶</button>
+      <button class="btn btn-ghost" id="cal-hoy" style="width:auto;font-size:.84rem">Hoy</button>
+    </div>
+    <div id="cal-grid"></div>
   </div>
 
   <!-- ===== REPORTES (dashboard + export) ===== -->
@@ -696,15 +727,46 @@ $('#sf-add').addEventListener('click',async()=>{
 });
 $('#sol-filtro').addEventListener('change',renderSolicitudes);
 
+/* ===== calendario ===== */
+let CAL_YM=null;
+function calIso(x){ const p=n=>String(n).padStart(2,'0'); return `${x.getFullYear()}-${p(x.getMonth()+1)}-${p(x.getDate())}`; }
+async function renderCalendario(){
+  if(!CAL_YM){ const d=new Date(); CAL_YM={y:d.getFullYear(),m:d.getMonth()}; }
+  const {y,m}=CAL_YM, first=new Date(y,m,1), last=new Date(y,m+1,0);
+  $('#cal-label').textContent=first.toLocaleDateString('es-GT',{month:'long',year:'numeric'});
+  if(PREVIEW){ $('#cal-grid').innerHTML='<div class="empty"><h3>Configurá Supabase para ver el calendario</h3></div>'; return; }
+  $('#cal-grid').innerHTML='<div class="empty" style="padding:30px;color:var(--muted)">Cargando…</div>';
+  const {marc,act}=await fetchPunch(calIso(first),calIso(last),'');
+  const days=aggPunch(marc,act); const just=await loadJustAll();
+  const byDay={};
+  days.forEach(d=>{ const o=byDay[d.fecha]||(byDay[d.fecha]={pres:0,tarde:0,inc:0}); if(!d.ent) return; const jt=justificaTardanza(just,d.empleado,d.fecha); o.pres++; if(d.tard>5&&!jt) o.tarde++; const e=empByName(d.empleado), req=(e&&e.horas_req!=null)?+e.horas_req:8; if(d.sal && (req-(d.horas||0))>0.25 && !jt) o.inc++; });
+  const off=(first.getDay()+6)%7, nd=last.getDate(), today=todayStr();
+  let cells='';
+  for(let i=0;i<off;i++) cells+='<div class="cal-cell out"></div>';
+  for(let dn=1;dn<=nd;dn++){
+    const ds=calIso(new Date(y,m,dn)), o=byDay[ds], fut=ds>today;
+    let inner='';
+    if(o){ inner=`<span class="cal-pres">${o.pres} marcaron</span>`; const dots=[]; if(o.tarde) dots.push(`<span class="cal-dot warn">${o.tarde} tarde</span>`); if(o.inc) dots.push(`<span class="cal-dot bad">${o.inc} inc.</span>`); if(dots.length) inner+=`<div class="cal-dots">${dots.join('')}</div>`; }
+    else if(!fut) inner='<span class="cal-none">—</span>';
+    cells+=`<div class="cal-cell${o?' has':''}${ds===today?' today':''}${fut?' fut':''}" data-d="${ds}"><span class="cal-num">${dn}</span>${inner}</div>`;
+  }
+  $('#cal-grid').innerHTML=`<div class="cal-head">${['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'].map(x=>`<div>${x}</div>`).join('')}</div><div class="cal-body">${cells}</div>`;
+  $('#cal-grid').querySelectorAll('.cal-cell[data-d]:not(.fut)').forEach(c=>c.addEventListener('click',()=>{ const d=c.dataset.d; $('#p-from').value=d; $('#p-to').value=d; document.querySelector('.tabs button[data-tab="dia"]').click(); }));
+}
+$('#cal-prev').addEventListener('click',()=>{ CAL_YM.m--; if(CAL_YM.m<0){CAL_YM.m=11;CAL_YM.y--;} renderCalendario(); });
+$('#cal-next').addEventListener('click',()=>{ CAL_YM.m++; if(CAL_YM.m>11){CAL_YM.m=0;CAL_YM.y++;} renderCalendario(); });
+$('#cal-hoy').addEventListener('click',()=>{ const d=new Date(); CAL_YM={y:d.getFullYear(),m:d.getMonth()}; renderCalendario(); });
+
 /* ===== pestañas + init ===== */
-const TAB_VIEWS={ dia:['dia'], reportes:['dashboard'], solicitudes:['solicitudes'], empleados:['empleados'] };
+const TAB_VIEWS={ dia:['dia'], calendario:['calendario'], reportes:['dashboard'], solicitudes:['solicitudes'], empleados:['empleados'] };
 const TAB_HELP={
-  dia:'Lo que pasa cada día: avisos (quién no marcó, llegó tarde o no cerró) y el detalle de puncheos con fotos. Cambiá la fecha o el rango arriba.',
+  dia:'Lo que pasa cada día: el estado en vivo, avisos (quién no marcó, llegó tarde o no cerró) y el detalle de puncheos con fotos. Cambiá la fecha o el rango arriba.',
+  calendario:'Vista de mes: cada día muestra cuántos marcaron y si hubo tardanzas u horas incompletas. Tocá un día para ver su detalle.',
   reportes:'Resumen por empleado en el período: días, puntualidad, tardanza y horas promedio. Tocá un empleado para ver sus días. Descargá Excel o PDF.',
   solicitudes:'Permisos, ausencias y entradas tarde del personal. Aprobá o rechazá; las aprobadas silencian los avisos.',
   empleados:'Dá de alta al personal y definí sus horarios (por defecto o turnos por día, con días libres).'
 };
-const ALL_VIEWS=['dia','dashboard','solicitudes','empleados'];
+const ALL_VIEWS=['dia','calendario','dashboard','solicitudes','empleados'];
 document.querySelectorAll('.tabs button').forEach(b=>b.addEventListener('click',()=>{
   document.querySelectorAll('.tabs button').forEach(x=>x.classList.toggle('active',x===b));
   const tab=b.dataset.tab, shown=TAB_VIEWS[tab]||[];
@@ -712,6 +774,7 @@ document.querySelectorAll('.tabs button').forEach(b=>b.addEventListener('click',
   $('#tab-help').textContent=TAB_HELP[tab]||'';
   if(tab!=='dia') stopEnVivo();
   if(tab==='dia'){ fillPEmp(); renderDia(); }
+  if(tab==='calendario') renderCalendario();
   if(tab==='reportes') renderDashboard();
   if(tab==='solicitudes') renderSolicitudes();
   if(tab==='empleados'){ renderEmpTab(); renderCfg(); }
