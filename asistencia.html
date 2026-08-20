@@ -71,6 +71,12 @@
   .av-items{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:8px}
   .av-item{display:flex;justify-content:space-between;align-items:center;gap:10px;background:var(--white);border:1px solid var(--line);border-radius:11px;padding:10px 13px;box-shadow:var(--shadow)}
   .av-item .nm{font-weight:700;color:var(--ink)}.av-item .d{font-size:.8rem;color:var(--muted);text-align:right}
+  .evgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:10px;margin-bottom:6px}
+  .evcard{background:var(--white);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow);padding:11px 13px;border-left:4px solid var(--line)}
+  .evcard.work{border-left-color:#2fa356}.evcard.ref{border-left-color:#e0a500}.evcard.noent{border-left-color:#cdd8cf}.evcard.off{border-left-color:#8794a0}.evcard.libre{border-left-color:#bcd8f2}.evcard.just{border-left-color:#2fa356}
+  .evcard .evn{font-weight:700;color:var(--ink);font-size:.94rem;margin-bottom:6px}
+  .evcard .evrow{display:flex;align-items:center;justify-content:space-between;gap:8px}
+  .evcard .evh{font-size:.78rem;color:var(--muted);font-variant-numeric:tabular-nums;white-space:nowrap}
   .solform{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
   .solform select,.solform input{font-family:inherit;font-size:.9rem;border:1px solid #cdd8cf;border-radius:9px;padding:8px 10px;background:#fcfdfc}
   .solform label{font-size:.82rem;font-weight:600;color:var(--muted)}
@@ -188,6 +194,11 @@
       <label style="font-size:.84rem;font-weight:600;color:var(--muted)">Empleado <select id="p-emp"></select></label>
       <button class="btn btn-ghost" id="p-apply" style="width:auto;padding:9px 14px;font-size:.86rem">Aplicar</button>
       <button class="btn btn-ghost" id="p-today" style="width:auto;padding:9px 14px;font-size:.86rem">Hoy</button>
+    </div>
+
+    <div id="ev-wrap" hidden>
+      <h3 class="sec-h">En vivo <span style="font-size:.78rem;color:var(--muted);font-weight:500">· estado ahora mismo</span></h3>
+      <div class="evgrid" id="envivo"></div>
     </div>
 
     <h3 class="sec-h">Avisos <span id="av-when" style="font-size:.78rem;color:var(--muted);font-weight:500"></span></h3>
@@ -535,7 +546,45 @@ function punchDetail(d){
   actInfo+='</div>';
   return `<div class="pgrid">${fotos}</div>${actInfo}`;
 }
-function renderDia(){ renderPuncheos(); renderAvisos(); }
+/* ===== tablero en vivo ===== */
+let EV_STATES=[], EV_TICK=null, EV_FETCH=null;
+const EV_PRIO={ref:0,work:1,noent:2,off:3,just:4,libre:5};
+function fmtSince(ms){ const s=Math.floor(ms/1000),p=x=>String(x).padStart(2,'0'); const h=Math.floor(s/3600),m=Math.floor(s%3600/60); return h?`${h}h ${p(m)}m`:`${m}m`; }
+function stopEnVivo(){ if(EV_TICK)clearInterval(EV_TICK); if(EV_FETCH)clearInterval(EV_FETCH); EV_TICK=EV_FETCH=null; }
+async function loadEnVivo(){
+  const fecha=todayStr();
+  const {marc,act}=await fetchPunch(fecha,fecha,'');
+  const byEmp={}; aggPunch(marc,act).forEach(d=>byEmp[d.empleado]=d);
+  const just=await justificadosDe(fecha);
+  EV_STATES=EMP.filter(e=>e.activo!==false).map(e=>{
+    const P=progFor(e,fecha), d=byEmp[e.nombre]; let st,cls,since=null;
+    if(P.libre){ st='Día libre'; cls='libre'; }
+    else if(just.full.has(e.nombre)){ st='Justificado'; cls='just'; }
+    else if(!d||!d.ent){ st='Sin entrada'; cls='noent'; }
+    else if(d.sal){ st='Salió'; cls='off'; since=d.sal.ts; }
+    else if(d.rout&&!d.rin){ st='En refacción'; cls='ref'; since=d.rout.ts; }
+    else { st='Trabajando'; cls='work'; since=(d.rin?d.rin.ts:d.ent.ts); }
+    return {nombre:e.nombre,st,cls,since};
+  }).sort((a,b)=> (EV_PRIO[a.cls]-EV_PRIO[b.cls]) || a.nombre.localeCompare(b.nombre));
+  paintEnVivo();
+}
+function paintEnVivo(){
+  const box=$('#envivo'); if(!box) return; const now=Date.now();
+  if(!EV_STATES.length){ box.innerHTML='<div class="empty" style="padding:16px;color:var(--muted)">Sin empleados activos.</div>'; return; }
+  box.innerHTML=EV_STATES.map(s=>{
+    let pillCls=(s.cls==='work'||s.cls==='just')?'ok':(s.cls==='ref'?'warn':'gray'), extra='', hace='';
+    if(s.since){ const ms=now-new Date(s.since).getTime(); hace='hace '+fmtSince(ms); if(s.cls==='ref'&&ms>3600000){ pillCls='bad'; extra=' · +1h'; } }
+    return `<div class="evcard ${s.cls}"><div class="evn">${esc(s.nombre)}</div><div class="evrow"><span class="pill ${pillCls}">${s.st}${extra}</span>${hace?`<span class="evh">${hace}</span>`:''}</div></div>`;
+  }).join('');
+}
+async function startEnVivo(){
+  const box=$('#ev-wrap'); if(!box) return;
+  const esHoy=($('#p-to').value||todayStr())===todayStr();
+  if(PREVIEW || !esHoy){ box.hidden=true; stopEnVivo(); return; }
+  box.hidden=false; stopEnVivo(); await loadEnVivo();
+  EV_TICK=setInterval(paintEnVivo,1000); EV_FETCH=setInterval(loadEnVivo,45000);
+}
+function renderDia(){ renderPuncheos(); renderAvisos(); startEnVivo(); }
 $('#p-apply').addEventListener('click',renderDia);
 $('#p-today').addEventListener('click',()=>{ $('#p-from').value=todayStr(); $('#p-to').value=todayStr(); renderDia(); });
 function fillPEmp(){ const cur=$('#p-emp').value; $('#p-emp').innerHTML='<option value="">— todos —</option>'+EMP.map(e=>`<option ${e.nombre===cur?'selected':''}>${esc(e.nombre)}</option>`).join(''); }
@@ -661,6 +710,7 @@ document.querySelectorAll('.tabs button').forEach(b=>b.addEventListener('click',
   const tab=b.dataset.tab, shown=TAB_VIEWS[tab]||[];
   ALL_VIEWS.forEach(v=>$('#v-'+v).hidden=!shown.includes(v));
   $('#tab-help').textContent=TAB_HELP[tab]||'';
+  if(tab!=='dia') stopEnVivo();
   if(tab==='dia'){ fillPEmp(); renderDia(); }
   if(tab==='reportes') renderDashboard();
   if(tab==='solicitudes') renderSolicitudes();
