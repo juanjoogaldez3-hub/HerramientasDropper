@@ -505,7 +505,7 @@ async function loadMisFaltas(){
   const jTardeAp=day=>apr.some(s=> s.fecha<=day&&day<=(s.fecha_fin||s.fecha) && ['entrada_tarde','permiso','ausencia'].includes(s.tipo));
   const jSalAp=day=>apr.some(s=> s.fecha<=day&&day<=(s.fecha_fin||s.fecha) && ['salida_temprano','permiso','ausencia'].includes(s.tipo));
   const byDay={}; marc.forEach(m=>{ (byDay[m.fecha]||(byDay[m.fecha]=[])).push(m); });
-  const req=(MEMP.horas_req!=null?+MEMP.horas_req:8);
+  const reqBase=(MEMP.horas_req!=null?+MEMP.horas_req:8);
   const issues=[]; let deudaTot=0;
   const start=new Date(desde+'T00:00:00'), end=new Date(hasta+'T00:00:00');
   for(let d=new Date(end); d>=start; d.setDate(d.getDate()-1)){
@@ -515,6 +515,7 @@ async function loadMisFaltas(){
     const ent=g('entrada')[0], salA=g('salida'), sal=salA[salA.length-1], rout=g('refaccion_salida')[0], rin=g('refaccion_regreso')[0];
     const entH=ent?hm(ent.hora):null, salH=sal?hm(sal.hora):null, progEnt=hm(P.ent), progSal=hm(P.sal);
     const refMin=(rout&&rin)?Math.max(0,hm(rin.hora)-hm(rout.hora)):0;
+    const span=(progEnt!=null&&progSal!=null)?(progSal-progEnt)/60:reqBase, req=Math.min(reqBase,span);   // requerido del día según su turno
     // Horas que debe. Si está justificado (entrada tarde/salida temprano aprobada) cuenta como si cumpliera → sin deuda.
     if(entH!=null && salH!=null){
       let entEfec=entH; if(jTardeAp(day)&&progEnt!=null) entEfec=Math.min(entH,progEnt);

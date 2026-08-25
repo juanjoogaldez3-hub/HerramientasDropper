@@ -418,7 +418,9 @@ function punchDaysToRegs(days,just){
     let entEfec=entH; if(jTarde && entH!=null && progEnt!=null) entEfec=Math.min(entH,progEnt);
     let salEfec=salH; if(jSal && salH!=null && progSal!=null) salEfec=Math.max(salH,progSal);
     let horasEfec=d.horas||0; if(entEfec!=null && salEfec!=null) horasEfec=Math.max(0,(salEfec-entEfec)/60-(d.refMin||0)/60);
-    const req=(emp&&emp.horas_req!=null)?+emp.horas_req:8;
+    const base=(emp&&emp.horas_req!=null)?+emp.horas_req:8;
+    const span=(progEnt!=null&&progSal!=null)?(progSal-progEnt)/60:base;
+    const req=d.libre?0:Math.min(base,span);   // requerido del día, nunca más que el turno; 0 si es día libre
     const deuda=(entH!=null&&salH!=null)?Math.max(0,req-horasEfec):0;   // 0 si está justificado
     return {
       empleado:d.empleado, fecha:d.fecha,
@@ -678,7 +680,9 @@ async function computeAvisos(fecha){
       if(!hoy){ R.faltaSal.push({nombre:e.nombre,txt:'No marcó salida'}); bien=false; }
       else if(progSal!=null && nm>progSal){ R.faltaSal.push({nombre:e.nombre,txt:'No ha marcado salida',prog:P.sal}); bien=false; }
     } else {
-      const req=(e.horas_req!=null?+e.horas_req:8);
+      const base=(e.horas_req!=null?+e.horas_req:8);
+      const span=(progEnt!=null&&progSal!=null)?(progSal-progEnt)/60:base;
+      const req=Math.min(base,span);
       const jTarde=just.full.has(e.nombre)||just.tarde.has(e.nombre), jSal=just.full.has(e.nombre)||just.salida.has(e.nombre);
       let entEfec=entH; if(jTarde&&entH!=null&&progEnt!=null) entEfec=Math.min(entH,progEnt);
       const horasEfec=Math.max(0,(salH-entEfec)/60-(d.refMin||0)/60), faltanH=req-horasEfec;
