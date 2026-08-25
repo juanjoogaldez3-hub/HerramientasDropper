@@ -96,6 +96,13 @@
   .ms-right{display:inline-flex;align-items:center;gap:8px;white-space:nowrap}
   .ms-cancel{border:none;background:#fdecea;color:#a3261a;border-radius:8px;padding:4px 9px;cursor:pointer;font-weight:600;font-size:.76rem}
   .ms-empty{font-size:.82rem;color:var(--muted)}
+  .mf-hint{font-size:.82rem;color:var(--muted);margin-bottom:10px}
+  .mf-deuda{background:#fdecea;border:1px solid #f5c6c0;color:#a3261a;border-radius:10px;padding:10px 13px;font-size:.9rem;margin-bottom:8px}.mf-deuda b{font-family:'Sora',sans-serif}
+  .mf-list{display:flex;flex-direction:column;gap:8px}
+  .mf-item{display:flex;justify-content:space-between;align-items:center;gap:12px;background:#fdf6e3;border:1px solid #f0e2b6;border-radius:10px;padding:10px 13px}
+  .mf-item .mf-l{display:flex;flex-direction:column;gap:2px;font-size:.86rem}.mf-item .mf-l b{color:var(--ink)}.mf-item .mf-l span{color:#8a5a00}
+  .mf-just{border:none;background:var(--green-dk);color:#fff;border-radius:9px;padding:7px 13px;cursor:pointer;font-weight:700;font-size:.82rem;white-space:nowrap}
+  .mf-just:hover{filter:brightness(1.08)}
   .view[hidden]{display:none}
 </style>
 </head>
@@ -183,6 +190,12 @@
       </div>
     </div>
 
+    <div class="solpanel" id="mf-panel" hidden>
+      <h3>Tus faltas por justificar</h3>
+      <div class="mf-hint">Si algo no fue tu culpa, tocá «Justificar» y mandá tu excepción. El supervisor la revisa.</div>
+      <div id="mf-list" class="mf-list"></div>
+    </div>
+
     <div class="solpanel">
       <h3>Solicitar permiso o ausencia</h3>
       <div class="solform">
@@ -227,12 +240,16 @@ function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;',
 function todayStr(){ const d=new Date(),p=x=>String(x).padStart(2,'0'); return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}`; }
 function nowHMS(){ const d=new Date(),p=x=>String(x).padStart(2,'0'); return `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`; }
 function hm(t){ const m=String(t||'').match(/(\d{1,2}):(\d{2})/); return m?(+m[1])*60+(+m[2]):null; }
-function progHoy(emp){
+function progForDate(emp,dateStr){
   if(!emp) return {ent:null,sal:null,libre:false};
-  const h=emp.horario;
-  if(Array.isArray(h)&&h.length===7){ const d=h[new Date().getDay()]||{}; if(d.libre) return {ent:null,sal:null,libre:true}; return {ent:d.ent||emp.entrada_prog, sal:d.sal||emp.salida_prog, libre:false}; }
+  const h=emp.horario, wd=new Date(dateStr+'T00:00:00').getDay();
+  if(Array.isArray(h)&&h.length===7){ const d=h[wd]||{}; if(d.libre) return {ent:null,sal:null,libre:true}; return {ent:d.ent||emp.entrada_prog, sal:d.sal||emp.salida_prog, libre:false}; }
   return {ent:emp.entrada_prog, sal:emp.salida_prog, libre:false};
 }
+function progHoy(emp){ return progForDate(emp,todayStr()); }
+function f1(n){ return Number(n||0).toLocaleString('es-GT',{minimumFractionDigits:1,maximumFractionDigits:1}); }
+function daysBack(n){ const d=new Date(); d.setDate(d.getDate()-n); return todayStrOf(d); }
+function todayStrOf(d){ const p=x=>String(x).padStart(2,'0'); return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}`; }
 function fmtDateLong(){ const d=new Date(); return d.toLocaleDateString('es-GT',{weekday:'long',day:'numeric',month:'long'}); }
 function fmtDMY(s){ const m=String(s||'').match(/(\d{4})-(\d{2})-(\d{2})/); return m?`${m[3]}/${m[2]}/${m[1]}`:s; }
 function getGeo(){ return new Promise(res=>{ if(!navigator.geolocation) return res(null); navigator.geolocation.getCurrentPosition(p=>res({lat:p.coords.latitude,lng:p.coords.longitude,acc:Math.round(p.coords.accuracy)}), ()=>res(null), {enableHighAccuracy:true,timeout:7000,maximumAge:20000}); }); }
@@ -279,7 +296,7 @@ async function enterPanel(){
   stopCam();
   await loadToday();
   renderButtons(); renderTimeline(); renderRefaccion();
-  if(!PREVIEW){ await loadAct(); startHeartbeat(); renderAct(); loadMisSol(); }
+  if(!PREVIEW){ await loadAct(); startHeartbeat(); renderAct(); loadMisSol(); loadMisFaltas(); }
 }
 
 /* ===== cámara (solo se enciende al marcar) ===== */
@@ -356,7 +373,7 @@ async function punch(tipo){
   }catch(err){ console.error(err); status('No se pudo marcar: '+err.message,'err'); }
 }
 function afterPunch(tipo,hora){
-  renderButtons(); renderTimeline(); renderRefaccion();
+  renderButtons(); renderTimeline(); renderRefaccion(); if(!PREVIEW) loadMisFaltas();
   let extra='';
   const ph=progHoy(MEMP); if(tipo==='entrada' && ph.ent && !ph.libre){ const t=Math.max(0,(hm(hora)||0)-(hm(ph.ent)||0)); extra=' · '+(t>0?('llegaste '+t+' min tarde'):'a tiempo'); }
   status('✓ '+TLABEL[tipo]+' marcada a las '+hora.slice(0,5)+extra,'ok');
@@ -471,7 +488,62 @@ async function loadMisSol(){
     if(!confirm('¿Cancelar esta solicitud?')) return;
     const {error}=await window.sb.from('solicitudes').delete().eq('id',b.dataset.id);
     if(error){ status('No se pudo cancelar: '+error.message,'err'); return; }
-    status('✓ Solicitud cancelada.','ok'); loadMisSol();
+    status('✓ Solicitud cancelada.','ok'); loadMisSol(); loadMisFaltas();
+  }));
+}
+/* ===== mis faltas por justificar ===== */
+async function loadMisFaltas(){
+  const panel=$('#mf-panel'); if(!panel) return;
+  if(PREVIEW||!MEMP||!window.sb){ panel.hidden=true; return; }
+  const desde=daysBack(14), hasta=todayStr();
+  const [rm,rs]=await Promise.all([
+    window.sb.from('asistencia_marcajes').select('fecha,tipo,hora,ts').eq('empleado',MEMP.nombre).gte('fecha',desde).lte('fecha',hasta).order('ts'),
+    window.sb.from('solicitudes').select('tipo,fecha,fecha_fin,estado').eq('empleado',MEMP.nombre).gte('fecha',desde)
+  ]);
+  const marc=rm.data||[], sol=rs.data||[], apr=sol.filter(s=>s.estado==='aprobada');
+  const cubre=(list,day)=>list.find(s=> s.fecha<=day && day<=(s.fecha_fin||s.fecha));
+  const jTardeAp=day=>apr.some(s=> s.fecha<=day&&day<=(s.fecha_fin||s.fecha) && ['entrada_tarde','permiso','ausencia'].includes(s.tipo));
+  const byDay={}; marc.forEach(m=>{ (byDay[m.fecha]||(byDay[m.fecha]=[])).push(m); });
+  const req=(MEMP.horas_req!=null?+MEMP.horas_req:8);
+  const issues=[]; let deudaTot=0;
+  const start=new Date(desde+'T00:00:00'), end=new Date(hasta+'T00:00:00');
+  for(let d=new Date(end); d>=start; d.setDate(d.getDate()-1)){
+    const day=todayStrOf(d), isToday=day===todayStr();
+    const P=progForDate(MEMP,day); if(P.libre) continue;
+    const ms=byDay[day]||[]; const g=t=>ms.filter(x=>x.tipo===t).sort((a,b)=>String(a.ts).localeCompare(String(b.ts)));
+    const ent=g('entrada')[0], salA=g('salida'), sal=salA[salA.length-1], rout=g('refaccion_salida')[0], rin=g('refaccion_regreso')[0];
+    const entH=ent?hm(ent.hora):null, salH=sal?hm(sal.hora):null, progEnt=hm(P.ent);
+    const refMin=(rout&&rin)?Math.max(0,hm(rin.hora)-hm(rout.hora)):0;
+    // Horas que debe (con crédito si la entrada tarde ya está aprobada)
+    if(entH!=null && salH!=null){ let entEfec=entH; if(jTardeAp(day)&&progEnt!=null) entEfec=Math.min(entH,progEnt); const he=Math.max(0,(salH-entEfec)/60-refMin/60); deudaTot+=Math.max(0,req-he); }
+    // Faltas por justificar (con valores reales)
+    let probs=[], tipo=null;
+    if(entH==null){ if(!isToday){ probs.push('No marcaste entrada'); tipo='ausencia'; } }
+    else {
+      const tard=(progEnt!=null)?Math.max(0,entH-progEnt):0;
+      if(tard>5){ probs.push('Llegaste tarde '+tard+' min'); tipo='entrada_tarde'; }
+      if(salH==null){ if(!isToday){ probs.push('No marcaste salida'); tipo=tipo||'salida_temprano'; } }
+      else { const he=Math.max(0,(salH-entH)/60-refMin/60); if(req-he>0.25){ probs.push('Saliste temprano ('+f1(he)+'h de '+f1(req)+'h)'); tipo=tipo||'salida_temprano'; } if(refMin>60){ probs.push('Refacción de '+refMin+'m (pasó de 1h)'); tipo=tipo||'permiso'; } }
+    }
+    if(!probs.length) continue;
+    const sd=cubre(sol,day);
+    if(sd && sd.estado==='aprobada') continue;   // ya justificado
+    issues.push({day,probs,tipo:tipo||'permiso',sol:sd});
+  }
+  if(!issues.length && deudaTot<=0.05){ panel.hidden=true; return; }
+  panel.hidden=false;
+  const banner = deudaTot>0.05 ? `<div class="mf-deuda">Debés <b>${f1(deudaTot)} horas</b> por reponer (últimos 14 días).</div>` : '';
+  const lista = issues.length ? issues.map((it,i)=>{
+    const right = it.sol ? (it.sol.estado==='rechazada'?pill('Rechazada','bad'):pill('Enviada','warn'))
+                         : `<button class="mf-just" data-i="${i}">Justificar</button>`;
+    return `<div class="mf-item"><div class="mf-l"><b>${fmtDMY(it.day)}</b><span>${it.probs.map(esc).join(' · ')}</span></div><div class="mf-r">${right}</div></div>`;
+  }).join('') : '<div class="ms-empty">No tenés faltas sin justificar.</div>';
+  $('#mf-list').innerHTML=banner+lista;
+  $('#mf-list').querySelectorAll('.mf-just').forEach(b=>b.addEventListener('click',()=>{
+    const it=issues[+b.dataset.i];
+    $('#ms-tipo').value=it.tipo; $('#ms-desde').value=it.day; $('#ms-hasta').value=''; $('#ms-motivo').value=''; $('#ms-motivo').focus();
+    document.querySelector('.solpanel:last-of-type').scrollIntoView({behavior:'smooth',block:'center'});
+    status('Completá el motivo y tocá Enviar.','ok');
   }));
 }
 $('#ms-send').addEventListener('click',async()=>{
@@ -481,7 +553,7 @@ $('#ms-send').addEventListener('click',async()=>{
   if(!desde){ status('Elegí la fecha «Desde».','err'); return; }
   const {error}=await window.sb.from('solicitudes').insert({empleado:MEMP.nombre,tipo,fecha:desde,fecha_fin:hasta,motivo:motivo||null,estado:'pendiente',created_by:USER.id,created_by_email:USER.email||null});
   if(error){ status('No se pudo enviar: '+error.message,'err'); return; }
-  $('#ms-motivo').value=''; status('✓ Solicitud enviada. Queda pendiente de aprobación.','ok'); loadMisSol();
+  $('#ms-motivo').value=''; status('✓ Solicitud enviada. Queda pendiente de aprobación.','ok'); loadMisSol(); loadMisFaltas();
 });
 
 $('#logout').addEventListener('click',e=>{ e.preventDefault(); stopHeartbeat(); window.dropperAuth.signOut(); });
