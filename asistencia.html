@@ -399,7 +399,7 @@ $('#cfg-save').addEventListener('click',async()=>{
 async function loadJustAll(){
   if(!window.sb) return [];
   const {data}=await window.sb.from('solicitudes').select('empleado,tipo,fecha,fecha_fin,estado').eq('estado','aprobada').limit(2000);
-  return (data||[]).filter(s=>['ausencia','permiso','entrada_tarde'].includes(s.tipo));
+  return (data||[]).filter(s=>['ausencia','permiso','entrada_tarde','salida_temprano'].includes(s.tipo));
 }
 // Justifica tardanza: entrada tarde / permiso / ausencia aprobados.
 function justificaTardanza(list,emp,fecha){
