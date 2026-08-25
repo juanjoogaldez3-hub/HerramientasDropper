@@ -681,7 +681,7 @@ async function computeAvisos(fecha){
       const jTarde=just.full.has(e.nombre)||just.tarde.has(e.nombre), jSal=just.full.has(e.nombre)||just.salida.has(e.nombre);
       let entEfec=entH; if(jTarde&&entH!=null&&progEnt!=null) entEfec=Math.min(entH,progEnt);
       const horasEfec=Math.max(0,(salH-entEfec)/60-(d.refMin||0)/60), faltanH=req-horasEfec;
-      if(faltanH>0.25 && !jSal){ R.incompletas.push({nombre:e.nombre,faltan:Math.round(faltanH*60),req,netas:horasEfec}); bien=false; }
+      if(faltanH>0.083 && !jSal){ R.incompletas.push({nombre:e.nombre,faltan:Math.round(faltanH*60),req,netas:horasEfec}); bien=false; }
     }
     const maxRef=CONFIG.refaccion_max_min||60;
     if(d.refMin>maxRef){ R.refExcedida.push({nombre:e.nombre,min:d.refMin,max:maxRef}); bien=false; }
