@@ -206,6 +206,7 @@
       <label style="font-size:.84rem;font-weight:600;color:var(--muted)">Hasta <input type="date" id="d-to"></label>
       <button class="btn btn-ghost" id="d-apply" style="width:auto;padding:9px 14px;font-size:.86rem">Aplicar</button>
       <button class="btn btn-ghost" id="d-semana" style="width:auto;padding:9px 14px;font-size:.86rem">Semana</button>
+      <button class="btn btn-ghost" id="d-quincena" style="width:auto;padding:9px 14px;font-size:.86rem">Quincena</button>
       <button class="btn btn-ghost" id="d-mes" style="width:auto;padding:9px 14px;font-size:.86rem">Mes</button>
       <button class="btn btn-ghost" id="d-clear" style="width:auto;padding:9px 14px;font-size:.86rem">Todo</button>
       <span style="flex:1"></span>
@@ -482,9 +483,17 @@ $('#d-clear').addEventListener('click',()=>{ $('#d-from').value=''; $('#d-to').v
 /* ===== semanal ===== */
 function weekRange(dstr){ const d=dstr?new Date(dstr+'T00:00:00'):new Date(); const dow=(d.getDay()+6)%7; const mon=new Date(d); mon.setDate(d.getDate()-dow); const sun=new Date(mon); sun.setDate(mon.getDate()+6); const iso=x=>{const p=n=>String(n).padStart(2,'0');return `${x.getFullYear()}-${p(x.getMonth()+1)}-${p(x.getDate())}`;}; return [iso(mon),iso(sun)]; }
 function monthRange(){ const d=new Date(),y=d.getFullYear(),m=d.getMonth(); const iso=x=>{const p=n=>String(n).padStart(2,'0');return `${x.getFullYear()}-${p(x.getMonth()+1)}-${p(x.getDate())}`;}; return [iso(new Date(y,m,1)), iso(new Date(y,m+1,0))]; }
+function quincenaRange(){
+  const d=new Date(),y=d.getFullYear(),m=d.getMonth(),day=d.getDate();
+  const iso=x=>{const p=n=>String(n).padStart(2,'0');return `${x.getFullYear()}-${p(x.getMonth()+1)}-${p(x.getDate())}`;};
+  let s,e; if(day<=15){ s=new Date(y,m,1); e=new Date(y,m,15); } else { s=new Date(y,m,16); e=new Date(y,m+1,0); }
+  while(s.getDay()===0){ s.setDate(s.getDate()+1); }   // primer día hábil (salta solo domingo; sábado sí cuenta)
+  return [iso(s), iso(e)];
+}
 function dl(blob,name){ const u=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=u; a.download=name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(u),1500); }
 function periodoDash(){ const f=$('#d-from').value, t=$('#d-to').value; if(f&&t) return `${fmtDate(f)} al ${fmtDate(t)}`; if(f) return `desde ${fmtDate(f)}`; if(t) return `hasta ${fmtDate(t)}`; return 'Todo el historial'; }
 $('#d-semana').addEventListener('click',()=>{ const [a,b]=weekRange(); $('#d-from').value=a; $('#d-to').value=b; renderDashboard(); });
+$('#d-quincena').addEventListener('click',()=>{ const [a,b]=quincenaRange(); $('#d-from').value=a; $('#d-to').value=b; renderDashboard(); });
 $('#d-mes').addEventListener('click',()=>{ const [a,b]=monthRange(); $('#d-from').value=a; $('#d-to').value=b; renderDashboard(); });
 $('#d-xlsx').addEventListener('click',async()=>{
   const rows=aggEmp(D_REGS); if(!rows.length){ alert('Sin datos en el período.'); return; } const periodo=periodoDash();
