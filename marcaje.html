@@ -521,7 +521,7 @@ async function loadMisFaltas(){
     if(entH!=null && salH!=null){
       let entEfec=entH; if(jTardeAp(day)&&progEnt!=null) entEfec=Math.min(entH,progEnt);
       let salEfec=salH; if(jSalAp(day)&&progSal!=null) salEfec=Math.max(salH,progSal);
-      const he=Math.max(0,(salEfec-entEfec)/60-refMin/60); deudaTot+=Math.max(0,req-he);
+      const refCap=Math.min(refMin,60); const he=Math.max(0,(salEfec-entEfec)/60-refCap/60); deudaTot+=Math.max(0,req-he);
     }
     // Faltas por justificar (con valores reales)
     let probs=[], tipo=null;
@@ -530,7 +530,7 @@ async function loadMisFaltas(){
       const tard=(progEnt!=null)?Math.max(0,entH-progEnt):0;
       if(tard>5){ probs.push('Llegaste tarde '+tard+' min'); tipo='entrada_tarde'; }
       if(salH==null){ if(!isToday){ probs.push('No marcaste salida'); tipo=tipo||'salida_temprano'; } }
-      else { const he=Math.max(0,(salH-entH)/60-refMin/60); if(req-he>0.083){ probs.push('No cumpliste las '+f1(req)+'h (hiciste '+f1(he)+'h)'); tipo=tipo||'salida_temprano'; } if(refMin>60){ probs.push('Refacción de '+refMin+'m (pasó de 1h)'); tipo=tipo||'permiso'; } }
+      else { const refCap=Math.min(refMin,60), he=Math.max(0,(salH-entH)/60-refCap/60); if(req-he>0.083){ probs.push('No cumpliste las '+f1(req)+'h (hiciste '+f1(he)+'h)'); tipo=tipo||'salida_temprano'; } if(refMin>60){ probs.push('Refacción de '+refMin+'m (pasó de 1h)'); tipo=tipo||'permiso'; } }
     }
     if(!probs.length) continue;
     const sd=cubre(sol,day);

@@ -417,7 +417,8 @@ function punchDaysToRegs(days,just){
     // Justificado = cuenta como si hubiera cumplido: entrada tarde acredita la entrada, salida temprano acredita la salida.
     let entEfec=entH; if(jTarde && entH!=null && progEnt!=null) entEfec=Math.min(entH,progEnt);
     let salEfec=salH; if(jSal && salH!=null && progSal!=null) salEfec=Math.max(salH,progSal);
-    let horasEfec=d.horas||0; if(entEfec!=null && salEfec!=null) horasEfec=Math.max(0,(salEfec-entEfec)/60-(d.refMin||0)/60);
+    const refCap=Math.min(d.refMin||0,(CONFIG.refaccion_max_min||60));   // refacción de más no cuenta como deuda (tiene su propio aviso)
+    let horasEfec=d.horas||0; if(entEfec!=null && salEfec!=null) horasEfec=Math.max(0,(salEfec-entEfec)/60-refCap/60);
     const base=(emp&&emp.horas_req!=null)?+emp.horas_req:8;
     const span=(progEnt!=null&&progSal!=null)?(progSal-progEnt)/60:base;
     const req=d.libre?0:Math.min(base,span);   // requerido del día, nunca más que el turno; 0 si es día libre
@@ -686,7 +687,8 @@ async function computeAvisos(fecha){
       const req=Math.min(base,span);
       const jTarde=just.full.has(e.nombre)||just.tarde.has(e.nombre), jSal=just.full.has(e.nombre)||just.salida.has(e.nombre);
       let entEfec=entH; if(jTarde&&entH!=null&&progEnt!=null) entEfec=Math.min(entH,progEnt);
-      const horasEfec=Math.max(0,(salH-entEfec)/60-(d.refMin||0)/60), faltanH=req-horasEfec;
+      const refCap2=Math.min(d.refMin||0,(CONFIG.refaccion_max_min||60));
+      const horasEfec=Math.max(0,(salH-entEfec)/60-refCap2/60), faltanH=req-horasEfec;
       if(faltanH>0.083 && !jSal){ R.incompletas.push({nombre:e.nombre,faltan:Math.round(faltanH*60),req,netas:horasEfec}); bien=false; }
     }
     const maxRef=CONFIG.refaccion_max_min||60;
