@@ -412,13 +412,14 @@ function justificaSalida(list,emp,fecha){
 function punchDaysToRegs(days,just){
   return days.map(d=>{
     const emp=empByName(d.empleado), P=progFor(emp,d.fecha);
-    const entH=d.ent?hm(d.ent.hora):null, salH=d.sal?hm(d.sal.hora):null, progEnt=hm(P.ent);
+    const entH=d.ent?hm(d.ent.hora):null, salH=d.sal?hm(d.sal.hora):null, progEnt=hm(P.ent), progSal=hm(P.sal);
     const jTarde=justificaTardanza(just,d.empleado,d.fecha), jSal=justificaSalida(just,d.empleado,d.fecha);
-    // Con entrada tarde aprobada, la entrada cuenta como la hora programada (crédito de horas).
+    // Justificado = cuenta como si hubiera cumplido: entrada tarde acredita la entrada, salida temprano acredita la salida.
     let entEfec=entH; if(jTarde && entH!=null && progEnt!=null) entEfec=Math.min(entH,progEnt);
-    let horasEfec=d.horas||0; if(entEfec!=null && salH!=null) horasEfec=Math.max(0,(salH-entEfec)/60-(d.refMin||0)/60);
+    let salEfec=salH; if(jSal && salH!=null && progSal!=null) salEfec=Math.max(salH,progSal);
+    let horasEfec=d.horas||0; if(entEfec!=null && salEfec!=null) horasEfec=Math.max(0,(salEfec-entEfec)/60-(d.refMin||0)/60);
     const req=(emp&&emp.horas_req!=null)?+emp.horas_req:8;
-    const deuda=(entH!=null&&salH!=null)?Math.max(0,req-horasEfec):0;   // horas que debe (aunque la salida esté justificada)
+    const deuda=(entH!=null&&salH!=null)?Math.max(0,req-horasEfec):0;   // 0 si está justificado
     return {
       empleado:d.empleado, fecha:d.fecha,
       entrada_prog: (d.libre?'Libre':P.ent),
