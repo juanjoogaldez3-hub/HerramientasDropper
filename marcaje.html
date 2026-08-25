@@ -248,6 +248,7 @@ function progForDate(emp,dateStr){
 }
 function progHoy(emp){ return progForDate(emp,todayStr()); }
 function f1(n){ return Number(n||0).toLocaleString('es-GT',{minimumFractionDigits:1,maximumFractionDigits:1}); }
+function fmtDebe(h){ const min=Math.round((+h||0)*60); return min<60 ? min+' min' : f1(min/60)+'h'; }
 function daysBack(n){ const d=new Date(); d.setDate(d.getDate()-n); return todayStrOf(d); }
 function todayStrOf(d){ const p=x=>String(x).padStart(2,'0'); return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}`; }
 function fmtDateLong(){ const d=new Date(); return d.toLocaleDateString('es-GT',{weekday:'long',day:'numeric',month:'long'}); }
@@ -538,7 +539,7 @@ async function loadMisFaltas(){
   }
   if(!issues.length && deudaTot<=0.05){ panel.hidden=true; return; }
   panel.hidden=false;
-  const banner = deudaTot>0.05 ? `<div class="mf-deuda">Debés <b>${f1(deudaTot)} horas</b> por reponer (últimos 14 días).</div>` : '';
+  const banner = deudaTot>0.008 ? `<div class="mf-deuda">Debés <b>${fmtDebe(deudaTot)}</b> por reponer (últimos 14 días).</div>` : '';
   const lista = issues.length ? issues.map((it,i)=>{
     const right = it.sol ? (it.sol.estado==='rechazada'?pill('Rechazada','bad'):pill('Enviada','warn'))
                          : `<button class="mf-just" data-i="${i}">Justificar</button>`;

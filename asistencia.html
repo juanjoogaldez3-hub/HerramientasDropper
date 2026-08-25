@@ -452,12 +452,13 @@ function aggEmp(regs){
   });
 }
 function puntCls(p){ return p>=0.9?'ok':(p>=0.75?'warn':'bad'); }
+function fmtDebe(h){ const min=Math.round((+h||0)*60); return min<60 ? min+' min' : f1(min/60)+'h'; }
 function renderDTable(){
   let rows=aggEmp(D_REGS);
   const {key,dir}=D_SORT;
   rows.sort((a,b)=>{ const av=key==='emp'?a.emp.toLowerCase():a[key], bv=key==='emp'?b.emp.toLowerCase():b[key]; return av<bv?-dir:(av>bv?dir:0); });
   const deudaTot=rows.reduce((s,r)=>s+r.deuda,0);
-  $('#d-stats').innerHTML=`<div class="stat"><div class="k">Empleados</div><div class="v">${rows.length}</div></div><div class="stat"><div class="k">Días registrados</div><div class="v">${rows.reduce((s,r)=>s+r.dias,0)}</div></div><div class="stat"><div class="k">Ausencias</div><div class="v">${rows.reduce((s,r)=>s+r.aus,0)}</div></div><div class="stat"><div class="k">Horas que deben</div><div class="v">${f1(deudaTot)}h</div></div>`;
+  $('#d-stats').innerHTML=`<div class="stat"><div class="k">Empleados</div><div class="v">${rows.length}</div></div><div class="stat"><div class="k">Días registrados</div><div class="v">${rows.reduce((s,r)=>s+r.dias,0)}</div></div><div class="stat"><div class="k">Ausencias</div><div class="v">${rows.reduce((s,r)=>s+r.aus,0)}</div></div><div class="stat"><div class="k">Deben (tiempo)</div><div class="v">${deudaTot>0.008?fmtDebe(deudaTot):'0'}</div></div>`;
   if(!rows.length){ $('#d-table').innerHTML='<div class="empty"><h3>Sin datos guardados en el período</h3></div>'; return; }
   const cols=[['emp','Empleado'],['dias','Días'],['pres','Presentes'],['aus','Ausencias'],['punt','Puntualidad'],['tardProm','Tard. prom'],['horasProm','Horas prom'],['deuda','Debe']];
   const arrow=k2=>D_SORT.key===k2?(D_SORT.dir<0?' ▾':' ▴'):'';
@@ -466,7 +467,7 @@ function renderDTable(){
     <tr class="drow" data-i="${i}"><td><span class="dcaret">▸</span>${esc(r.emp)}</td>
       <td class="num">${r.dias}</td><td class="num">${r.pres}</td><td class="num">${r.aus||'—'}</td>
       <td>${pill(pctS(r.punt),puntCls(r.punt))}</td><td>${pill(Math.round(r.tardProm)+'m',tardCls(r.tardProm))}</td><td class="num">${f1(r.horasProm)}</td>
-      <td class="num">${r.deuda>0.05?pill(f1(r.deuda)+'h','bad'):'—'}</td></tr>
+      <td class="num">${r.deuda>0.008?pill(fmtDebe(r.deuda),'bad'):'—'}</td></tr>
     <tr class="ddetail" data-i="${i}" hidden><td colspan="8">${dayDetail(r.days)}</td></tr>`).join('');
   $('#d-table').innerHTML=`<div class="tbl-wrap"><table class="hist"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div>`;
   $('#d-table').querySelectorAll('th.sortable').forEach(th=>th.addEventListener('click',()=>{ const k2=th.dataset.k; if(D_SORT.key===k2) D_SORT.dir*=-1; else D_SORT={key:k2,dir:(k2==='emp'?1:-1)}; renderDTable(); }));
@@ -476,7 +477,7 @@ function dayDetail(days){
   const ds=[...days].sort((a,b)=>b.fecha.localeCompare(a.fecha));
   return `<table class="hist"><thead><tr><th>Fecha</th><th>Entrada</th><th>Salida</th><th>Estado</th><th>Horas</th><th>Debe</th></tr></thead><tbody>${ds.map(r=>{
     const est=r.ausente?pill('Ausente','gray'):(r.entrada_real?(r.justificado?pill('Justificado','ok'):pill(r.tardanza_min>0?'Tarde '+r.tardanza_min+'m':'A tiempo',tardCls(r.tardanza_min))):pill('Sin marcar','gray'));
-    return `<tr><td>${fmtDate(r.fecha)}</td><td>${esc(r.entrada_real||'—')}</td><td>${esc(r.salida_real||'—')}</td><td>${est}</td><td class="num">${f1(r.horas)}</td><td class="num">${r.deuda>0.05?pill(f1(r.deuda)+'h','bad'):'—'}</td></tr>`;
+    return `<tr><td>${fmtDate(r.fecha)}</td><td>${esc(r.entrada_real||'—')}</td><td>${esc(r.salida_real||'—')}</td><td>${est}</td><td class="num">${f1(r.horas)}</td><td class="num">${r.deuda>0.008?pill(fmtDebe(r.deuda),'bad'):'—'}</td></tr>`;
   }).join('')}</tbody></table>`;
 }
 $('#d-apply').addEventListener('click',renderDashboard);
@@ -515,7 +516,7 @@ $('#d-pdf').addEventListener('click',()=>{
   doc.setFillColor(12,15,13); doc.rect(0,0,PW,60,'F'); doc.setFont('helvetica','bold'); doc.setFontSize(15); doc.setTextColor(255,255,255); doc.text('Dropper · Reporte de Asistencia',M,30);
   doc.setFont('helvetica','normal'); doc.setFontSize(9.5); doc.setTextColor(207,230,211); doc.text(`Período: ${periodo}`,M,47);
   doc.autoTable({ startY:78, head:[['Empleado','Días','Presentes','Ausencias','Puntualidad','Tard. prom','Horas prom','Debe']],
-    body:rows.map(r=>[r.emp,r.dias,r.pres,r.aus,pctS(r.punt),Math.round(r.tardProm)+'m',f1(r.horasProm),r.deuda>0.05?f1(r.deuda)+'h':'—']),
+    body:rows.map(r=>[r.emp,r.dias,r.pres,r.aus,pctS(r.punt),Math.round(r.tardProm)+'m',f1(r.horasProm),r.deuda>0.008?fmtDebe(r.deuda):'—']),
     styles:{font:'helvetica',fontSize:8.5,cellPadding:4,textColor:[26,26,26],lineColor:[213,218,222],lineWidth:0.5},
     headStyles:{fillColor:[31,122,61],textColor:[255,255,255],fontStyle:'bold'}, alternateRowStyles:{fillColor:[221,240,226]},
     columnStyles:{0:{cellWidth:'auto'},1:{halign:'center'},2:{halign:'center'},3:{halign:'center'},4:{halign:'center'},5:{halign:'center'},6:{halign:'center'},7:{halign:'center'}}, margin:{left:M,right:M} });
