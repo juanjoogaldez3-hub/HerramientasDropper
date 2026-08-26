@@ -593,29 +593,31 @@ async function buildWorkbook(c){
   // Resumen por tipo de envío (estándar / express)
   const tipoMap=new Map();
   rows.forEach(r=>{ if(!esEntregado(r))return; const o=tipoMap.get(r.tipo)||{n:0,sub:0}; o.n++; o.sub+=r.precio; tipoMap.set(r.tipo,o); });
-  const tiposOrd=['estandar','express'].filter(k=>tipoMap.has(k)).map(k=>[k,tipoMap.get(k)]);
+  const tipoRows=['estandar','express'].filter(k=>tipoMap.has(k)).map(k=>[k==='express'?'Express':'Estándar',tipoMap.get(k).n,tipoMap.get(k).sub]);
+  if(cargoTot>0) tipoRows.push(['Intento de entrega',intTot,cargoTot]);
   let ts=tr+2;
   ws.mergeCells(`A${ts}:C${ts}`);
   let ht=ws.getCell(`A${ts}`); ht.value='Resumen por tipo de envío';
   ht.font={name:'Arial',bold:true,size:11,color:{argb:WHITE}}; ht.fill=fill(G);
   ht.alignment={vertical:'middle',horizontal:'left',indent:1}; ws.getRow(ts).height=22; ts++;
-  ['Tipo','Entregas','Subtotal'].forEach((x,j)=>{
+  ['Tipo','Cantidad','Subtotal'].forEach((x,j)=>{
     const cell=ws.getCell(ts,j+1); cell.value=x;
     cell.font={name:'Arial',bold:true,size:10,color:{argb:TXT}}; cell.fill=fill(GREY); cell.border=bd;
     cell.alignment={horizontal:j>0?'center':'left'};
   });
   const tfd=ts+1;
-  tiposOrd.forEach(([k,o],i)=>{
+  tipoRows.forEach((row,i)=>{
     const r=tfd+i, even=i%2===0;
-    ws.getCell(r,1).value=k==='express'?'Express':'Estándar'; ws.getCell(r,1).alignment={horizontal:'left'};
-    ws.getCell(r,2).value=o.n; ws.getCell(r,2).alignment={horizontal:'center'};
-    const cc=ws.getCell(r,3); cc.value=o.sub; cc.numFmt=TARIFA_FMT; cc.alignment={horizontal:'center'};
+    ws.getCell(r,1).value=row[0]; ws.getCell(r,1).alignment={horizontal:'left'};
+    ws.getCell(r,2).value=row[1]; ws.getCell(r,2).alignment={horizontal:'center'};
+    const cc=ws.getCell(r,3); cc.value=row[2]; cc.numFmt=TARIFA_FMT; cc.alignment={horizontal:'center'};
     [1,2,3].forEach(col=>{const x=ws.getCell(r,col); x.fill=fill(even?WHITE:LIME); x.border=bd; x.font={name:'Arial',size:10,color:{argb:TXT}};});
   });
-  const tld=tfd+tiposOrd.length-1, ttr=tld+1;
+  const tld=tfd+tipoRows.length-1, ttr=tld+1;
+  const tipoCnt=tipoRows.reduce((s,r)=>s+r[1],0), tipoSub=tipoRows.reduce((s,r)=>s+r[2],0);
   ws.getCell(ttr,1).value='TOTAL'; ws.getCell(ttr,1).font={name:'Arial',bold:true,size:11,color:{argb:WHITE}};
-  const ttn=ws.getCell(ttr,2); ttn.value={formula:`SUM(B${tfd}:B${tld})`,result:totalCount}; ttn.font={name:'Arial',bold:true,size:11,color:{argb:WHITE}}; ttn.alignment={horizontal:'center'};
-  const tts=ws.getCell(ttr,3); tts.value={formula:`SUM(C${tfd}:C${tld})`,result:grandTotal}; tts.numFmt=TARIFA_FMT; tts.font={name:'Arial',bold:true,size:11,color:{argb:WHITE}}; tts.alignment={horizontal:'center'};
+  const ttn=ws.getCell(ttr,2); ttn.value={formula:`SUM(B${tfd}:B${tld})`,result:tipoCnt}; ttn.font={name:'Arial',bold:true,size:11,color:{argb:WHITE}}; ttn.alignment={horizontal:'center'};
+  const tts=ws.getCell(ttr,3); tts.value={formula:`SUM(C${tfd}:C${tld})`,result:tipoSub}; tts.numFmt=TARIFA_FMT; tts.font={name:'Arial',bold:true,size:11,color:{argb:WHITE}}; tts.alignment={horizontal:'center'};
   [1,2,3].forEach(col=>{ws.getCell(ttr,col).fill=fill(GD); ws.getCell(ttr,col).border=bd;});
 
   // Resumen de cobro (solo si hay cargos por intentos)
@@ -917,11 +919,14 @@ function buildPDF(c){
   const afterTarifa=doc.lastAutoTable.finalY;
   doc.setFont('helvetica','bold'); doc.setFontSize(10); doc.setTextColor(...greenDk);
   doc.text('Por tipo de envío',M,afterTarifa+22);
+  const tipoBody=tiposP.map(([k,o])=>[k==='express'?'Express':'Estándar',o.n,o.sub]);
+  if(cargoTot>0) tipoBody.push(['Intento de entrega',intTot,cargoTot]);
+  const tipoCnt=tipoBody.reduce((s,r)=>s+r[1],0), tipoSub=tipoBody.reduce((s,r)=>s+r[2],0);
   doc.autoTable({
     startY:afterTarifa+28,
-    head:[['Tipo','Entregas','Subtotal']],
-    body:tiposP.map(([k,o])=>[k==='express'?'Express':'Estándar',o.n,fmtQ(o.sub)]),
-    foot:[['TOTAL',nEntP,fmtQ(feeTot)]],
+    head:[['Tipo','Cantidad','Subtotal']],
+    body:tipoBody.map(r=>[r[0],r[1],fmtQ(r[2])]),
+    foot:[['TOTAL',tipoCnt,fmtQ(tipoSub)]],
     styles:{font:'helvetica',fontSize:8.5,cellPadding:4,textColor:txt,lineColor:[213,218,222],lineWidth:0.5,halign:'center'},
     headStyles:{fillColor:green,textColor:[255,255,255],fontStyle:'bold',halign:'center'},
     footStyles:{fillColor:greenDk,textColor:[255,255,255],fontStyle:'bold',halign:'center'},
