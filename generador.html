@@ -329,13 +329,15 @@ function parseWorkbook(buf){
     ciudad:pickHeader(keys,['ciudad','municipio']),
     zona:pickHeader(keys,['localidad','zona']),
     precio:pickHeader(keys,['precio de entrega','precio','tarifa']),
+    intentos:pickHeader(keys,['intentos de entrega','intentos']),
+    cargo:pickHeader(keys,['cargos por intentos','cargo por intentos','cargos por intento','cargo por intento','cargos por reintento']),
     metodo:pickHeader(keys,['metodo de entrega','metodo','envio']),
     estado:pickHeader(keys,['estado del envio','estado de entrega','estado']),
   };
   if(!C.cliente||!C.precio){ status('No encontré las columnas de Cliente y Precio. Revisá los encabezados del Excel.','err'); return; }
 
   const data=rowsRaw.map((r,i)=>{
-    const t=rowsTxt[i]||{}; const precio=parseFloat(r[C.precio]);
+    const t=rowsTxt[i]||{}; const precio=parseFloat(r[C.precio]); const cargo=C.cargo?parseFloat(r[C.cargo]):0;
     return {
       cliente:String((t[C.cliente]??r[C.cliente])||'').trim(),
       fecha:C.fecha?r[C.fecha]:'',
@@ -345,6 +347,8 @@ function parseWorkbook(buf){
       ciudad:C.ciudad?String((t[C.ciudad]??r[C.ciudad])||'').trim():'',
       zona:C.zona?String((t[C.zona]??r[C.zona])||'').trim():'',
       precio:isNaN(precio)?0:precio,
+      intentos:C.intentos?(parseInt(r[C.intentos])||0):0,
+      cargo:isNaN(cargo)?0:cargo,
       metodo:C.metodo?String((t[C.metodo]??r[C.metodo])||'').trim():'',
       tipo:/expres/.test(norm(C.metodo?(t[C.metodo]??r[C.metodo]):''))?'express':'estandar',
       estado:C.estado?String((t[C.estado]??r[C.estado])||'').trim():'',
@@ -395,7 +399,7 @@ function buildView(){
   filtered.forEach(r=>{ if(!map.has(r.cliente)) map.set(r.cliente,[]); map.get(r.cliente).push(r); });
   CLIENTS=[...map.entries()].map(([name,rows])=>({name,rows,total:0}));
   const changes=applyCorrections();
-  CLIENTS.forEach(c=>c.total=c.rows.reduce((s,x)=>s+x.precio,0));
+  CLIENTS.forEach(c=>{ c.fee=c.rows.reduce((s,x)=>s+x.precio,0); c.cargo=c.rows.reduce((s,x)=>s+(x.cargo||0),0); c.intentos=c.rows.reduce((s,x)=>s+(x.intentos||0),0); c.total=c.fee+c.cargo; });
   CLIENTS.sort((a,b)=>b.total-a.total);
   const cnt=$('#df-count');
   if(cnt){
@@ -483,6 +487,7 @@ function render(changes){
           <div class="name">${esc(c.name)}</div>
           <div class="meta">
             <div>Entregas<b>${c.rows.length}</b></div>
+            ${c.cargo>0?`<div>Intentos<b>${c.intentos}</b></div><div>Cargos<b>${fmtQ(c.cargo)}</b></div>`:''}
             <div>Total<b class="total">${fmtQ(c.total)}</b></div>
           </div>
           ${nc?`<span class="badge">✓ ${nc} corrección${nc>1?'es':''}</span>`:''}
@@ -526,14 +531,14 @@ async function buildWorkbook(c){
   const G='FF1F7A3D',GD='FF14572A',LIME='FFDDF0E2',GREY='FFF2F4F5',WHITE='FFFFFFFF',TXT='FF1A1A1A';
   const fill=c=>({type:'pattern',pattern:'solid',fgColor:{argb:c}});
   const bd={top:{style:'thin',color:{argb:'FFD5DADE'}},bottom:{style:'thin',color:{argb:'FFD5DADE'}},left:{style:'thin',color:{argb:'FFD5DADE'}},right:{style:'thin',color:{argb:'FFD5DADE'}}};
-  [12,16,14,52,18,12,12,11].forEach((w,i)=>ws.getColumn(i+1).width=w);
+  [12,16,14,52,18,12,12,9,11,11,12].forEach((w,i)=>ws.getColumn(i+1).width=w);
 
   // logo (fila blanca)
-  ws.mergeCells('A1:H1'); ws.getRow(1).height=46;
+  ws.mergeCells('A1:K1'); ws.getRow(1).height=46;
   const imgId=wb.addImage({base64:LOGO_B64,extension:'png'});
   ws.addImage(imgId,{tl:{col:0.12,row:0.18},ext:{width:180,height:40}});
 
-  ws.mergeCells('A2:H2');
+  ws.mergeCells('A2:K2');
   let t=ws.getCell('A2'); t.value='Reporte de Entregas';
   t.font={name:'Arial',bold:true,size:13,color:{argb:WHITE}};
   t.alignment={vertical:'middle',horizontal:'left',indent:1}; t.fill=fill(G); ws.getRow(2).height=26;
@@ -545,15 +550,18 @@ async function buildWorkbook(c){
   });
   const fechas=rows.map(r=>r.fecha).filter(Boolean).map(fmtDate);
   const periodo=fechas.length?`${fechas[0]} al ${fechas[fechas.length-1]}`:'—';
-  [['Cliente:',c.name],['Período:',periodo],['Entregas:',rows.length]].forEach((p,i)=>{
+  const cargoTot=rows.reduce((s,r)=>s+(r.cargo||0),0), feeTot=rows.reduce((s,r)=>s+r.precio,0), intTot=rows.reduce((s,r)=>s+(r.intentos||0),0);
+  const info=[['Cliente:',c.name],['Período:',periodo],['Entregas:',rows.length]];
+  if(cargoTot>0){ info.push(['Cargos por intentos:',`${fmtQ(cargoTot)} (${intTot} intentos)`]); info.push(['Total a cobrar:',fmtQ(feeTot+cargoTot)]); }
+  info.forEach((p,i)=>{
     const r=4+i;
-    ws.getCell(`A${r}`).value=p[0]; ws.getCell(`A${r}`).font={name:'Arial',bold:true,size:10,color:{argb:TXT}};
-    ws.getCell(`B${r}`).value=p[1]; ws.getCell(`B${r}`).font={name:'Arial',size:10,color:{argb:TXT}};
+    ws.getCell(`A${r}`).value=p[0]; ws.getCell(`A${r}`).font={name:'Arial',bold:true,size:10,color:{argb: p[0]==='Total a cobrar:'?'FF14572A':TXT}};
+    ws.getCell(`B${r}`).value=p[1]; ws.getCell(`B${r}`).font={name:'Arial',bold:p[0]==='Total a cobrar:',size:10,color:{argb: p[0]==='Total a cobrar:'?'FF14572A':TXT}};
   });
 
   const piv=new Map(); rows.forEach(r=>piv.set(r.precio,(piv.get(r.precio)||0)+1));
   const tarifas=[...piv.entries()].sort((a,b)=>a[0]-b[0]);
-  let rs=8;
+  let rs=4+info.length+1;
   ws.mergeCells(`A${rs}:C${rs}`);
   let h=ws.getCell(`A${rs}`); h.value='Resumen por tarifa';
   h.font={name:'Arial',bold:true,size:11,color:{argb:WHITE}}; h.fill=fill(G);
@@ -607,12 +615,12 @@ async function buildWorkbook(c){
   [1,2,3].forEach(col=>{ws.getCell(ttr,col).fill=fill(GD); ws.getCell(ttr,col).border=bd;});
 
   const ds=ttr+3;
-  ws.mergeCells(`A${ds}:H${ds}`);
+  ws.mergeCells(`A${ds}:K${ds}`);
   h=ws.getCell(`A${ds}`); h.value='Detalle de entregas';
   h.font={name:'Arial',bold:true,size:11,color:{argb:WHITE}}; h.fill=fill(G);
   h.alignment={vertical:'middle',horizontal:'left',indent:1}; ws.getRow(ds).height=22;
   const dh=ds+1;
-  ['Fecha','No. de Orden','ID de Orden','Dirección de Entrega','Ciudad','Zona','Tipo','Tarifa'].forEach((x,j)=>{
+  ['Fecha','No. de Orden','ID de Orden','Dirección de Entrega','Ciudad','Zona','Tipo','Intentos','Tarifa','Cargo int.','Total'].forEach((x,j)=>{
     const cell=ws.getCell(dh,j+1); cell.value=x;
     cell.font={name:'Arial',bold:true,size:9,color:{argb:TXT}}; cell.fill=fill(GREY); cell.border=bd;
     cell.alignment={horizontal:'left',vertical:'middle'};
@@ -620,18 +628,19 @@ async function buildWorkbook(c){
   const rstart=dh+1;
   rows.forEach((r,i)=>{
     const rr=rstart+i, even=i%2===0;
-    const vals=[r.fecha?fmtDate(r.fecha):'',r.norden,r.idorden,r.dir,r.ciudad,r.zona,r.tipo==='express'?'Express':'Estándar',r.precio];
+    const vals=[r.fecha?fmtDate(r.fecha):'',r.norden,r.idorden,r.dir,r.ciudad,r.zona,r.tipo==='express'?'Express':'Estándar',r.intentos||0,r.precio,r.cargo||0,r.precio+(r.cargo||0)];
     vals.forEach((v,j)=>{
       const cell=ws.getCell(rr,j+1); cell.value=v;
       cell.fill=fill(even?WHITE:LIME); cell.border=bd; cell.font={name:'Arial',size:9,color:{argb:TXT}};
       cell.alignment={horizontal:'left',vertical:'middle',wrapText:j===3};
-      if(j===7){ cell.numFmt=TARIFA_FMT; cell.alignment={horizontal:'center'}; }
+      if(j===7){ cell.alignment={horizontal:'center'}; }                 // intentos
+      if(j>=8){ cell.numFmt=TARIFA_FMT; cell.alignment={horizontal:'center'}; } // tarifa / cargo / total
     });
   });
   const rend=rstart+rows.length-1, tot=rend+1;
-  ws.getCell(tot,7).value='Total'; ws.getCell(tot,7).font={name:'Arial',bold:true,size:9,color:{argb:TXT}};
-  ws.getCell(tot,7).alignment={horizontal:'right'}; ws.getCell(tot,7).fill=fill(GREY);
-  const g=ws.getCell(tot,8); g.value={formula:`SUM(H${rstart}:H${rend})`,result:rows.reduce((s,r)=>s+r.precio,0)}; g.numFmt=TARIFA_FMT;
+  ws.getCell(tot,10).value='Total'; ws.getCell(tot,10).font={name:'Arial',bold:true,size:9,color:{argb:TXT}};
+  ws.getCell(tot,10).alignment={horizontal:'right'}; ws.getCell(tot,10).fill=fill(GREY);
+  const g=ws.getCell(tot,11); g.value={formula:`SUM(K${rstart}:K${rend})`,result:rows.reduce((s,r)=>s+r.precio+(r.cargo||0),0)}; g.numFmt=TARIFA_FMT;
   g.font={name:'Arial',bold:true,size:9,color:{argb:TXT}}; g.alignment={horizontal:'center'}; g.fill=fill(GREY);
 
   ws.views=[{state:'frozen',ySplit:rstart-1,showGridLines:false}];
@@ -841,20 +850,22 @@ function buildPDF(c){
 
   doc.setFont('helvetica','bold'); doc.setFontSize(12); doc.setTextColor(18,38,26);
   doc.text(String(c.name),M,84);
+  const feeTot=rows.reduce((s,x)=>s+x.precio,0), cargoTot=rows.reduce((s,x)=>s+(x.cargo||0),0), intTot=rows.reduce((s,x)=>s+(x.intentos||0),0), totalCobrar=feeTot+cargoTot;
   doc.setFont('helvetica','normal'); doc.setFontSize(9.5); doc.setTextColor(...txt);
   doc.text(`Entregas: ${rows.length}`,M,100);
-  const total=rows.reduce((s,x)=>s+x.precio,0);
+  let cy=100;
+  if(cargoTot>0){ doc.text(`Cargos por intentos (${intTot}): ${fmtQ(cargoTot)}`,M,116); doc.setFont('helvetica','bold'); doc.setTextColor(...greenDk); doc.text(`Total a cobrar: ${fmtQ(totalCobrar)}`,M,132); doc.setFont('helvetica','normal'); doc.setTextColor(...txt); cy=132; }
 
-  // Resumen por tarifa
+  // Resumen por tarifa (tarifas de entrega)
   const piv=new Map(); rows.forEach(r=>piv.set(r.precio,(piv.get(r.precio)||0)+1));
   const tarifas=[...piv.entries()].sort((a,b)=>a[0]-b[0]);
   doc.setFont('helvetica','bold'); doc.setFontSize(10); doc.setTextColor(...greenDk);
-  doc.text('Resumen por tarifa',M,120);
+  doc.text('Resumen por tarifa',M,cy+20);
   doc.autoTable({
-    startY:126,
+    startY:cy+26,
     head:[['Tarifa','Entregas','Subtotal']],
     body:tarifas.map(([p,n])=>[fmtQ(p),n,fmtQ(p*n)]),
-    foot:[['TOTAL',rows.length,fmtQ(total)]],
+    foot:[['TOTAL',rows.length,fmtQ(feeTot)]],
     styles:{font:'helvetica',fontSize:8.5,cellPadding:4,textColor:txt,lineColor:[213,218,222],lineWidth:0.5,halign:'center'},
     headStyles:{fillColor:green,textColor:[255,255,255],fontStyle:'bold',halign:'center'},
     footStyles:{fillColor:greenDk,textColor:[255,255,255],fontStyle:'bold',halign:'center'},
@@ -874,7 +885,7 @@ function buildPDF(c){
     startY:afterTarifa+28,
     head:[['Tipo','Entregas','Subtotal']],
     body:tiposP.map(([k,o])=>[k==='express'?'Express':'Estándar',o.n,fmtQ(o.sub)]),
-    foot:[['TOTAL',rows.length,fmtQ(total)]],
+    foot:[['TOTAL',rows.length,fmtQ(feeTot)]],
     styles:{font:'helvetica',fontSize:8.5,cellPadding:4,textColor:txt,lineColor:[213,218,222],lineWidth:0.5,halign:'center'},
     headStyles:{fillColor:green,textColor:[255,255,255],fontStyle:'bold',halign:'center'},
     footStyles:{fillColor:greenDk,textColor:[255,255,255],fontStyle:'bold',halign:'center'},
@@ -888,15 +899,24 @@ function buildPDF(c){
   doc.setFont('helvetica','bold'); doc.setFontSize(10); doc.setTextColor(...greenDk);
   doc.text('Detalle de entregas',M,afterResumen+24);
 
-  const body=rows.map(r=>[ r.fecha?fmtDate(r.fecha):'', r.idorden, r.norden, r.ciudad, r.tipo==='express'?'Express':'Estándar', fmtQ(r.precio), r.estado ]);
+  const hasCargo=cargoTot>0;
+  const head=hasCargo
+    ? [['Fecha','No. de Orden','Municipio','Tipo','Int.','Tarifa','Cargo','Total','Estado']]
+    : [['Fecha','No. de Guía','No. de Orden','Municipio','Tipo','Costo Envío','Estado']];
+  const body=hasCargo
+    ? rows.map(r=>[ r.fecha?fmtDate(r.fecha):'', r.norden, r.ciudad, r.tipo==='express'?'Express':'Estándar', r.intentos||0, fmtQ(r.precio), (r.cargo||0)?fmtQ(r.cargo):'—', fmtQ(r.precio+(r.cargo||0)), r.estado ])
+    : rows.map(r=>[ r.fecha?fmtDate(r.fecha):'', r.idorden, r.norden, r.ciudad, r.tipo==='express'?'Express':'Estándar', fmtQ(r.precio), r.estado ]);
+  const colStyles=hasCargo
+    ? {0:{cellWidth:46},1:{cellWidth:60},2:{cellWidth:'auto'},3:{cellWidth:48},4:{cellWidth:28,halign:'center'},5:{cellWidth:48,halign:'right'},6:{cellWidth:48,halign:'right'},7:{cellWidth:52,halign:'right'},8:{cellWidth:52}}
+    : {0:{cellWidth:52},1:{cellWidth:78},2:{cellWidth:64},3:{cellWidth:'auto'},4:{cellWidth:54},5:{cellWidth:60,halign:'right'},6:{cellWidth:56}};
   doc.autoTable({
     startY:afterResumen+30,
-    head:[['Fecha','No. de Guía','No. de Orden','Municipio','Tipo','Costo Envío','Estado']],
+    head,
     body,
     styles:{font:'helvetica',fontSize:8,cellPadding:4,textColor:txt,lineColor:[213,218,222],lineWidth:0.5,overflow:'linebreak'},
     headStyles:{fillColor:green,textColor:[255,255,255],fontStyle:'bold'},
     alternateRowStyles:{fillColor:lime},
-    columnStyles:{0:{cellWidth:52},1:{cellWidth:78},2:{cellWidth:64},3:{cellWidth:'auto'},4:{cellWidth:54},5:{cellWidth:60,halign:'right'},6:{cellWidth:56}},
+    columnStyles:colStyles,
     margin:{left:M,right:M},
     didDrawPage:()=>{
       const ph=doc.internal.pageSize.getHeight();
