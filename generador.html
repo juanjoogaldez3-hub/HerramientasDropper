@@ -552,11 +552,10 @@ async function buildWorkbook(c){
   const periodo=fechas.length?`${fechas[0]} al ${fechas[fechas.length-1]}`:'—';
   const cargoTot=rows.reduce((s,r)=>s+(r.cargo||0),0), feeTot=rows.reduce((s,r)=>s+r.precio,0), intTot=rows.reduce((s,r)=>s+(r.intentos||0),0);
   const info=[['Cliente:',c.name],['Período:',periodo],['Entregas:',rows.length]];
-  if(cargoTot>0){ info.push(['Cargos por intentos:',`${fmtQ(cargoTot)} (${intTot} intentos)`]); info.push(['Total a cobrar:',fmtQ(feeTot+cargoTot)]); }
   info.forEach((p,i)=>{
     const r=4+i;
-    ws.getCell(`A${r}`).value=p[0]; ws.getCell(`A${r}`).font={name:'Arial',bold:true,size:10,color:{argb: p[0]==='Total a cobrar:'?'FF14572A':TXT}};
-    ws.getCell(`B${r}`).value=p[1]; ws.getCell(`B${r}`).font={name:'Arial',bold:p[0]==='Total a cobrar:',size:10,color:{argb: p[0]==='Total a cobrar:'?'FF14572A':TXT}};
+    ws.getCell(`A${r}`).value=p[0]; ws.getCell(`A${r}`).font={name:'Arial',bold:true,size:10,color:{argb:TXT}};
+    ws.getCell(`B${r}`).value=p[1]; ws.getCell(`B${r}`).font={name:'Arial',size:10,color:{argb:TXT}};
   });
 
   const piv=new Map(); rows.forEach(r=>piv.set(r.precio,(piv.get(r.precio)||0)+1));
@@ -614,7 +613,38 @@ async function buildWorkbook(c){
   const tts=ws.getCell(ttr,3); tts.value={formula:`SUM(C${tfd}:C${tld})`,result:grandTotal}; tts.numFmt=TARIFA_FMT; tts.font={name:'Arial',bold:true,size:11,color:{argb:WHITE}}; tts.alignment={horizontal:'center'};
   [1,2,3].forEach(col=>{ws.getCell(ttr,col).fill=fill(GD); ws.getCell(ttr,col).border=bd;});
 
-  const ds=ttr+3;
+  // Resumen de cobro (solo si hay cargos por intentos)
+  let ds;
+  if(cargoTot>0){
+    const cs=ttr+2;
+    ws.mergeCells(`A${cs}:C${cs}`);
+    let hc=ws.getCell(`A${cs}`); hc.value='Resumen de cobro';
+    hc.font={name:'Arial',bold:true,size:11,color:{argb:WHITE}}; hc.fill=fill(G);
+    hc.alignment={vertical:'middle',horizontal:'left',indent:1}; ws.getRow(cs).height=22;
+    const chr=cs+1;
+    ['Concepto','Cantidad','Monto'].forEach((x,j)=>{
+      const cell=ws.getCell(chr,j+1); cell.value=x;
+      cell.font={name:'Arial',bold:true,size:10,color:{argb:TXT}}; cell.fill=fill(GREY); cell.border=bd;
+      cell.alignment={horizontal:j>0?'center':'left'};
+    });
+    const cfd=chr+1;
+    const cobro=[['Tarifas de entrega',totalCount,grandTotal],['Cargos por intentos',intTot,cargoTot]];
+    cobro.forEach((row,i)=>{
+      const r=cfd+i, even=i%2===0;
+      ws.getCell(r,1).value=row[0]; ws.getCell(r,1).alignment={horizontal:'left'};
+      ws.getCell(r,2).value=row[1]; ws.getCell(r,2).alignment={horizontal:'center'};
+      const cc=ws.getCell(r,3); cc.value=row[2]; cc.numFmt=TARIFA_FMT; cc.alignment={horizontal:'center'};
+      [1,2,3].forEach(col=>{const x=ws.getCell(r,col); x.fill=fill(even?WHITE:LIME); x.border=bd; x.font={name:'Arial',size:10,color:{argb:TXT}};});
+    });
+    const cld=cfd+1, ctr=cld+1;
+    ws.getCell(ctr,1).value='Total a cobrar'; ws.getCell(ctr,1).font={name:'Arial',bold:true,size:11,color:{argb:WHITE}};
+    ws.getCell(ctr,2).value='';
+    const cts=ws.getCell(ctr,3); cts.value={formula:`SUM(C${cfd}:C${cld})`,result:grandTotal+cargoTot}; cts.numFmt=TARIFA_FMT; cts.font={name:'Arial',bold:true,size:11,color:{argb:WHITE}}; cts.alignment={horizontal:'center'};
+    [1,2,3].forEach(col=>{ws.getCell(ctr,col).fill=fill(GD); ws.getCell(ctr,col).border=bd;});
+    ds=ctr+3;
+  } else {
+    ds=ttr+3;
+  }
   ws.mergeCells(`A${ds}:K${ds}`);
   h=ws.getCell(`A${ds}`); h.value='Detalle de entregas';
   h.font={name:'Arial',bold:true,size:11,color:{argb:WHITE}}; h.fill=fill(G);
