@@ -285,6 +285,10 @@ function status(msg,type){ const s=$('#status'); s.className='status show '+(typ
 function hideStatus(){ $('#status').className='status'; }
 function esc(s){ return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
 function norm(s){ return String(s).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,''); }
+/* Regla de cobro: solo los ENTREGADOS pagan tarifa de entrega; cualquier otro estado paga solo el cargo por intentos. */
+function esEntregado(r){ const e=norm(r&&r.estado||''); return /^entregad/.test(e)||e==='entrega'||e==='entregas'; }
+function tarifaCob(r){ return esEntregado(r)?(+r.precio||0):0; }
+function totalRow(r){ return tarifaCob(r)+(+r.cargo||0); }
 function fmtQ(n){ return 'Q'+Number(n).toLocaleString('es-GT',{minimumFractionDigits:2,maximumFractionDigits:2}); }
 function fmtDate(v){
   let d;
@@ -399,7 +403,7 @@ function buildView(){
   filtered.forEach(r=>{ if(!map.has(r.cliente)) map.set(r.cliente,[]); map.get(r.cliente).push(r); });
   CLIENTS=[...map.entries()].map(([name,rows])=>({name,rows,total:0}));
   const changes=applyCorrections();
-  CLIENTS.forEach(c=>{ c.fee=c.rows.reduce((s,x)=>s+x.precio,0); c.cargo=c.rows.reduce((s,x)=>s+(x.cargo||0),0); c.intentos=c.rows.reduce((s,x)=>s+(x.intentos||0),0); c.total=c.fee+c.cargo; });
+  CLIENTS.forEach(c=>{ c.fee=c.rows.reduce((s,x)=>s+tarifaCob(x),0); c.cargo=c.rows.reduce((s,x)=>s+(x.cargo||0),0); c.intentos=c.rows.reduce((s,x)=>s+(x.intentos||0),0); c.entregados=c.rows.filter(esEntregado).length; c.total=c.fee+c.cargo; });
   CLIENTS.sort((a,b)=>b.total-a.total);
   const cnt=$('#df-count');
   if(cnt){
@@ -486,7 +490,8 @@ function render(changes){
         <div>
           <div class="name">${esc(c.name)}</div>
           <div class="meta">
-            <div>Entregas<b>${c.rows.length}</b></div>
+            <div>Envíos<b>${c.rows.length}</b></div>
+            ${c.entregados<c.rows.length?`<div>Entregados<b>${c.entregados}</b></div>`:''}
             ${c.cargo>0?`<div>Intentos<b>${c.intentos}</b></div><div>Cargos<b>${fmtQ(c.cargo)}</b></div>`:''}
             <div>Total<b class="total">${fmtQ(c.total)}</b></div>
           </div>
@@ -531,14 +536,14 @@ async function buildWorkbook(c){
   const G='FF1F7A3D',GD='FF14572A',LIME='FFDDF0E2',GREY='FFF2F4F5',WHITE='FFFFFFFF',TXT='FF1A1A1A';
   const fill=c=>({type:'pattern',pattern:'solid',fgColor:{argb:c}});
   const bd={top:{style:'thin',color:{argb:'FFD5DADE'}},bottom:{style:'thin',color:{argb:'FFD5DADE'}},left:{style:'thin',color:{argb:'FFD5DADE'}},right:{style:'thin',color:{argb:'FFD5DADE'}}};
-  [12,16,14,52,18,12,12,9,11,11,12].forEach((w,i)=>ws.getColumn(i+1).width=w);
+  [12,16,14,52,18,12,12,9,11,11,12,16].forEach((w,i)=>ws.getColumn(i+1).width=w);
 
   // logo (fila blanca)
-  ws.mergeCells('A1:K1'); ws.getRow(1).height=46;
+  ws.mergeCells('A1:L1'); ws.getRow(1).height=46;
   const imgId=wb.addImage({base64:LOGO_B64,extension:'png'});
   ws.addImage(imgId,{tl:{col:0.12,row:0.18},ext:{width:180,height:40}});
 
-  ws.mergeCells('A2:K2');
+  ws.mergeCells('A2:L2');
   let t=ws.getCell('A2'); t.value='Reporte de Entregas';
   t.font={name:'Arial',bold:true,size:13,color:{argb:WHITE}};
   t.alignment={vertical:'middle',horizontal:'left',indent:1}; t.fill=fill(G); ws.getRow(2).height=26;
@@ -550,15 +555,16 @@ async function buildWorkbook(c){
   });
   const fechas=rows.map(r=>r.fecha).filter(Boolean).map(fmtDate);
   const periodo=fechas.length?`${fechas[0]} al ${fechas[fechas.length-1]}`:'—';
-  const cargoTot=rows.reduce((s,r)=>s+(r.cargo||0),0), feeTot=rows.reduce((s,r)=>s+r.precio,0), intTot=rows.reduce((s,r)=>s+(r.intentos||0),0);
-  const info=[['Cliente:',c.name],['Período:',periodo],['Entregas:',rows.length]];
+  const cargoTot=rows.reduce((s,r)=>s+(r.cargo||0),0), feeTot=rows.reduce((s,r)=>s+tarifaCob(r),0), intTot=rows.reduce((s,r)=>s+(r.intentos||0),0);
+  const nEnt=rows.filter(esEntregado).length;
+  const info=[['Cliente:',c.name],['Período:',periodo],['Envíos:',rows.length],['Entregados:',nEnt]];
   info.forEach((p,i)=>{
     const r=4+i;
     ws.getCell(`A${r}`).value=p[0]; ws.getCell(`A${r}`).font={name:'Arial',bold:true,size:10,color:{argb:TXT}};
     ws.getCell(`B${r}`).value=p[1]; ws.getCell(`B${r}`).font={name:'Arial',size:10,color:{argb:TXT}};
   });
 
-  const piv=new Map(); rows.forEach(r=>piv.set(r.precio,(piv.get(r.precio)||0)+1));
+  const piv=new Map(); rows.forEach(r=>{ if(esEntregado(r)) piv.set(r.precio,(piv.get(r.precio)||0)+1); });
   const tarifas=[...piv.entries()].sort((a,b)=>a[0]-b[0]);
   let rs=4+info.length+1;
   ws.mergeCells(`A${rs}:C${rs}`);
@@ -587,7 +593,7 @@ async function buildWorkbook(c){
 
   // Resumen por tipo de envío (estándar / express)
   const tipoMap=new Map();
-  rows.forEach(r=>{ const o=tipoMap.get(r.tipo)||{n:0,sub:0}; o.n++; o.sub+=r.precio; tipoMap.set(r.tipo,o); });
+  rows.forEach(r=>{ if(!esEntregado(r))return; const o=tipoMap.get(r.tipo)||{n:0,sub:0}; o.n++; o.sub+=r.precio; tipoMap.set(r.tipo,o); });
   const tiposOrd=['estandar','express'].filter(k=>tipoMap.has(k)).map(k=>[k,tipoMap.get(k)]);
   let ts=tr+2;
   ws.mergeCells(`A${ts}:C${ts}`);
@@ -645,12 +651,12 @@ async function buildWorkbook(c){
   } else {
     ds=ttr+3;
   }
-  ws.mergeCells(`A${ds}:K${ds}`);
+  ws.mergeCells(`A${ds}:L${ds}`);
   h=ws.getCell(`A${ds}`); h.value='Detalle de entregas';
   h.font={name:'Arial',bold:true,size:11,color:{argb:WHITE}}; h.fill=fill(G);
   h.alignment={vertical:'middle',horizontal:'left',indent:1}; ws.getRow(ds).height=22;
   const dh=ds+1;
-  ['Fecha','No. de Orden','ID de Orden','Dirección de Entrega','Ciudad','Zona','Tipo','Intentos','Tarifa','Cargo int.','Total'].forEach((x,j)=>{
+  ['Fecha','No. de Orden','ID de Orden','Dirección de Entrega','Ciudad','Zona','Tipo','Intentos','Tarifa','Cargo int.','Total','Estado'].forEach((x,j)=>{
     const cell=ws.getCell(dh,j+1); cell.value=x;
     cell.font={name:'Arial',bold:true,size:9,color:{argb:TXT}}; cell.fill=fill(GREY); cell.border=bd;
     cell.alignment={horizontal:'left',vertical:'middle'};
@@ -658,19 +664,19 @@ async function buildWorkbook(c){
   const rstart=dh+1;
   rows.forEach((r,i)=>{
     const rr=rstart+i, even=i%2===0;
-    const vals=[r.fecha?fmtDate(r.fecha):'',r.norden,r.idorden,r.dir,r.ciudad,r.zona,r.tipo==='express'?'Express':'Estándar',r.intentos||0,r.precio,r.cargo||0,r.precio+(r.cargo||0)];
+    const vals=[r.fecha?fmtDate(r.fecha):'',r.norden,r.idorden,r.dir,r.ciudad,r.zona,r.tipo==='express'?'Express':'Estándar',r.intentos||0,tarifaCob(r),r.cargo||0,totalRow(r),r.estado||''];
     vals.forEach((v,j)=>{
       const cell=ws.getCell(rr,j+1); cell.value=v;
       cell.fill=fill(even?WHITE:LIME); cell.border=bd; cell.font={name:'Arial',size:9,color:{argb:TXT}};
       cell.alignment={horizontal:'left',vertical:'middle',wrapText:j===3};
       if(j===7){ cell.alignment={horizontal:'center'}; }                 // intentos
-      if(j>=8){ cell.numFmt=TARIFA_FMT; cell.alignment={horizontal:'center'}; } // tarifa / cargo / total
+      if(j>=8&&j<=10){ cell.numFmt=TARIFA_FMT; cell.alignment={horizontal:'center'}; } // tarifa / cargo / total
     });
   });
   const rend=rstart+rows.length-1, tot=rend+1;
   ws.getCell(tot,10).value='Total'; ws.getCell(tot,10).font={name:'Arial',bold:true,size:9,color:{argb:TXT}};
   ws.getCell(tot,10).alignment={horizontal:'right'}; ws.getCell(tot,10).fill=fill(GREY);
-  const g=ws.getCell(tot,11); g.value={formula:`SUM(K${rstart}:K${rend})`,result:rows.reduce((s,r)=>s+r.precio+(r.cargo||0),0)}; g.numFmt=TARIFA_FMT;
+  const g=ws.getCell(tot,11); g.value={formula:`SUM(K${rstart}:K${rend})`,result:rows.reduce((s,r)=>s+totalRow(r),0)}; g.numFmt=TARIFA_FMT;
   g.font={name:'Arial',bold:true,size:9,color:{argb:TXT}}; g.alignment={horizontal:'center'}; g.fill=fill(GREY);
 
   ws.views=[{state:'frozen',ySplit:rstart-1,showGridLines:false}];
@@ -693,19 +699,19 @@ function aggregateAll(sel){
   const muni=new Map();
   rows.forEach(r=>{
     const k=(String(r.ciudad||'').trim())||'(sin municipio)';
-    const o=muni.get(k)||{entregas:0,total:0}; o.entregas++; o.total+=r.precio; muni.set(k,o);
+    const o=muni.get(k)||{entregas:0,total:0}; o.entregas++; o.total+=totalRow(r); muni.set(k,o);
   });
   const porMuni=[...muni.entries()].map(([name,o])=>({name,entregas:o.entregas,total:o.total}))
                                    .sort((a,b)=>b.total-a.total);
   const tipo=new Map();
-  rows.forEach(r=>{ const o=tipo.get(r.tipo)||{entregas:0,total:0}; o.entregas++; o.total+=r.precio; tipo.set(r.tipo,o); });
+  rows.forEach(r=>{ const o=tipo.get(r.tipo)||{entregas:0,total:0}; o.entregas++; o.total+=totalRow(r); tipo.set(r.tipo,o); });
   const porTipo=['estandar','express'].filter(k=>tipo.has(k))
     .map(k=>({name:k==='express'?'Express':'Estándar',entregas:tipo.get(k).entregas,total:tipo.get(k).total}));
   const ds=rows.map(r=>r.fecha instanceof Date?r.fecha:new Date(Date.parse(r.fecha)||0))
               .filter(d=>d&&!isNaN(d)&&d.getFullYear()>1971);
   let periodo='—';
   if(ds.length){ const mn=new Date(Math.min(...ds)), mx=new Date(Math.max(...ds)); periodo=`${fmtDate(mn)} al ${fmtDate(mx)}`; }
-  return { porCliente, porMuni, porTipo, periodo, entregas:rows.length, total:rows.reduce((s,r)=>s+r.precio,0), clientes:sel.length };
+  return { porCliente, porMuni, porTipo, periodo, entregas:rows.length, total:rows.reduce((s,r)=>s+totalRow(r),0), clientes:sel.length };
 }
 
 async function buildConsolidatedWorkbook(agg){
@@ -880,14 +886,15 @@ function buildPDF(c){
 
   doc.setFont('helvetica','bold'); doc.setFontSize(12); doc.setTextColor(18,38,26);
   doc.text(String(c.name),M,84);
-  const feeTot=rows.reduce((s,x)=>s+x.precio,0), cargoTot=rows.reduce((s,x)=>s+(x.cargo||0),0), intTot=rows.reduce((s,x)=>s+(x.intentos||0),0), totalCobrar=feeTot+cargoTot;
+  const feeTot=rows.reduce((s,x)=>s+tarifaCob(x),0), cargoTot=rows.reduce((s,x)=>s+(x.cargo||0),0), intTot=rows.reduce((s,x)=>s+(x.intentos||0),0), totalCobrar=feeTot+cargoTot;
+  const nEntP=rows.filter(esEntregado).length;
   doc.setFont('helvetica','normal'); doc.setFontSize(9.5); doc.setTextColor(...txt);
-  doc.text(`Entregas: ${rows.length}`,M,100);
+  doc.text(nEntP<rows.length?`Envíos: ${rows.length}   ·   Entregados: ${nEntP}`:`Entregas: ${rows.length}`,M,100);
   let cy=100;
   if(cargoTot>0){ doc.text(`Cargos por intentos (${intTot}): ${fmtQ(cargoTot)}`,M,116); doc.setFont('helvetica','bold'); doc.setTextColor(...greenDk); doc.text(`Total a cobrar: ${fmtQ(totalCobrar)}`,M,132); doc.setFont('helvetica','normal'); doc.setTextColor(...txt); cy=132; }
 
   // Resumen por tarifa (tarifas de entrega)
-  const piv=new Map(); rows.forEach(r=>piv.set(r.precio,(piv.get(r.precio)||0)+1));
+  const piv=new Map(); rows.forEach(r=>{ if(esEntregado(r)) piv.set(r.precio,(piv.get(r.precio)||0)+1); });
   const tarifas=[...piv.entries()].sort((a,b)=>a[0]-b[0]);
   doc.setFont('helvetica','bold'); doc.setFontSize(10); doc.setTextColor(...greenDk);
   doc.text('Resumen por tarifa',M,cy+20);
@@ -895,7 +902,7 @@ function buildPDF(c){
     startY:cy+26,
     head:[['Tarifa','Entregas','Subtotal']],
     body:tarifas.map(([p,n])=>[fmtQ(p),n,fmtQ(p*n)]),
-    foot:[['TOTAL',rows.length,fmtQ(feeTot)]],
+    foot:[['TOTAL',nEntP,fmtQ(feeTot)]],
     styles:{font:'helvetica',fontSize:8.5,cellPadding:4,textColor:txt,lineColor:[213,218,222],lineWidth:0.5,halign:'center'},
     headStyles:{fillColor:green,textColor:[255,255,255],fontStyle:'bold',halign:'center'},
     footStyles:{fillColor:greenDk,textColor:[255,255,255],fontStyle:'bold',halign:'center'},
@@ -906,7 +913,7 @@ function buildPDF(c){
 
   // Resumen por tipo de envío (estándar / express)
   const tipoMapP=new Map();
-  rows.forEach(r=>{ const o=tipoMapP.get(r.tipo)||{n:0,sub:0}; o.n++; o.sub+=r.precio; tipoMapP.set(r.tipo,o); });
+  rows.forEach(r=>{ if(!esEntregado(r))return; const o=tipoMapP.get(r.tipo)||{n:0,sub:0}; o.n++; o.sub+=r.precio; tipoMapP.set(r.tipo,o); });
   const tiposP=['estandar','express'].filter(k=>tipoMapP.has(k)).map(k=>[k,tipoMapP.get(k)]);
   const afterTarifa=doc.lastAutoTable.finalY;
   doc.setFont('helvetica','bold'); doc.setFontSize(10); doc.setTextColor(...greenDk);
@@ -915,7 +922,7 @@ function buildPDF(c){
     startY:afterTarifa+28,
     head:[['Tipo','Entregas','Subtotal']],
     body:tiposP.map(([k,o])=>[k==='express'?'Express':'Estándar',o.n,fmtQ(o.sub)]),
-    foot:[['TOTAL',rows.length,fmtQ(feeTot)]],
+    foot:[['TOTAL',nEntP,fmtQ(feeTot)]],
     styles:{font:'helvetica',fontSize:8.5,cellPadding:4,textColor:txt,lineColor:[213,218,222],lineWidth:0.5,halign:'center'},
     headStyles:{fillColor:green,textColor:[255,255,255],fontStyle:'bold',halign:'center'},
     footStyles:{fillColor:greenDk,textColor:[255,255,255],fontStyle:'bold',halign:'center'},
@@ -934,8 +941,8 @@ function buildPDF(c){
     ? [['Fecha','No. de Orden','Municipio','Tipo','Int.','Tarifa','Cargo','Total','Estado']]
     : [['Fecha','No. de Guía','No. de Orden','Municipio','Tipo','Costo Envío','Estado']];
   const body=hasCargo
-    ? rows.map(r=>[ r.fecha?fmtDate(r.fecha):'', r.norden, r.ciudad, r.tipo==='express'?'Express':'Estándar', r.intentos||0, fmtQ(r.precio), (r.cargo||0)?fmtQ(r.cargo):'—', fmtQ(r.precio+(r.cargo||0)), r.estado ])
-    : rows.map(r=>[ r.fecha?fmtDate(r.fecha):'', r.idorden, r.norden, r.ciudad, r.tipo==='express'?'Express':'Estándar', fmtQ(r.precio), r.estado ]);
+    ? rows.map(r=>[ r.fecha?fmtDate(r.fecha):'', r.norden, r.ciudad, r.tipo==='express'?'Express':'Estándar', r.intentos||0, fmtQ(tarifaCob(r)), (r.cargo||0)?fmtQ(r.cargo):'—', fmtQ(totalRow(r)), r.estado ])
+    : rows.map(r=>[ r.fecha?fmtDate(r.fecha):'', r.idorden, r.norden, r.ciudad, r.tipo==='express'?'Express':'Estándar', fmtQ(tarifaCob(r)), r.estado ]);
   const colStyles=hasCargo
     ? {0:{cellWidth:46},1:{cellWidth:60},2:{cellWidth:'auto'},3:{cellWidth:48},4:{cellWidth:28,halign:'center'},5:{cellWidth:48,halign:'right'},6:{cellWidth:48,halign:'right'},7:{cellWidth:52,halign:'right'},8:{cellWidth:52}}
     : {0:{cellWidth:52},1:{cellWidth:78},2:{cellWidth:64},3:{cellWidth:'auto'},4:{cellWidth:54},5:{cellWidth:60,halign:'right'},6:{cellWidth:56}};
