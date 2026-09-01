@@ -92,8 +92,15 @@
   .solform label{font-size:.82rem;font-weight:600;color:var(--muted)}
   .solform input[type=text]{min-width:170px;flex:1}
   .ms-list{margin-top:12px;display:flex;flex-direction:column;gap:6px}
-  .ms-item{display:flex;justify-content:space-between;align-items:center;gap:10px;font-size:.84rem;color:var(--ink);border-top:1px solid var(--line);padding-top:7px}
+  .ms-item{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;font-size:.84rem;color:var(--ink);border-top:1px solid var(--line);padding-top:7px}
+  .ms-item-main{display:flex;flex-direction:column;min-width:0}
+  .ms-sub{display:block;font-size:.78rem;color:var(--muted);margin-top:2px}
   .ms-right{display:inline-flex;align-items:center;gap:8px;white-space:nowrap}
+  .ms-horario{margin-top:12px;border:1px dashed #cdd8cf;border-radius:10px;padding:10px 12px;background:#fafcfb}
+  .ms-h-title{font-size:.8rem;font-weight:700;color:var(--muted);margin-bottom:6px}
+  .ms-h-row{display:flex;justify-content:space-between;gap:12px;font-size:.85rem;padding:3px 0}
+  .ms-h-row b{font-weight:600}
+  .ms-h-libre{color:var(--muted)}
   .ms-cancel{border:none;background:#fdecea;color:#a3261a;border-radius:8px;padding:4px 9px;cursor:pointer;font-weight:600;font-size:.76rem}
   .ms-empty{font-size:.82rem;color:var(--muted)}
   .mf-hint{font-size:.82rem;color:var(--muted);margin-bottom:10px}
@@ -212,6 +219,7 @@
         <input type="text" id="ms-motivo" placeholder="Motivo (opcional)" maxlength="140">
         <button class="btn btn-primary" id="ms-send" style="width:auto">Enviar</button>
       </div>
+      <div id="ms-horario" class="ms-horario" hidden></div>
       <div id="ms-list" class="ms-list"></div>
     </div>
   </div>
@@ -474,6 +482,35 @@ window.addEventListener('beforeunload',()=>{ if(!PREVIEW){ ACT.ultimo_latido=iso
 /* ===== init ===== */
 /* ===== solicitudes del empleado ===== */
 const MS_TIPO={ausencia:'Ausencia justificada',permiso:'Permiso',entrada_tarde:'Entrada tarde',salida_temprano:'Salida temprano',cambio_turno:'Cambio de turno',otro:'Otro'};
+// Lista de días del rango con su horario programado (para mostrar qué se está justificando)
+function horarioDias(desde,hasta){
+  if(!MEMP||!desde) return [];
+  const end=(hasta&&hasta>=desde)?hasta:desde;
+  const start=new Date(desde+'T00:00:00'), fin=new Date(end+'T00:00:00'); const out=[];
+  for(let d=new Date(start); d<=fin && out.length<31; d.setDate(d.getDate()+1)){
+    const day=todayStrOf(d), P=progForDate(MEMP,day);
+    out.push({day, libre:!!P.libre, txt:P.libre?'Día libre':`${P.ent||'—'} – ${P.sal||'—'}`});
+  }
+  return out;
+}
+// Resumen compacto para la lista de solicitudes
+function horarioResumen(desde,hasta){
+  const dias=horarioDias(desde,hasta); if(!dias.length) return '';
+  if(dias.length===1) return 'Horario: '+dias[0].txt;
+  const distintos=[...new Set(dias.filter(x=>!x.libre).map(x=>x.txt))];
+  const libres=dias.filter(x=>x.libre).length;
+  if(distintos.length<=1){ const base=distintos[0]||'Día libre'; return `Horario: ${base}`+(libres?` · ${libres} día(s) libre(s)`:'')+` · ${dias.length} días`; }
+  return 'Horario: '+dias.map(x=>fmtDMY(x.day).slice(0,5)+' '+x.txt).slice(0,4).join(' · ')+(dias.length>4?' …':'');
+}
+function renderMsHorario(){
+  const box=$('#ms-horario'); if(!box) return;
+  const desde=$('#ms-desde').value, hasta=$('#ms-hasta').value;
+  const dias=horarioDias(desde,hasta);
+  if(!dias.length){ box.hidden=true; box.innerHTML=''; return; }
+  box.hidden=false;
+  box.innerHTML='<div class="ms-h-title">Horario que estás justificando</div>'+
+    dias.map(x=>`<div class="ms-h-row"><b>${fmtDMY(x.day)}</b><span class="${x.libre?'ms-h-libre':''}">${x.txt}</span></div>`).join('');
+}
 async function loadMisSol(){
   if(PREVIEW||!MEMP||!window.sb){ $('#ms-list').innerHTML=''; return; }
   const {data}=await window.sb.from('solicitudes').select('*').eq('empleado',MEMP.nombre).order('created_at',{ascending:false}).limit(20);
@@ -483,7 +520,8 @@ async function loadMisSol(){
     const fechas=fmtDMY(s.fecha)+((s.fecha_fin&&s.fecha_fin!==s.fecha)?(' al '+fmtDMY(s.fecha_fin)):'');
     const est=s.estado==='aprobada'?pill('Aprobada','ok'):(s.estado==='rechazada'?pill('Rechazada','bad'):pill('Pendiente','warn'));
     const cancel=s.estado==='pendiente'?` <button class="ms-cancel" data-id="${s.id}">Cancelar</button>`:'';
-    return `<div class="ms-item"><span>${esc(MS_TIPO[s.tipo]||s.tipo)} · ${fechas}${s.motivo?(' · '+esc(s.motivo)):''}</span><span class="ms-right">${est}${cancel}</span></div>`;
+    const hor=horarioResumen(s.fecha,s.fecha_fin);
+    return `<div class="ms-item"><div class="ms-item-main"><span>${esc(MS_TIPO[s.tipo]||s.tipo)} · ${fechas}${s.motivo?(' · '+esc(s.motivo)):''}</span>${hor?`<span class="ms-sub">${esc(hor)}</span>`:''}</div><span class="ms-right">${est}${cancel}</span></div>`;
   }).join('');
   $('#ms-list').querySelectorAll('.ms-cancel').forEach(b=>b.addEventListener('click',async()=>{
     if(!confirm('¿Cancelar esta solicitud?')) return;
@@ -548,7 +586,7 @@ async function loadMisFaltas(){
   $('#mf-list').innerHTML=banner+lista;
   $('#mf-list').querySelectorAll('.mf-just').forEach(b=>b.addEventListener('click',()=>{
     const it=issues[+b.dataset.i];
-    $('#ms-tipo').value=it.tipo; $('#ms-desde').value=it.day; $('#ms-hasta').value=''; $('#ms-motivo').value=''; $('#ms-motivo').focus();
+    $('#ms-tipo').value=it.tipo; $('#ms-desde').value=it.day; $('#ms-hasta').value=''; $('#ms-motivo').value=''; renderMsHorario(); $('#ms-motivo').focus();
     document.querySelector('.solpanel:last-of-type').scrollIntoView({behavior:'smooth',block:'center'});
     status('Completá el motivo y tocá Enviar.','ok');
   }));
@@ -562,6 +600,7 @@ $('#ms-send').addEventListener('click',async()=>{
   if(error){ status('No se pudo enviar: '+error.message,'err'); return; }
   $('#ms-motivo').value=''; status('✓ Solicitud enviada. Queda pendiente de aprobación.','ok'); loadMisSol(); loadMisFaltas();
 });
+['#ms-desde','#ms-hasta','#ms-tipo'].forEach(sel=>{ const el=$(sel); if(el) el.addEventListener('change',renderMsHorario); });
 
 $('#logout').addEventListener('click',e=>{ e.preventDefault(); stopHeartbeat(); window.dropperAuth.signOut(); });
 tickClock(); setInterval(tickClock,15000);
