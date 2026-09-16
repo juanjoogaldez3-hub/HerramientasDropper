@@ -211,7 +211,7 @@
           <option value="permiso">Permiso</option>
           <option value="entrada_tarde">Entrada tarde</option>
           <option value="salida_temprano">Salida temprano</option>
-          <option value="refaccion">Refacción larga</option>
+          <option value="refaccion">Regresé tarde de refacción</option>
           <option value="cambio_turno">Cambio de turno</option>
           <option value="otro">Otro</option>
         </select>
@@ -482,7 +482,7 @@ window.addEventListener('beforeunload',()=>{ if(!PREVIEW){ ACT.ultimo_latido=iso
 
 /* ===== init ===== */
 /* ===== solicitudes del empleado ===== */
-const MS_TIPO={ausencia:'Ausencia justificada',permiso:'Permiso',entrada_tarde:'Entrada tarde',salida_temprano:'Salida temprano',refaccion:'Refacción larga',cambio_turno:'Cambio de turno',otro:'Otro'};
+const MS_TIPO={ausencia:'Ausencia justificada',permiso:'Permiso',entrada_tarde:'Entrada tarde',salida_temprano:'Salida temprano',refaccion:'Regresé tarde de refacción',cambio_turno:'Cambio de turno',otro:'Otro'};
 // Lista de días del rango con su horario programado (para mostrar qué se está justificando)
 function horarioDias(desde,hasta){
   if(!MEMP||!desde) return [];

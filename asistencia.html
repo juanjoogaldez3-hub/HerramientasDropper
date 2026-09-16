@@ -173,7 +173,7 @@
           <option value="permiso">Permiso</option>
           <option value="entrada_tarde">Entrada tarde</option>
           <option value="salida_temprano">Salida temprano</option>
-          <option value="refaccion">Refacción larga</option>
+          <option value="refaccion">Regresó tarde de refacción</option>
           <option value="cambio_turno">Cambio de turno</option>
           <option value="otro">Otro</option>
         </select>
@@ -246,7 +246,7 @@
       <div class="howto" style="margin-top:10px">
         Cada persona marca desde su computadora en <b>Marcaje</b> y cada marca guarda hora + foto.<br>
         <b>Horas netas</b> = (Salida − Entrada) − tiempo de refacción.<br>
-        <b>Refacción</b>: cuenta hasta 1h. Si pasa de 1h, el exceso se suma a lo que deben, salvo que suban una excepción de «Refacción larga».<br>
+        <b>Refacción</b>: cuenta hasta 1h. Si pasa de 1h, el exceso se suma a lo que deben, salvo que suban una excepción de «Regresó tarde de refacción».<br>
         <b>Salió antes</b>: minutos antes de su hora de salida; se convierten en deuda salvo que justifiquen «Salida temprano».<br>
         <b>Inactividad</b> = minutos sin mouse ni teclado (aprox. cuando dejan/bloquean la máquina). <b>Última señal</b> = último latido de la página; si es mucho antes de la salida, dejaron la compu sin marcar salida.
       </div>
@@ -733,7 +733,7 @@ async function renderAvisos(){
 }
 
 /* ===== solicitudes ===== */
-const TIPO_LBL={ausencia:'Ausencia justificada',permiso:'Permiso',entrada_tarde:'Entrada tarde',salida_temprano:'Salida temprano',refaccion:'Refacción larga',cambio_turno:'Cambio de turno',otro:'Otro'};
+const TIPO_LBL={ausencia:'Ausencia justificada',permiso:'Permiso',entrada_tarde:'Entrada tarde',salida_temprano:'Salida temprano',refaccion:'Regresó tarde de refacción',cambio_turno:'Cambio de turno',otro:'Otro'};
 let SOL=[];
 async function loadSol(){ SOL=[]; if(!window.sb) return; const {data}=await window.sb.from('solicitudes').select('*').order('created_at',{ascending:false}).limit(500); SOL=data||[]; }
 function solBadge(){ const n=SOL.filter(s=>s.estado==='pendiente').length; const b=$('#sol-badge'); if(b){ b.textContent=n; b.hidden=n===0; } }
