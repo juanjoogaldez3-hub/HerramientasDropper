@@ -211,6 +211,7 @@
           <option value="permiso">Permiso</option>
           <option value="entrada_tarde">Entrada tarde</option>
           <option value="salida_temprano">Salida temprano</option>
+          <option value="refaccion">Refacción larga</option>
           <option value="cambio_turno">Cambio de turno</option>
           <option value="otro">Otro</option>
         </select>
@@ -481,7 +482,7 @@ window.addEventListener('beforeunload',()=>{ if(!PREVIEW){ ACT.ultimo_latido=iso
 
 /* ===== init ===== */
 /* ===== solicitudes del empleado ===== */
-const MS_TIPO={ausencia:'Ausencia justificada',permiso:'Permiso',entrada_tarde:'Entrada tarde',salida_temprano:'Salida temprano',cambio_turno:'Cambio de turno',otro:'Otro'};
+const MS_TIPO={ausencia:'Ausencia justificada',permiso:'Permiso',entrada_tarde:'Entrada tarde',salida_temprano:'Salida temprano',refaccion:'Refacción larga',cambio_turno:'Cambio de turno',otro:'Otro'};
 // Lista de días del rango con su horario programado (para mostrar qué se está justificando)
 function horarioDias(desde,hasta){
   if(!MEMP||!desde) return [];
@@ -539,10 +540,10 @@ async function loadMisFaltas(){
     window.sb.from('asistencia_marcajes').select('fecha,tipo,hora,ts').eq('empleado',MEMP.nombre).gte('fecha',desde).lte('fecha',hasta).order('ts'),
     window.sb.from('solicitudes').select('tipo,fecha,fecha_fin,estado').eq('empleado',MEMP.nombre).gte('fecha',desde)
   ]);
-  const marc=rm.data||[], sol=rs.data||[], apr=sol.filter(s=>s.estado==='aprobada');
-  const cubre=(list,day)=>list.find(s=> s.fecha<=day && day<=(s.fecha_fin||s.fecha));
-  const jTardeAp=day=>apr.some(s=> s.fecha<=day&&day<=(s.fecha_fin||s.fecha) && ['entrada_tarde','permiso','ausencia'].includes(s.tipo));
-  const jSalAp=day=>apr.some(s=> s.fecha<=day&&day<=(s.fecha_fin||s.fecha) && ['salida_temprano','permiso','ausencia'].includes(s.tipo));
+  const marc=rm.data||[], sol=rs.data||[];
+  const grp={entrada_tarde:['entrada_tarde','permiso','ausencia'], salida_temprano:['salida_temprano','permiso','ausencia'], refaccion:['refaccion','permiso','ausencia'], ausencia:['ausencia','permiso']};
+  const cubreTipo=(day,T,estado)=>sol.find(s=> s.fecha<=day&&day<=(s.fecha_fin||s.fecha) && (grp[T]||[T]).includes(s.tipo) && (!estado||s.estado===estado));
+  const apDe=(day,T)=>!!cubreTipo(day,T,'aprobada');
   const byDay={}; marc.forEach(m=>{ (byDay[m.fecha]||(byDay[m.fecha]=[])).push(m); });
   const reqBase=(MEMP.horas_req!=null?+MEMP.horas_req:8);
   const issues=[]; let deudaTot=0;
@@ -555,33 +556,33 @@ async function loadMisFaltas(){
     const entH=ent?hm(ent.hora):null, salH=sal?hm(sal.hora):null, progEnt=hm(P.ent), progSal=hm(P.sal);
     const refMin=(rout&&rin)?Math.max(0,hm(rin.hora)-hm(rout.hora)):0;
     const span=(progEnt!=null&&progSal!=null)?(progSal-progEnt)/60:reqBase, req=Math.min(reqBase,span);   // requerido del día según su turno
-    // Horas que debe. Si está justificado (entrada tarde/salida temprano aprobada) cuenta como si cumpliera → sin deuda.
+    const jTa=apDe(day,'entrada_tarde'), jSa=apDe(day,'salida_temprano'), jRe=apDe(day,'refaccion');
+    // Deuda del día. Entrada tarde/salida temprano aprobadas acreditan la hora; el exceso de refacción SÍ resta salvo que esté justificado.
     if(entH!=null && salH!=null){
-      let entEfec=entH; if(jTardeAp(day)&&progEnt!=null) entEfec=Math.min(entH,progEnt);
-      let salEfec=salH; if(jSalAp(day)&&progSal!=null) salEfec=Math.max(salH,progSal);
-      const refCap=Math.min(refMin,60); const he=Math.max(0,(salEfec-entEfec)/60-refCap/60); deudaTot+=Math.max(0,req-he);
+      let entEfec=entH; if(jTa&&progEnt!=null) entEfec=Math.min(entH,progEnt);
+      let salEfec=salH; if(jSa&&progSal!=null) salEfec=Math.max(salH,progSal);
+      const refUsado=(refMin>60&&!jRe)?refMin:Math.min(refMin,60);
+      const he=Math.max(0,(salEfec-entEfec)/60-refUsado/60); deudaTot+=Math.max(0,req-he);
     }
-    // Faltas por justificar (con valores reales)
-    let probs=[], tipo=null;
-    if(entH==null){ if(!isToday){ probs.push('No marcaste entrada'); tipo='ausencia'; } }
+    // Problemas justificables (cada uno con su propio tipo; se omite si ya hay una excepción aprobada que lo cubre)
+    const add=(txt,T)=>{ if(apDe(day,T)) return; issues.push({day,txt,tipo:T,pend:!!cubreTipo(day,T,'pendiente'),rej:!!cubreTipo(day,T,'rechazada')}); };
+    if(entH==null){ if(!isToday) add('No marcaste entrada','ausencia'); continue; }
+    const tard=(progEnt!=null)?Math.max(0,entH-progEnt):0;
+    if(tard>5) add('Llegaste tarde '+tard+' min','entrada_tarde');
+    if(salH==null){ if(!isToday) add('No marcaste salida','salida_temprano'); }
     else {
-      const tard=(progEnt!=null)?Math.max(0,entH-progEnt):0;
-      if(tard>5){ probs.push('Llegaste tarde '+tard+' min'); tipo='entrada_tarde'; }
-      if(salH==null){ if(!isToday){ probs.push('No marcaste salida'); tipo=tipo||'salida_temprano'; } }
-      else { const refCap=Math.min(refMin,60), he=Math.max(0,(salH-entH)/60-refCap/60); if(req-he>0.083){ probs.push('No cumpliste las '+f1(req)+'h (hiciste '+f1(he)+'h)'); tipo=tipo||'salida_temprano'; } if(refMin>60){ probs.push('Refacción de '+refMin+'m (pasó de 1h)'); tipo=tipo||'permiso'; } }
+      const antes=(progSal!=null)?Math.max(0,progSal-salH):0;
+      if(antes>5) add('Saliste '+antes+' min antes','salida_temprano');
+      if(refMin>60) add('Refacción de '+refMin+'m ('+(refMin-60)+'m de más)','refaccion');
     }
-    if(!probs.length) continue;
-    const sd=cubre(sol,day);
-    if(sd && sd.estado==='aprobada') continue;   // ya justificado
-    issues.push({day,probs,tipo:tipo||'permiso',sol:sd});
   }
   if(!issues.length && deudaTot<=0.05){ panel.hidden=true; return; }
   panel.hidden=false;
   const banner = deudaTot>0.008 ? `<div class="mf-deuda">Debés <b>${fmtDebe(deudaTot)}</b> por reponer (últimos 14 días).</div>` : '';
   const lista = issues.length ? issues.map((it,i)=>{
-    const right = it.sol ? (it.sol.estado==='rechazada'?pill('Rechazada','bad'):pill('Enviada','warn'))
-                         : `<button class="mf-just" data-i="${i}">Justificar</button>`;
-    return `<div class="mf-item"><div class="mf-l"><b>${fmtDMY(it.day)}</b><span>${it.probs.map(esc).join(' · ')}</span></div><div class="mf-r">${right}</div></div>`;
+    const right = it.pend ? pill('Enviada','warn')
+                          : `<button class="mf-just" data-i="${i}">Justificar${it.rej?' de nuevo':''}</button>`;
+    return `<div class="mf-item"><div class="mf-l"><b>${fmtDMY(it.day)}</b><span>${esc(it.txt)}</span></div><div class="mf-r">${right}</div></div>`;
   }).join('') : '<div class="ms-empty">No tenés faltas sin justificar.</div>';
   $('#mf-list').innerHTML=banner+lista;
   $('#mf-list').querySelectorAll('.mf-just').forEach(b=>b.addEventListener('click',()=>{

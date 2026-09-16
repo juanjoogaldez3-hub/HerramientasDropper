@@ -173,6 +173,7 @@
           <option value="permiso">Permiso</option>
           <option value="entrada_tarde">Entrada tarde</option>
           <option value="salida_temprano">Salida temprano</option>
+          <option value="refaccion">Refacción larga</option>
           <option value="cambio_turno">Cambio de turno</option>
           <option value="otro">Otro</option>
         </select>
@@ -245,6 +246,8 @@
       <div class="howto" style="margin-top:10px">
         Cada persona marca desde su computadora en <b>Marcaje</b> y cada marca guarda hora + foto.<br>
         <b>Horas netas</b> = (Salida − Entrada) − tiempo de refacción.<br>
+        <b>Refacción</b>: cuenta hasta 1h. Si pasa de 1h, el exceso se suma a lo que deben, salvo que suban una excepción de «Refacción larga».<br>
+        <b>Salió antes</b>: minutos antes de su hora de salida; se convierten en deuda salvo que justifiquen «Salida temprano».<br>
         <b>Inactividad</b> = minutos sin mouse ni teclado (aprox. cuando dejan/bloquean la máquina). <b>Última señal</b> = último latido de la página; si es mucho antes de la salida, dejaron la compu sin marcar salida.
       </div>
     </details>
@@ -399,7 +402,7 @@ $('#cfg-save').addEventListener('click',async()=>{
 async function loadJustAll(){
   if(!window.sb) return [];
   const {data}=await window.sb.from('solicitudes').select('empleado,tipo,fecha,fecha_fin,estado').eq('estado','aprobada').limit(2000);
-  return (data||[]).filter(s=>['ausencia','permiso','entrada_tarde','salida_temprano'].includes(s.tipo));
+  return (data||[]).filter(s=>['ausencia','permiso','entrada_tarde','salida_temprano','refaccion'].includes(s.tipo));
 }
 // Justifica tardanza: entrada tarde / permiso / ausencia aprobados.
 function justificaTardanza(list,emp,fecha){
@@ -409,26 +412,33 @@ function justificaTardanza(list,emp,fecha){
 function justificaSalida(list,emp,fecha){
   return (list||[]).some(s=> s.empleado===emp && s.fecha<=fecha && fecha<=(s.fecha_fin||s.fecha) && ['salida_temprano','permiso','ausencia'].includes(s.tipo));
 }
+// Justifica refacción larga: refaccion / permiso / ausencia aprobados.
+function justificaRefaccion(list,emp,fecha){
+  return (list||[]).some(s=> s.empleado===emp && s.fecha<=fecha && fecha<=(s.fecha_fin||s.fecha) && ['refaccion','permiso','ausencia'].includes(s.tipo));
+}
 function punchDaysToRegs(days,just){
   return days.map(d=>{
     const emp=empByName(d.empleado), P=progFor(emp,d.fecha);
     const entH=d.ent?hm(d.ent.hora):null, salH=d.sal?hm(d.sal.hora):null, progEnt=hm(P.ent), progSal=hm(P.sal);
-    const jTarde=justificaTardanza(just,d.empleado,d.fecha), jSal=justificaSalida(just,d.empleado,d.fecha);
+    const jTarde=justificaTardanza(just,d.empleado,d.fecha), jSal=justificaSalida(just,d.empleado,d.fecha), jRef=justificaRefaccion(just,d.empleado,d.fecha);
     // Justificado = cuenta como si hubiera cumplido: entrada tarde acredita la entrada, salida temprano acredita la salida.
     let entEfec=entH; if(jTarde && entH!=null && progEnt!=null) entEfec=Math.min(entH,progEnt);
     let salEfec=salH; if(jSal && salH!=null && progSal!=null) salEfec=Math.max(salH,progSal);
-    const refCap=Math.min(d.refMin||0,(CONFIG.refaccion_max_min||60));   // refacción de más no cuenta como deuda (tiene su propio aviso)
-    let horasEfec=d.horas||0; if(entEfec!=null && salEfec!=null) horasEfec=Math.max(0,(salEfec-entEfec)/60-refCap/60);
+    const cap=(CONFIG.refaccion_max_min||60), refMin=d.refMin||0, refExcede=refMin>cap;
+    // Si la refacción pasa de 1h y NO está justificada, el exceso cuenta como deuda (se resta completa). Justificada: se limita a 1h.
+    const refUsado=(refExcede&&!jRef)?refMin:Math.min(refMin,cap);
+    let horasEfec=d.horas||0; if(entEfec!=null && salEfec!=null) horasEfec=Math.max(0,(salEfec-entEfec)/60-refUsado/60);
     const base=(emp&&emp.horas_req!=null)?+emp.horas_req:8;
     const span=(progEnt!=null&&progSal!=null)?(progSal-progEnt)/60:base;
     const req=d.libre?0:Math.min(base,span);   // requerido del día, nunca más que el turno; 0 si es día libre
     const deuda=(entH!=null&&salH!=null)?Math.max(0,req-horasEfec):0;   // 0 si está justificado
+    const salioAntes=(salH!=null&&progSal!=null&&!d.libre)?Math.max(0,progSal-salH):0;
     return {
       empleado:d.empleado, fecha:d.fecha,
       entrada_prog: (d.libre?'Libre':P.ent),
       entrada_real: d.ent?String(d.ent.hora).slice(0,5):null,
       salida_real: d.sal?String(d.sal.hora).slice(0,5):null,
-      tardanza_min: jTarde?0:d.tard, horas: horasEfec, deuda, jSal, ausente:false, justificado:jTarde
+      tardanza_min: jTarde?0:d.tard, horas: horasEfec, deuda, jSal, jRef, refMin, refExcede, salioAntes, ausente:false, justificado:jTarde
     };
   });
 }
@@ -476,9 +486,11 @@ function renderDTable(){
 }
 function dayDetail(days){
   const ds=[...days].sort((a,b)=>b.fecha.localeCompare(a.fecha));
-  return `<table class="hist"><thead><tr><th>Fecha</th><th>Entrada</th><th>Salida</th><th>Estado</th><th>Horas</th><th>Debe</th></tr></thead><tbody>${ds.map(r=>{
+  return `<table class="hist"><thead><tr><th>Fecha</th><th>Entrada</th><th>Salida</th><th>Estado</th><th>Refacción</th><th>Salió antes</th><th>Horas</th><th>Debe</th></tr></thead><tbody>${ds.map(r=>{
     const est=r.ausente?pill('Ausente','gray'):(r.entrada_real?(r.justificado?pill('Justificado','ok'):pill(r.tardanza_min>0?'Tarde '+r.tardanza_min+'m':'A tiempo',tardCls(r.tardanza_min))):pill('Sin marcar','gray'));
-    return `<tr><td>${fmtDate(r.fecha)}</td><td>${esc(r.entrada_real||'—')}</td><td>${esc(r.salida_real||'—')}</td><td>${est}</td><td class="num">${f1(r.horas)}</td><td class="num">${r.deuda>0.008?pill(fmtDebe(r.deuda),'bad'):'—'}</td></tr>`;
+    const ref = !r.refMin ? '—' : (r.refExcede ? pill(r.refMin+'m', r.jRef?'ok':'bad') : r.refMin+'m');
+    const antes = !r.salioAntes ? '—' : pill(r.salioAntes+'m', r.jSal?'ok':'bad');
+    return `<tr><td>${fmtDate(r.fecha)}</td><td>${esc(r.entrada_real||'—')}</td><td>${esc(r.salida_real||'—')}</td><td>${est}</td><td class="num">${ref}</td><td class="num">${antes}</td><td class="num">${f1(r.horas)}</td><td class="num">${r.deuda>0.008?pill(fmtDebe(r.deuda),'bad'):'—'}</td></tr>`;
   }).join('')}</tbody></table>`;
 }
 $('#d-apply').addEventListener('click',renderDashboard);
@@ -651,11 +663,11 @@ function fillPEmp(){ const cur=$('#p-emp').value; $('#p-emp').innerHTML='<option
 /* ===== avisos ===== */
 function nowMin(){ const d=new Date(); return d.getHours()*60+d.getMinutes(); }
 async function justificadosDe(fecha){
-  if(!window.sb) return {full:new Set(),tarde:new Set(),salida:new Set()};
+  if(!window.sb) return {full:new Set(),tarde:new Set(),salida:new Set(),refac:new Set()};
   const {data}=await window.sb.from('solicitudes').select('empleado,tipo,fecha,fecha_fin,estado').eq('estado','aprobada').limit(1000);
-  const full=new Set(), tarde=new Set(), salida=new Set();
-  (data||[]).forEach(s=>{ const fin=s.fecha_fin||s.fecha; if(!(s.fecha<=fecha && fecha<=fin)) return; if(['ausencia','permiso'].includes(s.tipo)) full.add(s.empleado); else if(s.tipo==='entrada_tarde') tarde.add(s.empleado); else if(s.tipo==='salida_temprano') salida.add(s.empleado); });
-  return {full,tarde,salida};
+  const full=new Set(), tarde=new Set(), salida=new Set(), refac=new Set();
+  (data||[]).forEach(s=>{ const fin=s.fecha_fin||s.fecha; if(!(s.fecha<=fecha && fecha<=fin)) return; if(['ausencia','permiso'].includes(s.tipo)) full.add(s.empleado); else if(s.tipo==='entrada_tarde') tarde.add(s.empleado); else if(s.tipo==='salida_temprano') salida.add(s.empleado); else if(s.tipo==='refaccion') refac.add(s.empleado); });
+  return {full,tarde,salida,refac};
 }
 async function computeAvisos(fecha){
   const {marc,act}=await fetchPunch(fecha,fecha,'');
@@ -685,14 +697,15 @@ async function computeAvisos(fecha){
       const base=(e.horas_req!=null?+e.horas_req:8);
       const span=(progEnt!=null&&progSal!=null)?(progSal-progEnt)/60:base;
       const req=Math.min(base,span);
-      const jTarde=just.full.has(e.nombre)||just.tarde.has(e.nombre), jSal=just.full.has(e.nombre)||just.salida.has(e.nombre);
+      const jTarde=just.full.has(e.nombre)||just.tarde.has(e.nombre), jSal=just.full.has(e.nombre)||just.salida.has(e.nombre), jRef=just.full.has(e.nombre)||just.refac.has(e.nombre);
       let entEfec=entH; if(jTarde&&entH!=null&&progEnt!=null) entEfec=Math.min(entH,progEnt);
-      const refCap2=Math.min(d.refMin||0,(CONFIG.refaccion_max_min||60));
-      const horasEfec=Math.max(0,(salH-entEfec)/60-refCap2/60), faltanH=req-horasEfec;
+      const cap=CONFIG.refaccion_max_min||60, refMin=d.refMin||0;
+      const refUsado=(refMin>cap&&!jRef)?refMin:Math.min(refMin,cap);   // exceso no justificado sí resta
+      const horasEfec=Math.max(0,(salH-entEfec)/60-refUsado/60), faltanH=req-horasEfec;
       if(faltanH>0.083 && !jSal){ R.incompletas.push({nombre:e.nombre,faltan:Math.round(faltanH*60),req,netas:horasEfec}); bien=false; }
     }
     const maxRef=CONFIG.refaccion_max_min||60;
-    if(d.refMin>maxRef){ R.refExcedida.push({nombre:e.nombre,min:d.refMin,max:maxRef}); bien=false; }
+    if(d.refMin>maxRef && !(just.full.has(e.nombre)||just.refac.has(e.nombre))){ R.refExcedida.push({nombre:e.nombre,min:d.refMin,max:maxRef}); bien=false; }
     if(bien) R.ok.push(e.nombre);
   });
   return R;
@@ -720,7 +733,7 @@ async function renderAvisos(){
 }
 
 /* ===== solicitudes ===== */
-const TIPO_LBL={ausencia:'Ausencia justificada',permiso:'Permiso',entrada_tarde:'Entrada tarde',salida_temprano:'Salida temprano',cambio_turno:'Cambio de turno',otro:'Otro'};
+const TIPO_LBL={ausencia:'Ausencia justificada',permiso:'Permiso',entrada_tarde:'Entrada tarde',salida_temprano:'Salida temprano',refaccion:'Refacción larga',cambio_turno:'Cambio de turno',otro:'Otro'};
 let SOL=[];
 async function loadSol(){ SOL=[]; if(!window.sb) return; const {data}=await window.sb.from('solicitudes').select('*').order('created_at',{ascending:false}).limit(500); SOL=data||[]; }
 function solBadge(){ const n=SOL.filter(s=>s.estado==='pendiente').length; const b=$('#sol-badge'); if(b){ b.textContent=n; b.hidden=n===0; } }
