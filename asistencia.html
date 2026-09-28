@@ -184,7 +184,7 @@
       </div>
     </div>
     <div class="selrow">
-      <label style="font-size:.84rem;font-weight:600;color:var(--muted)">Ver <select id="sol-filtro"><option value="pendiente">Pendientes</option><option value="all">Todas</option></select></label>
+      <label style="font-size:.84rem;font-weight:600;color:var(--muted)">Ver <select id="sol-filtro"><option value="pendiente">Pendientes</option><option value="resueltas">Historial (resueltas)</option><option value="aprobada">Aprobadas</option><option value="rechazada">Rechazadas</option><option value="all">Todas</option></select></label>
     </div>
     <div id="sol-list"></div>
   </div>
@@ -743,17 +743,24 @@ async function renderSolicitudes(){
   if(PREVIEW){ $('#sol-list').innerHTML='<div class="empty"><h3>Configurá Supabase para gestionar solicitudes</h3></div>'; return; }
   await loadSol(); fillSolEmp(); solBadge();
   const filt=$('#sol-filtro').value;
-  const rows=filt==='pendiente'?SOL.filter(s=>s.estado==='pendiente'):SOL;
-  if(!rows.length){ $('#sol-list').innerHTML='<div class="empty" style="padding:30px"><h3>Sin solicitudes'+(filt==='pendiente'?' pendientes':'')+'</h3></div>'; return; }
-  $('#sol-list').innerHTML=`<div class="tbl-wrap"><table class="hist"><thead><tr><th>Empleado</th><th>Tipo</th><th>Fechas</th><th>Motivo</th><th>Estado</th><th>Acción</th></tr></thead><tbody>${rows.map(s=>{
+  let rows;
+  if(filt==='pendiente') rows=SOL.filter(s=>s.estado==='pendiente');
+  else if(filt==='aprobada') rows=SOL.filter(s=>s.estado==='aprobada');
+  else if(filt==='rechazada') rows=SOL.filter(s=>s.estado==='rechazada');
+  else if(filt==='resueltas') rows=SOL.filter(s=>s.estado==='aprobada'||s.estado==='rechazada');
+  else rows=SOL;
+  const FILT_LBL={pendiente:' pendientes',aprobada:' aprobadas',rechazada:' rechazadas',resueltas:' resueltas',all:''};
+  if(!rows.length){ $('#sol-list').innerHTML='<div class="empty" style="padding:30px"><h3>Sin solicitudes'+(FILT_LBL[filt]||'')+'</h3></div>'; return; }
+  $('#sol-list').innerHTML=`<div class="tbl-wrap"><table class="hist"><thead><tr><th>Empleado</th><th>Tipo</th><th>Fechas</th><th>Motivo</th><th>Estado</th><th>Resuelta</th><th>Acción</th></tr></thead><tbody>${rows.map(s=>{
     const fechas=fmtDate(s.fecha)+((s.fecha_fin&&s.fecha_fin!==s.fecha)?(' al '+fmtDate(s.fecha_fin)):'');
     const est=s.estado==='aprobada'?pill('Aprobada','ok'):(s.estado==='rechazada'?pill('Rechazada','bad'):pill('Pendiente','warn'));
+    const resu=(s.estado==='pendiente')?'<span style="color:var(--muted)">—</span>':esc((String(s.resuelto_por||'').split('@')[0]||'—')+(s.resuelto_at?(' · '+new Date(s.resuelto_at).toLocaleDateString('es-GT')):''));
     const bOk=`<button class="btn btn-primary sol-ok" data-id="${s.id}" style="width:auto;padding:5px 10px;font-size:.76rem">Aprobar</button>`;
     const bNo=`<button class="btn btn-ghost sol-no" data-id="${s.id}" style="width:auto;padding:5px 10px;font-size:.76rem">Rechazar</button>`;
     const bDel=`<button class="x sol-del" data-id="${s.id}">Quitar</button>`;
     let acc='<span style="color:var(--muted)">—</span>';
     if(IS_ADMIN){ if(s.estado==='pendiente') acc=bOk+' '+bNo+' '+bDel; else if(s.estado==='aprobada') acc=bNo+' '+bDel; else acc=bOk+' '+bDel; }
-    return `<tr><td>${esc(s.empleado)}</td><td>${esc(TIPO_LBL[s.tipo]||s.tipo)}</td><td>${fechas}</td><td>${esc(s.motivo||'—')}</td><td>${est}</td><td>${acc}</td></tr>`;
+    return `<tr><td>${esc(s.empleado)}</td><td>${esc(TIPO_LBL[s.tipo]||s.tipo)}</td><td>${fechas}</td><td>${esc(s.motivo||'—')}</td><td>${est}</td><td>${resu}</td><td>${acc}</td></tr>`;
   }).join('')}</tbody></table></div>`;
   $('#sol-list').querySelectorAll('.sol-ok').forEach(b=>b.addEventListener('click',()=>resolverSol(b.dataset.id,'aprobada')));
   $('#sol-list').querySelectorAll('.sol-no').forEach(b=>b.addEventListener('click',()=>resolverSol(b.dataset.id,'rechazada')));
@@ -810,7 +817,7 @@ const TAB_HELP={
   dia:'Lo que pasa cada día: el estado en vivo, avisos (quién no marcó, llegó tarde o no cerró) y el detalle de puncheos con fotos. Cambiá la fecha o el rango arriba.',
   calendario:'Vista de mes: cada día muestra cuántos marcaron y si hubo tardanzas u horas incompletas. Tocá un día para ver su detalle.',
   reportes:'Resumen por empleado en el período: días, puntualidad, tardanza y horas promedio. Tocá un empleado para ver sus días. Descargá Excel o PDF.',
-  solicitudes:'Permisos, ausencias y entradas tarde del personal. Aprobá o rechazá; las aprobadas silencian los avisos.',
+  solicitudes:'Permisos, ausencias y excepciones del personal. Aprobá o rechazá; las aprobadas silencian los avisos. Con el filtro «Ver» consultás el historial: pendientes, aprobadas, rechazadas o todas las resueltas (con quién y cuándo las resolvió).',
   empleados:'Dá de alta al personal y definí sus horarios (por defecto o turnos por día, con días libres).'
 };
 const ALL_VIEWS=['dia','calendario','dashboard','solicitudes','empleados'];
