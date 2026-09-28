@@ -508,6 +508,8 @@ function quincenaRange(){
   return [iso(s), iso(e)];
 }
 function dl(blob,name){ const u=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=u; a.download=name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(u),1500); }
+function regEstadoTxt(r){ return r.ausente?'Ausente':(r.entrada_real?(r.justificado?'Justificado':(r.tardanza_min>0?('Tarde '+r.tardanza_min+'m'):'A tiempo')):'Sin marcar'); }
+function detalleOrdenado(){ return [...D_REGS].filter(r=>r.entrada_real||r.salida_real||r.ausente).sort((a,b)=> String(a.empleado).localeCompare(String(b.empleado)) || String(a.fecha).localeCompare(String(b.fecha))); }
 function periodoDash(){ const f=$('#d-from').value, t=$('#d-to').value; if(f&&t) return `${fmtDate(f)} al ${fmtDate(t)}`; if(f) return `desde ${fmtDate(f)}`; if(t) return `hasta ${fmtDate(t)}`; return 'Todo el historial'; }
 $('#d-semana').addEventListener('click',()=>{ const [a,b]=weekRange(); $('#d-from').value=a; $('#d-to').value=b; renderDashboard(); });
 $('#d-quincena').addEventListener('click',()=>{ const [a,b]=quincenaRange(); $('#d-from').value=a; $('#d-to').value=b; renderDashboard(); });
@@ -521,6 +523,23 @@ $('#d-xlsx').addEventListener('click',async()=>{
   ws.getCell('A3').value='Período:'; ws.getCell('A3').font={name:'Arial',bold:true,size:10}; ws.getCell('B3').value=periodo; ws.getCell('B3').font={name:'Arial',size:10};
   let r=5; ['Empleado','Días','Presentes','Ausencias','Puntualidad','Tard. prom','Horas prom','Debe (h)'].forEach((x,j)=>{ const c=ws.getCell(r,j+1); c.value=x; c.font={name:'Arial',bold:true,size:10}; c.fill=fill('FFF2F4F5'); c.border=bd; c.alignment={horizontal:j===0?'left':'center'}; }); r++;
   rows.forEach((row,i)=>{ const even=i%2===0; const vals=[row.emp,row.dias,row.pres,row.aus,r2(row.punt),Math.round(row.tardProm),r2(row.horasProm),r2(row.deuda)]; vals.forEach((v,j)=>{ const c=ws.getCell(r,j+1); c.value=v; c.fill=fill(even?'FFFFFFFF':'FFDDF0E2'); c.border=bd; c.font={name:'Arial',size:10,color:{argb:j===7&&row.deuda>0.05?'FFA3261A':'FF1A1A1A'}}; c.alignment={horizontal:j===0?'left':'center'}; if(j===4) c.numFmt='0%'; }); r++; });
+
+  // ----- Hoja: Detalle por día (cada día del período) -----
+  const det=detalleOrdenado();
+  const ws2=wb.addWorksheet('Detalle por día',{views:[{showGridLines:false}]});
+  [24,12,10,10,14,15,16,9,9].forEach((w,i)=>ws2.getColumn(i+1).width=w);
+  ws2.mergeCells('A1:I1'); ws2.getRow(1).height=28; let t2=ws2.getCell('A1'); t2.value='Dropper · Detalle de asistencia por día'; t2.font={name:'Arial',bold:true,size:13,color:{argb:'FFFFFFFF'}}; t2.fill=fill('FF0C0F0D'); t2.alignment={vertical:'middle',horizontal:'left',indent:1};
+  ws2.getCell('A3').value='Período:'; ws2.getCell('A3').font={name:'Arial',bold:true,size:10}; ws2.getCell('B3').value=periodo; ws2.getCell('B3').font={name:'Arial',size:10};
+  let r2n=5; ['Empleado','Fecha','Entrada','Salida','Estado','Refacción (min)','Salió antes (min)','Horas','Debe (h)'].forEach((x,j)=>{ const c=ws2.getCell(r2n,j+1); c.value=x; c.font={name:'Arial',bold:true,size:10}; c.fill=fill('FFF2F4F5'); c.border=bd; c.alignment={horizontal:j===0?'left':'center'}; }); r2n++;
+  det.forEach((row,i)=>{ const even=i%2===0;
+    const refBad=row.refExcede&&!row.jRef, antesBad=row.salioAntes>0&&!row.jSal;
+    const vals=[row.empleado,fmtDate(row.fecha),row.entrada_real||'—',row.salida_real||'—',regEstadoTxt(row),row.refMin||0,row.salioAntes||0,r2(row.horas),r2(row.deuda)];
+    vals.forEach((v,j)=>{ const c=ws2.getCell(r2n,j+1); c.value=v; c.fill=fill(even?'FFFFFFFF':'FFDDF0E2'); c.border=bd;
+      let col='FF1A1A1A'; if(j===5&&refBad) col='FFA3261A'; if(j===6&&antesBad) col='FFA3261A'; if(j===8&&row.deuda>0.05) col='FFA3261A';
+      c.font={name:'Arial',size:10,color:{argb:col}}; c.alignment={horizontal:j===0?'left':'center'};
+    }); r2n++;
+  });
+
   const buf=await wb.xlsx.writeBuffer(); dl(new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}),`Asistencia_${$('#d-from').value||'todo'}.xlsx`);
 });
 $('#d-pdf').addEventListener('click',()=>{
@@ -533,6 +552,18 @@ $('#d-pdf').addEventListener('click',()=>{
     styles:{font:'helvetica',fontSize:8.5,cellPadding:4,textColor:[26,26,26],lineColor:[213,218,222],lineWidth:0.5},
     headStyles:{fillColor:[31,122,61],textColor:[255,255,255],fontStyle:'bold'}, alternateRowStyles:{fillColor:[221,240,226]},
     columnStyles:{0:{cellWidth:'auto'},1:{halign:'center'},2:{halign:'center'},3:{halign:'center'},4:{halign:'center'},5:{halign:'center'},6:{halign:'center'},7:{halign:'center'}}, margin:{left:M,right:M} });
+  const det=detalleOrdenado();
+  if(det.length){
+    doc.addPage();
+    doc.setFont('helvetica','bold'); doc.setFontSize(12); doc.setTextColor(26,26,26); doc.text('Detalle por día',M,44);
+    doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(120,120,120); doc.text(`Período: ${periodo}`,M,58);
+    doc.autoTable({ startY:70,
+      head:[['Empleado','Fecha','Entrada','Salida','Estado','Refacc.','Salió antes','Horas','Debe']],
+      body:det.map(r=>[r.empleado,fmtDate(r.fecha),r.entrada_real||'—',r.salida_real||'—',regEstadoTxt(r),(r.refMin||0)+'m',(r.salioAntes||0)+'m',f1(r.horas),r.deuda>0.008?fmtDebe(r.deuda):'—']),
+      styles:{font:'helvetica',fontSize:7.5,cellPadding:3,textColor:[26,26,26],lineColor:[213,218,222],lineWidth:0.5},
+      headStyles:{fillColor:[31,122,61],textColor:[255,255,255],fontStyle:'bold'}, alternateRowStyles:{fillColor:[221,240,226]},
+      columnStyles:{0:{cellWidth:'auto'},1:{cellWidth:56,halign:'center'},2:{cellWidth:44,halign:'center'},3:{cellWidth:44,halign:'center'},4:{cellWidth:58,halign:'center'},5:{cellWidth:40,halign:'center'},6:{cellWidth:52,halign:'center'},7:{cellWidth:36,halign:'center'},8:{cellWidth:38,halign:'center'}}, margin:{left:M,right:M} });
+  }
   doc.save('Reporte_Asistencia.pdf');
 });
 
