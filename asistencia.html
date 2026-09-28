@@ -205,6 +205,7 @@
     <div class="selrow">
       <label style="font-size:.84rem;font-weight:600;color:var(--muted)">Desde <input type="date" id="d-from"></label>
       <label style="font-size:.84rem;font-weight:600;color:var(--muted)">Hasta <input type="date" id="d-to"></label>
+      <label style="font-size:.84rem;font-weight:600;color:var(--muted)">Trabajador <select id="d-emp"><option value="__all__">Todos</option></select></label>
       <button class="btn btn-ghost" id="d-apply" style="width:auto;padding:9px 14px;font-size:.86rem">Aplicar</button>
       <button class="btn btn-ghost" id="d-semana" style="width:auto;padding:9px 14px;font-size:.86rem">Semana</button>
       <button class="btn btn-ghost" id="d-quincena" style="width:auto;padding:9px 14px;font-size:.86rem">Quincena</button>
@@ -451,8 +452,11 @@ async function fetchRange(from,to){
 let D_REGS=[], D_SORT={key:'punt',dir:1};
 async function renderDashboard(){
   if(PREVIEW){ $('#d-table').innerHTML='<div class="empty"><h3>Configurá Supabase para ver el dashboard</h3></div>'; $('#d-stats').innerHTML=''; return; }
+  fillDEmp();
   D_REGS=await fetchRange($('#d-from').value,$('#d-to').value); renderDTable();
 }
+function fillDEmp(){ const sel=$('#d-emp'); if(!sel) return; const cur=sel.value; sel.innerHTML='<option value="__all__">Todos</option>'+EMP.map(e=>`<option${e.nombre===cur?' selected':''}>${esc(e.nombre)}</option>`).join(''); }
+function filteredRegs(){ const sel=$('#d-emp'); const e=sel?sel.value:'__all__'; return (e&&e!=='__all__')?D_REGS.filter(r=>r.empleado===e):D_REGS; }
 function aggEmp(regs){
   const by=new Map();
   regs.forEach(r=>{ if(!by.has(r.empleado)) by.set(r.empleado,[]); by.get(r.empleado).push(r); });
@@ -465,7 +469,7 @@ function aggEmp(regs){
 function puntCls(p){ return p>=0.9?'ok':(p>=0.75?'warn':'bad'); }
 function fmtDebe(h){ const min=Math.round((+h||0)*60); return min<60 ? min+' min' : f1(min/60)+'h'; }
 function renderDTable(){
-  let rows=aggEmp(D_REGS);
+  let rows=aggEmp(filteredRegs());
   const {key,dir}=D_SORT;
   rows.sort((a,b)=>{ const av=key==='emp'?a.emp.toLowerCase():a[key], bv=key==='emp'?b.emp.toLowerCase():b[key]; return av<bv?-dir:(av>bv?dir:0); });
   const deudaTot=rows.reduce((s,r)=>s+r.deuda,0);
@@ -494,6 +498,7 @@ function dayDetail(days){
   }).join('')}</tbody></table>`;
 }
 $('#d-apply').addEventListener('click',renderDashboard);
+$('#d-emp').addEventListener('change',renderDTable);
 $('#d-clear').addEventListener('click',()=>{ $('#d-from').value=''; $('#d-to').value=''; renderDashboard(); });
 
 
@@ -509,13 +514,13 @@ function quincenaRange(){
 }
 function dl(blob,name){ const u=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=u; a.download=name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(u),1500); }
 function regEstadoTxt(r){ return r.ausente?'Ausente':(r.entrada_real?(r.justificado?'Justificado':(r.tardanza_min>0?('Tarde '+r.tardanza_min+'m'):'A tiempo')):'Sin marcar'); }
-function detalleOrdenado(){ return [...D_REGS].filter(r=>r.entrada_real||r.salida_real||r.ausente).sort((a,b)=> String(a.empleado).localeCompare(String(b.empleado)) || String(a.fecha).localeCompare(String(b.fecha))); }
+function detalleOrdenado(){ return [...filteredRegs()].filter(r=>r.entrada_real||r.salida_real||r.ausente).sort((a,b)=> String(a.empleado).localeCompare(String(b.empleado)) || String(a.fecha).localeCompare(String(b.fecha))); }
 function periodoDash(){ const f=$('#d-from').value, t=$('#d-to').value; if(f&&t) return `${fmtDate(f)} al ${fmtDate(t)}`; if(f) return `desde ${fmtDate(f)}`; if(t) return `hasta ${fmtDate(t)}`; return 'Todo el historial'; }
 $('#d-semana').addEventListener('click',()=>{ const [a,b]=weekRange(); $('#d-from').value=a; $('#d-to').value=b; renderDashboard(); });
 $('#d-quincena').addEventListener('click',()=>{ const [a,b]=quincenaRange(); $('#d-from').value=a; $('#d-to').value=b; renderDashboard(); });
 $('#d-mes').addEventListener('click',()=>{ const [a,b]=monthRange(); $('#d-from').value=a; $('#d-to').value=b; renderDashboard(); });
 $('#d-xlsx').addEventListener('click',async()=>{
-  const rows=aggEmp(D_REGS); if(!rows.length){ alert('Sin datos en el período.'); return; } const periodo=periodoDash();
+  const rows=aggEmp(filteredRegs()); if(!rows.length){ alert('Sin datos en el período.'); return; } const empF=($('#d-emp')&&$('#d-emp').value!=='__all__')?$('#d-emp').value:''; const periodo=periodoDash()+(empF?(' · '+empF):'');
   const wb=new ExcelJS.Workbook(); const ws=wb.addWorksheet('Asistencia',{views:[{showGridLines:false}]});
   const fill=c=>({type:'pattern',pattern:'solid',fgColor:{argb:c}}); const bd={top:{style:'thin',color:{argb:'FFD5DADE'}},bottom:{style:'thin',color:{argb:'FFD5DADE'}},left:{style:'thin',color:{argb:'FFD5DADE'}},right:{style:'thin',color:{argb:'FFD5DADE'}}};
   [26,8,11,11,13,12,11,10].forEach((w,i)=>ws.getColumn(i+1).width=w);
@@ -540,10 +545,10 @@ $('#d-xlsx').addEventListener('click',async()=>{
     }); r2n++;
   });
 
-  const buf=await wb.xlsx.writeBuffer(); dl(new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}),`Asistencia_${$('#d-from').value||'todo'}.xlsx`);
+  const buf=await wb.xlsx.writeBuffer(); dl(new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}),`Asistencia_${empF?empF.replace(/\s+/g,'_')+'_':''}${$('#d-from').value||'todo'}.xlsx`);
 });
 $('#d-pdf').addEventListener('click',()=>{
-  const rows=aggEmp(D_REGS); if(!rows.length){ alert('Sin datos en el período.'); return; } const periodo=periodoDash();
+  const rows=aggEmp(filteredRegs()); if(!rows.length){ alert('Sin datos en el período.'); return; } const empF=($('#d-emp')&&$('#d-emp').value!=='__all__')?$('#d-emp').value:''; const periodo=periodoDash()+(empF?(' · '+empF):'');
   const {jsPDF}=window.jspdf; const doc=new jsPDF({unit:'pt',format:'a4'}); const PW=doc.internal.pageSize.getWidth(),M=40;
   doc.setFillColor(12,15,13); doc.rect(0,0,PW,60,'F'); doc.setFont('helvetica','bold'); doc.setFontSize(15); doc.setTextColor(255,255,255); doc.text('Dropper · Reporte de Asistencia',M,30);
   doc.setFont('helvetica','normal'); doc.setFontSize(9.5); doc.setTextColor(207,230,211); doc.text(`Período: ${periodo}`,M,47);
@@ -847,7 +852,7 @@ const TAB_VIEWS={ dia:['dia'], calendario:['calendario'], reportes:['dashboard']
 const TAB_HELP={
   dia:'Lo que pasa cada día: el estado en vivo, avisos (quién no marcó, llegó tarde o no cerró) y el detalle de puncheos con fotos. Cambiá la fecha o el rango arriba.',
   calendario:'Vista de mes: cada día muestra cuántos marcaron y si hubo tardanzas u horas incompletas. Tocá un día para ver su detalle.',
-  reportes:'Resumen por empleado en el período: días, puntualidad, tardanza y horas promedio. Tocá un empleado para ver sus días. Descargá Excel o PDF.',
+  reportes:'Resumen por empleado en el período: días, puntualidad, tardanza y horas promedio. Filtrá por trabajador con «Trabajador» (afecta la tabla y la descarga). Tocá un empleado para ver sus días. Descargá Excel o PDF (incluye el detalle día por día).',
   solicitudes:'Permisos, ausencias y excepciones del personal. Aprobá o rechazá; las aprobadas silencian los avisos. Con el filtro «Ver» consultás el historial: pendientes, aprobadas, rechazadas o todas las resueltas (con quién y cuándo las resolvió).',
   empleados:'Dá de alta al personal y definí sus horarios (por defecto o turnos por día, con días libres).'
 };
