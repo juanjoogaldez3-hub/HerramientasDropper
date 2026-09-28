@@ -559,10 +559,11 @@ $('#d-pdf').addEventListener('click',()=>{
     columnStyles:{0:{cellWidth:'auto'},1:{halign:'center'},2:{halign:'center'},3:{halign:'center'},4:{halign:'center'},5:{halign:'center'},6:{halign:'center'},7:{halign:'center'}}, margin:{left:M,right:M} });
   const det=detalleOrdenado();
   if(det.length){
-    doc.addPage();
-    doc.setFont('helvetica','bold'); doc.setFontSize(12); doc.setTextColor(26,26,26); doc.text('Detalle por día',M,44);
-    doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(120,120,120); doc.text(`Período: ${periodo}`,M,58);
-    doc.autoTable({ startY:70,
+    const ph=doc.internal.pageSize.getHeight();
+    let dy=(doc.lastAutoTable?doc.lastAutoTable.finalY:78)+30;
+    if(dy>ph-110){ doc.addPage(); dy=50; }   // solo salta de hoja si casi no queda espacio
+    doc.setFont('helvetica','bold'); doc.setFontSize(12); doc.setTextColor(26,26,26); doc.text('Detalle por día',M,dy);
+    doc.autoTable({ startY:dy+8,
       head:[['Empleado','Fecha','Entrada','Salida','Estado','Refacc.','Salió antes','Horas','Debe']],
       body:det.map(r=>[r.empleado,fmtDate(r.fecha),r.entrada_real||'—',r.salida_real||'—',regEstadoTxt(r),(r.refMin||0)+'m',(r.salioAntes||0)+'m',f1(r.horas),r.deuda>0.008?fmtDebe(r.deuda):'—']),
       styles:{font:'helvetica',fontSize:7.5,cellPadding:3,textColor:[26,26,26],lineColor:[213,218,222],lineWidth:0.5},
