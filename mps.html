@@ -208,9 +208,19 @@ function muniEnTexto(txt){
   if(/\bz(?:ona)?\.?\s*\d{1,2}\b/.test(a) && /guatemala|capital/.test(a)) return 'Ciudad de Guatemala';
   return '';
 }
+// Carretera a El Salvador escrita de muchas formas: "CAES", "Carr a El Salvador", "carretera al salvador"…
+const RE_CAES=/\bcaes\b|\bcarr?(?:etera|et)?\.?\s+(?:a\s+el|al|a)\s+salvador\b/;
+// Lugares conocidos sobre la CAES (centros comerciales y residenciales)
+const PUNTOS_CAES=['sporta','portal sole','condado concepcion','pradera concepcion','el canchon','puerta parada'];
 function sugerirMuni(dir){
   const a=norm(dir);
   if(/finca el rosario/.test(a)) return null; // falso positivo conocido (zona 12 capital)
+  if(RE_CAES.test(a) || PUNTOS_CAES.some(k=>a.includes(k))){
+    // Por kilómetro: hasta el km 20 es Santa Catarina Pinula; más adelante, Fraijanes
+    const km=a.match(/\bkm\.?\s*(\d{1,2}(?:[.,]\d+)?)|\bkilometro\s*(\d{1,2}(?:[.,]\d+)?)/);
+    const n=km?parseFloat((km[1]||km[2]).replace(',','.')):null;
+    return (n!=null && n>20) ? 'Fraijanes' : 'Santa Catarina Pinula';
+  }
   for(const [muni,keys] of Object.entries(PISTAS)){ if(keys.some(k=>a.includes(k))) return muni; }
   return null;
 }
@@ -288,7 +298,9 @@ function parseWorkbook(buf){
     let muni=canonMuni(g(r,C.muni));
     if(!muni){ muni=muniEnTexto(textoTodo); if(muni) fixes.push('municipio deducido de la dirección'); }
     if(muni==='Ciudad de Guatemala'){
-      const s=sugerirMuni(textoTodo);
+      // Si la dirección nombra otro municipio ("zona 8 de Mixco"), manda ese; si no, las pistas de colonias
+      const dicho=muniEnTexto(dirFull);
+      const s=(dicho && dicho!=='Ciudad de Guatemala') ? dicho : sugerirMuni(textoTodo);
       if(s){ muni=s; fixes.push('municipio corregido a '+s); }
     }
 
