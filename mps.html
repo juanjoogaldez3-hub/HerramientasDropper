@@ -35,16 +35,6 @@
   .spin{width:15px;height:15px;border:2px solid #bcd9c4;border-top-color:var(--green-dk);border-radius:50%;animation:sp .7s linear infinite;flex:none}
   @keyframes sp{to{transform:rotate(360deg)}}
 
-  .cfg{background:var(--white);border:1px solid var(--line);border-radius:14px;padding:14px 18px;box-shadow:var(--shadow);margin-bottom:16px}
-  .cfg h3{font-family:'Sora',sans-serif;font-weight:700;font-size:.95rem;margin-bottom:10px}
-  .cfg-grid{display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:12px}
-  .cfg label{display:block;font-size:.74rem;font-weight:600;color:var(--muted);margin-bottom:4px}
-  .cfg input,.cfg select,.tbl input,.tbl select{width:100%;font-family:inherit;font-size:.86rem;color:var(--ink);
-    border:1px solid #cdd8cf;border-radius:9px;padding:7px 9px;background:#fcfdfc}
-  .cfg input:focus,.cfg select:focus,.tbl input:focus,.tbl select:focus{outline:none;border-color:var(--green);box-shadow:0 0 0 3px rgba(31,122,61,.12)}
-  .cfg .fixed{margin-top:10px;font-size:.78rem;color:var(--muted)}
-  @media(max-width:720px){ .cfg-grid{grid-template-columns:1fr 1fr} }
-
   .ctrlbar{display:none;align-items:center;gap:12px;flex-wrap:wrap;margin:18px 0 4px;
     background:var(--white);border:1px solid var(--line);border-radius:14px;padding:12px 16px;box-shadow:var(--shadow)}
   .ctrlbar.show{display:flex}
@@ -58,6 +48,9 @@
   .rstats .s .v{font-family:'Sora',sans-serif;font-weight:800;font-size:1.4rem;color:var(--green-dk);margin-top:2px}
   .rstats .s.warn .v{color:#b07d00}
 
+  .tbl input,.tbl select{width:100%;font-family:inherit;font-size:.86rem;color:var(--ink);
+    border:1px solid #cdd8cf;border-radius:9px;padding:7px 9px;background:#fcfdfc}
+  .tbl input:focus,.tbl select:focus{outline:none;border-color:var(--green);box-shadow:0 0 0 3px rgba(31,122,61,.12)}
   .tbl-wrap{display:none;overflow-x:auto}
   .tbl-wrap.show{display:block}
   table.tbl{width:100%;border-collapse:collapse;font-size:.84rem;min-width:1350px}
@@ -112,18 +105,6 @@
       <h2>Carga masiva · MPS Nutrition</h2>
       <div class="sub">Convertí el Excel de ruta que descarga Odoo en la plantilla de carga masiva de envíos de Dropper.</div>
     </div>
-  </div>
-
-  <div class="cfg">
-    <h3>Datos fijos de la carga</h3>
-    <div class="cfg-grid">
-      <div><label for="c-dir">Dirección de recogida</label><input id="c-dir" placeholder="Dirección de la bodega de MPS"></div>
-      <div><label for="c-muni">Municipio de recogida</label><input id="c-muni" list="munis"></div>
-      <div><label for="c-loc">Localidad de recogida</label><input id="c-loc" placeholder="Ej. Zona 4"></div>
-      <div><label for="c-met">Método de entrega</label>
-        <select id="c-met"><option>Estándar</option><option>Express</option></select></div>
-    </div>
-    <div class="fixed">Siempre: Tipo de pagador <b>Remitente</b> · Tamaño del paquete <b>en blanco</b> · A crédito <b>en blanco</b>. Estos datos se guardan en este navegador.</div>
   </div>
 
   <div class="drop" id="drop">
@@ -248,21 +229,8 @@ function mapPago(s){
   return {metodo:'', pagado:false};
 }
 
-/* ---------- configuración guardada ---------- */
-const CFG_KEY='dropper_mps_cfg';
-const CFG_FIELDS={dir:'#c-dir',muni:'#c-muni',loc:'#c-loc',met:'#c-met'};
-function loadCfg(){
-  let c={};
-  try{ c=JSON.parse(localStorage.getItem(CFG_KEY)||'{}')||{}; }catch(e){ c={}; }
-  $('#c-dir').value=c.dir||'Distribodegas 6, Bodega 7 y 9';
-  $('#c-muni').value=c.muni||'Mixco';
-  $('#c-loc').value=c.loc||'Zona 4';
-  $('#c-met').value=c.met||'Estándar';
-}
-function getCfg(){ const c={}; for(const [k,s] of Object.entries(CFG_FIELDS)) c[k]=clean($(s).value); return c; }
-function saveCfg(){ try{ localStorage.setItem(CFG_KEY,JSON.stringify(getCfg())); }catch(e){} }
-Object.values(CFG_FIELDS).forEach(s=>$(s).addEventListener('change',saveCfg));
-loadCfg();
+/* ---------- datos fijos de la carga (recogida en la bodega de MPS) ---------- */
+const CFG={dir:'Distribodegas 6, Bodega 7 y 9', muni:'Mixco', loc:'Zona 4', met:'Estándar'};
 
 /* ---------- lectura del Excel de Odoo ---------- */
 drop.addEventListener('click',()=>fileInput.click());
@@ -413,7 +381,7 @@ $('#only-flag').addEventListener('change',()=>{ if(ROWS.length) render(); });
 
 /* ---------- plantilla Dropper ---------- */
 async function buildWorkbook(){
-  const cfg=getCfg();
+  const cfg=CFG;
   const wb=new ExcelJS.Workbook();
   const ws=wb.addWorksheet('Template');
   ws.addRow(PLANTILLA);
@@ -443,8 +411,6 @@ function nombreArchivo(){
 }
 $('#btn-xlsx').addEventListener('click',async()=>{
   if(!ROWS.length){ status('Primero cargá el Excel de Odoo.','err'); return; }
-  const cfg=getCfg();
-  if(!cfg.dir||!cfg.muni){ status('Completá la <b>dirección</b> y el <b>municipio de recogida</b> arriba antes de descargar.','err'); $('#c-dir').focus(); return; }
   const rev=ROWS.filter(r=>problemas(r).length).length;
   if(rev && !confirm(`Hay ${rev} pedido(s) con datos por revisar (marcados en amarillo). ¿Descargar de todos modos?`)) return;
   status('Generando plantilla…','work');
