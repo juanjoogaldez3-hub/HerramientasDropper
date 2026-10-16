@@ -656,14 +656,13 @@ async function buildWorkbook(c){
   } else {
     ds=ttr+3;
   }
-  // El detalle va en su propia hoja, y ahí solo se congela la fila de encabezado (no todo el bloque de arriba).
-  const ws2=wb.addWorksheet('Detalle',{views:[{showGridLines:false}]});
-  [12,16,14,52,18,12,12,9,11,11,12,16].forEach((w,i)=>ws2.getColumn(i+1).width=w);
-  ws2.mergeCells('A1:L1'); const hd=ws2.getCell('A1'); hd.value='Detalle de entregas · '+c.name;
-  hd.font={name:'Arial',bold:true,size:12,color:{argb:WHITE}}; hd.fill=fill(G); hd.alignment={vertical:'middle',horizontal:'left',indent:1}; ws2.getRow(1).height=22;
-  const dh=2;
+  ws.mergeCells(`A${ds}:L${ds}`);
+  h=ws.getCell(`A${ds}`); h.value='Detalle de entregas';
+  h.font={name:'Arial',bold:true,size:11,color:{argb:WHITE}}; h.fill=fill(G);
+  h.alignment={vertical:'middle',horizontal:'left',indent:1}; ws.getRow(ds).height=22;
+  const dh=ds+1;
   ['Fecha','No. de Orden','ID de Orden','Dirección de Entrega','Ciudad','Zona','Tipo','Intentos','Tarifa','Cargo int.','Total','Estado'].forEach((x,j)=>{
-    const cell=ws2.getCell(dh,j+1); cell.value=x;
+    const cell=ws.getCell(dh,j+1); cell.value=x;
     cell.font={name:'Arial',bold:true,size:9,color:{argb:TXT}}; cell.fill=fill(GREY); cell.border=bd;
     cell.alignment={horizontal:'left',vertical:'middle'};
   });
@@ -672,7 +671,7 @@ async function buildWorkbook(c){
     const rr=rstart+i, even=i%2===0;
     const vals=[r.fecha?fmtDate(r.fecha):'',r.norden,r.idorden,r.dir,r.ciudad,r.zona,r.tipo==='express'?'Express':'Estándar',r.intentos||0,tarifaCob(r),r.cargo||0,totalRow(r),r.estado||''];
     vals.forEach((v,j)=>{
-      const cell=ws2.getCell(rr,j+1); cell.value=v;
+      const cell=ws.getCell(rr,j+1); cell.value=v;
       cell.fill=fill(even?WHITE:LIME); cell.border=bd; cell.font={name:'Arial',size:9,color:{argb:TXT}};
       cell.alignment={horizontal:'left',vertical:'middle',wrapText:j===3};
       if(j===7){ cell.alignment={horizontal:'center'}; }                 // intentos
@@ -680,12 +679,12 @@ async function buildWorkbook(c){
     });
   });
   const rend=rstart+rows.length-1, tot=rend+1;
-  ws2.getCell(tot,10).value='Total'; ws2.getCell(tot,10).font={name:'Arial',bold:true,size:9,color:{argb:TXT}};
-  ws2.getCell(tot,10).alignment={horizontal:'right'}; ws2.getCell(tot,10).fill=fill(GREY);
-  const g=ws2.getCell(tot,11); g.value={formula:`SUM(K${rstart}:K${rend})`,result:rows.reduce((s,r)=>s+totalRow(r),0)}; g.numFmt=TARIFA_FMT;
+  ws.getCell(tot,10).value='Total'; ws.getCell(tot,10).font={name:'Arial',bold:true,size:9,color:{argb:TXT}};
+  ws.getCell(tot,10).alignment={horizontal:'right'}; ws.getCell(tot,10).fill=fill(GREY);
+  const g=ws.getCell(tot,11); g.value={formula:`SUM(K${rstart}:K${rend})`,result:rows.reduce((s,r)=>s+totalRow(r),0)}; g.numFmt=TARIFA_FMT;
   g.font={name:'Arial',bold:true,size:9,color:{argb:TXT}}; g.alignment={horizontal:'center'}; g.fill=fill(GREY);
-  ws2.views=[{state:'frozen',ySplit:dh,showGridLines:false}];   // solo la fila de encabezado (fila 2) queda fija
 
+  ws.views=[{showGridLines:false}];   // una sola hoja, sin inmovilizar (todo se mueve libre)
   return wb;
 }
 
