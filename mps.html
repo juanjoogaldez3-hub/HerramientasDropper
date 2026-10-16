@@ -211,6 +211,8 @@ function muniEnTexto(txt){
 // Carretera a El Salvador escrita de muchas formas: "CAES", "Carr a El Salvador", "carretera al salvador"…
 const RE_CAES=/\bcaes\b|\bcarr?(?:etera|et)?\.?\s+(?:a\s+el|al|a)\s+salvador\b/;
 // Lugares conocidos sobre la CAES (centros comerciales y residenciales)
+// Carretera Interamericana (CA-1): "Interamericana", "Panamericana", "CA-1", "CA 1"
+const RE_INTERAMERICANA=/interamericana|panamericana|pan american|\bca\s*-?\s*1\b/;
 const PUNTOS_CAES=['sporta','portal sole','condado concepcion','pradera concepcion','el canchon','puerta parada'];
 // Kilómetro mencionado en la dirección ("km 16.5", "Kilómetro 8"); null si no hay
 function kmDe(a){
@@ -226,21 +228,26 @@ const LOCALIDADES={
     ['El Carmen',['el carmen']], ['El Pueblito',['el pueblito']], ['Muxbal',['muxbal']],
     ['Ciénega Grande',['cienega grande']], ['Laguna Bermeja',['laguna bermeja']], ['Cristo Rey',['cristo rey']],
     ['El Pulte',['el pulte']], ['Cantón Lourdes',['canton lourdes']],
-  ], caes:[ [8.5,12.5,'CAES Km 8.5 a Km 12.5'], [12.5,19.5,'CAES Km 12.5 a Km 19'], [19.5,22.5,'CAES Km 19.5 a Km 22.5'] ] },
+  ], rutas:[ {re:RE_CAES, tramos:[ [8.5,12.5,'CAES Km 8.5 a Km 12.5'], [12.5,19.5,'CAES Km 12.5 a Km 19'], [19.5,22.5,'CAES Km 19.5 a Km 22.5'] ]} ] },
   'San José Pinula':{ zonas:[0,1,2,3], lista:[
     ['Centro de San José Pinula',['centro de san jose pinula']],
     ['Las Anonas',['anonas']], ['Residenciales San José',['residenciales san jose']], ['El Platanar',['platanar']],
   ] },
   'Fraijanes':{ zonas:[0,1,2,3], lista:[] },
+  'Mixco':{ zonas:[1,2,3,4,5,6,7,8,9,10,11], lista:[
+    ['Tierra Nueva 1 y 2',['tierra nueva']],
+  ], rutas:[ {re:RE_INTERAMERICANA, tramos:[ [18.5,25,'CA Pan American Km 18.5 a Km 25'] ]} ] },
 };
 function localidadDe(muni,txt){
   const L=LOCALIDADES[muni];
   if(!L) return zonaDeDir(txt);
   const a=norm(txt);
   for(const [loc,keys] of L.lista){ if(keys.some(k=>a.includes(k))) return loc; }
-  if(L.caes && RE_CAES.test(a)){
-    const n=kmDe(a);
-    if(n!=null){ const r=L.caes.find(([d,h],i)=>n>=d && (n<h || (i===L.caes.length-1 && n<=h))); if(r) return r[2]; }
+  const n=kmDe(a);
+  if(n!=null) for(const ruta of (L.rutas||[])){
+    if(!ruta.re.test(a)) continue;
+    const t=ruta.tramos.find(([d,h],i)=>n>=d && (n<h || (i===ruta.tramos.length-1 && n<=h)));
+    if(t) return t[2];
   }
   const z=a.match(/\bz(?:ona)?\.?\s*(\d{1,2})(?!\d)/);
   if(z && L.zonas.includes(+z[1])) return 'Zona '+(+z[1]);
