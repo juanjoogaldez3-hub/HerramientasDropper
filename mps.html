@@ -212,14 +212,47 @@ function muniEnTexto(txt){
 const RE_CAES=/\bcaes\b|\bcarr?(?:etera|et)?\.?\s+(?:a\s+el|al|a)\s+salvador\b/;
 // Lugares conocidos sobre la CAES (centros comerciales y residenciales)
 const PUNTOS_CAES=['sporta','portal sole','condado concepcion','pradera concepcion','el canchon','puerta parada'];
+// Kilómetro mencionado en la dirección ("km 16.5", "Kilómetro 8"); null si no hay
+function kmDe(a){
+  const m=norm(a).match(/\bkm\.?\s*(\d{1,2}(?:[.,]\d+)?)|\bkilometro\s*(\d{1,2}(?:[.,]\d+)?)/);
+  return m?parseFloat((m[1]||m[2]).replace(',','.')):null;
+}
+// Localidades por municipio tal como están en la plataforma: [nombre, palabras que la delatan en la dirección].
+// "zonas" = zonas válidas de ese municipio. Para estos municipios, si no calza nada la localidad va en blanco.
+const LOCALIDADES={
+  'Santa Catarina Pinula':{ zonas:[0,1,2,3], lista:[
+    ['Centro de Santa Catarina Pinula',['centro de santa catarina']],
+    ['El Pajón',['pajon']], ['Puerta Parada',['puerta parada']], ['Piedra Parada',['piedra parada']],
+    ['El Carmen',['el carmen']], ['El Pueblito',['el pueblito']], ['Muxbal',['muxbal']],
+    ['Ciénega Grande',['cienega grande']], ['Laguna Bermeja',['laguna bermeja']], ['Cristo Rey',['cristo rey']],
+    ['El Pulte',['el pulte']], ['Cantón Lourdes',['canton lourdes']],
+  ], caes:[ [8.5,12.5,'CAES Km 8.5 a Km 12.5'], [12.5,19.5,'CAES Km 12.5 a Km 19'], [19.5,22.5,'CAES Km 19.5 a Km 22.5'] ] },
+  'San José Pinula':{ zonas:[0,1,2,3], lista:[
+    ['Centro de San José Pinula',['centro de san jose pinula']],
+    ['Las Anonas',['anonas']], ['Residenciales San José',['residenciales san jose']], ['El Platanar',['platanar']],
+  ] },
+  'Fraijanes':{ zonas:[0,1,2,3], lista:[] },
+};
+function localidadDe(muni,txt){
+  const L=LOCALIDADES[muni];
+  if(!L) return zonaDeDir(txt);
+  const a=norm(txt);
+  for(const [loc,keys] of L.lista){ if(keys.some(k=>a.includes(k))) return loc; }
+  if(L.caes && RE_CAES.test(a)){
+    const n=kmDe(a);
+    if(n!=null){ const r=L.caes.find(([d,h],i)=>n>=d && (n<h || (i===L.caes.length-1 && n<=h))); if(r) return r[2]; }
+  }
+  const z=a.match(/\bz(?:ona)?\.?\s*(\d{1,2})(?!\d)/);
+  if(z && L.zonas.includes(+z[1])) return 'Zona '+(+z[1]);
+  return '';
+}
 function sugerirMuni(dir){
   const a=norm(dir);
   if(/finca el rosario/.test(a)) return null; // falso positivo conocido (zona 12 capital)
   if(RE_CAES.test(a) || PUNTOS_CAES.some(k=>a.includes(k))){
-    // Por kilómetro: hasta el km 20 es Santa Catarina Pinula; más adelante, Fraijanes
-    const km=a.match(/\bkm\.?\s*(\d{1,2}(?:[.,]\d+)?)|\bkilometro\s*(\d{1,2}(?:[.,]\d+)?)/);
-    const n=km?parseFloat((km[1]||km[2]).replace(',','.')):null;
-    return (n!=null && n>20) ? 'Fraijanes' : 'Santa Catarina Pinula';
+    // Por kilómetro: hasta el km 22.5 es Santa Catarina Pinula; más adelante, Fraijanes
+    const n=kmDe(a);
+    return (n!=null && n>22.5) ? 'Fraijanes' : 'Santa Catarina Pinula';
   }
   for(const [muni,keys] of Object.entries(PISTAS)){ if(keys.some(k=>a.includes(k))) return muni; }
   return null;
@@ -322,7 +355,7 @@ function parseWorkbook(buf){
     const precioRaw=r[C.total];
     const precio=typeof precioRaw==='number'?precioRaw:parseFloat(String(precioRaw).replace(/[^\d.\-]/g,''))||0;
 
-    return { orden:g(r,ord), nombre:g(r,C.nombre), tel, dir, muni, loc:zonaDeDir(textoTodo),
+    return { orden:g(r,ord), nombre:g(r,C.nombre), tel, dir, muni, loc:localidadDe(muni,textoTodo),
              pago:p.metodo, pagado:p.pagado, pagoOdoo, precio, notas:notas.join(' · '), fixes };
   });
 
@@ -336,7 +369,7 @@ function problemas(r){
   const p=[];
   if(!/^\d{8}$/.test(r.tel)) p.push('tel');
   if(!r.muni) p.push('muni');
-  if(!r.loc) p.push('loc');
+  if(!r.loc && !LOCALIDADES[r.muni]) p.push('loc'); // en municipios con lista de localidades puede ir en blanco
   if(!PAGOS.includes(r.pago)) p.push('pago');
   if(!(r.precio>0)) p.push('precio');
   return p;
