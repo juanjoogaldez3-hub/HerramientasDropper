@@ -254,9 +254,9 @@ const CFG_FIELDS={dir:'#c-dir',muni:'#c-muni',loc:'#c-loc',met:'#c-met'};
 function loadCfg(){
   let c={};
   try{ c=JSON.parse(localStorage.getItem(CFG_KEY)||'{}')||{}; }catch(e){ c={}; }
-  $('#c-dir').value=c.dir||'';
+  $('#c-dir').value=c.dir||'Distribodegas 6, Bodega 7 y 9';
   $('#c-muni').value=c.muni||'Mixco';
-  $('#c-loc').value=c.loc||'';
+  $('#c-loc').value=c.loc||'Zona 4';
   $('#c-met').value=c.met||'Estándar';
 }
 function getCfg(){ const c={}; for(const [k,s] of Object.entries(CFG_FIELDS)) c[k]=clean($(s).value); return c; }
