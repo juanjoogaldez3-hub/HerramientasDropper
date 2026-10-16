@@ -242,7 +242,7 @@ function limpiarTel(s){
 // Forma de pago de Odoo -> método de pago de la plataforma + si ya está pagado
 function mapPago(s){
   const n=norm(s);
-  if(/link|anticipad/.test(n)) return {metodo:'Link de Pago', pagado:true};
+  if(/link|anticipad/.test(n)) return {metodo:'Link de Pago', pagado:/anticipad/.test(n)}; // solo Link Anticipado va como ya pagado
   if(/efectivo/.test(n)) return {metodo:'Efectivo', pagado:false};
   if(/tarjeta|pos\b|pos /.test(n)) return {metodo:'Tarjeta Crédito/Débito', pagado:false};
   return {metodo:'', pagado:false};
@@ -254,9 +254,9 @@ const CFG_FIELDS={dir:'#c-dir',muni:'#c-muni',loc:'#c-loc',met:'#c-met'};
 function loadCfg(){
   let c={};
   try{ c=JSON.parse(localStorage.getItem(CFG_KEY)||'{}')||{}; }catch(e){ c={}; }
-  $('#c-dir').value=c.dir||'';
+  $('#c-dir').value=c.dir||'Distribodegas 6, Bodega 7 y 9';
   $('#c-muni').value=c.muni||'Mixco';
-  $('#c-loc').value=c.loc||'';
+  $('#c-loc').value=c.loc||'Zona 4';
   $('#c-met').value=c.met||'Estándar';
 }
 function getCfg(){ const c={}; for(const [k,s] of Object.entries(CFG_FIELDS)) c[k]=clean($(s).value); return c; }
@@ -392,7 +392,7 @@ function render(){
     if(f==='muni') v=canonMuni(v);
     if(f==='loc' && /^\d{1,2}$/.test(v)) v='Zona '+parseInt(v,10);
     r[f]=v;
-    if(f==='pago') r.pagado=(v==='Link de Pago');
+    if(f==='pago') r.pagado=(v==='Link de Pago' && /anticipad/.test(norm(r.pagoOdoo)));
     render();
   }));
   updateStats();
