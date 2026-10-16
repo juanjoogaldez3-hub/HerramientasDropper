@@ -288,8 +288,9 @@ function esc(s){ return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;',
 function norm(s){ return String(s).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,''); }
 /* Regla de cobro: solo los ENTREGADOS pagan tarifa de entrega; cualquier otro estado paga solo el cargo por intentos. */
 function esEntregado(r){ const e=norm(r&&r.estado||''); return /^entregad/.test(e)||e==='entrega'||e==='entregas'; }
-/* Las devoluciones NO se toman en cuenta para el cobro (se excluyen por completo). */
-function esDevolucion(r){ return /^devolu/.test(norm(r&&r.estado||'')); }
+/* Facturables: SOLO "Entregado" y "Devuelto" (estados finales). Todo lo demás —Devolución en proceso, En Tránsito, Intento, etc.— se excluye por completo. */
+function esDevuelto(r){ return /^devuelt/.test(norm(r&&r.estado||'')); }
+function esFacturable(r){ return esEntregado(r)||esDevuelto(r); }
 function tarifaCob(r){ return esEntregado(r)?(+r.precio||0):0; }
 function totalRow(r){ return tarifaCob(r)+(+r.cargo||0); }
 function fmtQ(n){ return 'Q'+Number(n).toLocaleString('es-GT',{minimumFractionDigits:2,maximumFractionDigits:2}); }
@@ -360,7 +361,7 @@ function parseWorkbook(buf){
       tipo:/expres/.test(norm(C.metodo?(t[C.metodo]??r[C.metodo]):''))?'express':'estandar',
       estado:C.estado?String((t[C.estado]??r[C.estado])||'').trim():'',
     };
-  }).filter(r=>r.cliente && !esDevolucion(r));   // las devoluciones no se toman en cuenta
+  }).filter(r=>r.cliente && esFacturable(r));   // solo facturables: Entregado y Devuelto
 
   RAW_DATA=data;        // guardamos las filas crudas; las correcciones se aplican por vista
   hideStatus();
