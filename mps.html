@@ -123,7 +123,7 @@
       <div><label for="c-met">Método de entrega</label>
         <select id="c-met"><option>Estándar</option><option>Express</option></select></div>
     </div>
-    <div class="fixed">Siempre: Tipo de pagador <b>Remitente</b> · Tamaño del paquete <b>en blanco</b> · A crédito <b>No</b>. Estos datos se guardan en este navegador.</div>
+    <div class="fixed">Siempre: Tipo de pagador <b>Remitente</b> · Tamaño del paquete <b>en blanco</b> · A crédito <b>en blanco</b>. Estos datos se guardan en este navegador.</div>
   </div>
 
   <div class="drop" id="drop">
@@ -423,7 +423,7 @@ async function buildWorkbook(){
       r.precio, r.notas, r.orden, r.nombre, r.tel,
       cfg.dir, cfg.muni, cfg.loc,
       r.dir, r.muni, r.loc,
-      cfg.met, 'Remitente', r.pago, r.pagado?'Sí':'No', '', 'No'
+      cfg.met, 'Remitente', r.pago, r.pagado?'Sí':'No', '', ''
     ]);
   });
   ws.getColumn(5).numFmt='@';   // teléfono como texto
