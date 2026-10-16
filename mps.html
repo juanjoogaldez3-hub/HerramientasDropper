@@ -73,8 +73,8 @@
 <div class="wrap">
 
   <div class="topbar">
-    <a class="brand" href="inicio.html"><img id="brand-logo" alt="Dropper · Herramientas"></a>
-    <nav class="nav">
+    <a class="brand" id="brand-link" href="inicio.html"><img id="brand-logo" alt="Dropper · Herramientas"></a>
+    <nav class="nav" id="main-nav">
       <div class="nav-links">
         <a href="inicio.html">Inicio</a>
         <a href="generador.html">Generador</a>
@@ -93,11 +93,6 @@
       <span class="nav-av" id="nav-av"></span>
       <a href="#" class="nav-logout" id="logout">Salir</a>
     </nav>
-  </div>
-
-  <div class="notice" id="notice">
-    <b>Modo vista previa.</b> Supabase aún no está configurado: la herramienta funciona, pero no hay login.
-    Pegá tus llaves en <code>assets/js/config.js</code> (ver README).
   </div>
 
   <div class="page-head">
@@ -476,13 +471,14 @@ $('#btn-xlsx').addEventListener('click',async()=>{
   }catch(err){ console.error(err); status('Error generando la plantilla: '+esc(err.message),'err'); }
 });
 
-/* sesión */
+/* sesión: esta herramienta es pública (no pide login). Sin sesión se oculta el menú de herramientas internas. */
 $('#logout').addEventListener('click',e=>{ e.preventDefault(); window.dropperAuth.signOut(); });
 (async function init(){
-  const guard=await window.dropperAuth.requireSession();
-  if(guard===null) return;
-  if(guard.previewMode){ $('#notice').classList.add('show'); return; }
-  window.dropperNav.setUser(guard.user.email||'');
+  let user=null;
+  try{ user=await window.dropperAuth.getUser(); }catch(e){ user=null; }
+  if(user){ window.dropperNav.setUser(user.email||''); return; }
+  $('#main-nav').style.display='none';
+  $('#brand-link').href='mps.html';
 })();
 </script>
 </body>
