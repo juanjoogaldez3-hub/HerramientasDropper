@@ -323,7 +323,13 @@ function parseWorkbook(buf){
   RUTA=clean(head[ord]);
 
   const g=(r,i)=>i<0?'':clean(r[i]);
-  ROWS=aoa.slice(1).filter(r=>g(r,ord)||g(r,C.nombre)).map(r=>{
+  // Odoo a veces agrupa: inserta una fila de "encabezado de grupo" (etiqueta de ruta tipo "DROOPER 19-10-2026" + subtotal) SIN cliente. No es un pedido: se ignora.
+  // Si el encabezado de la columna de pedido no trae la fecha de la ruta, la tomamos de esa fila de grupo para el nombre del archivo.
+  if(!/\d{1,2}[-\/.]\d{1,2}[-\/.]\d{2,4}/.test(RUTA)){
+    const grp=aoa.slice(1).find(r=>g(r,ord)&&!g(r,C.nombre));
+    if(grp) RUTA=g(grp,ord);
+  }
+  ROWS=aoa.slice(1).filter(r=>g(r,C.nombre)).map(r=>{   // solo filas con cliente (ignora encabezados de grupo / subtotales)
     const dirFull=g(r,C.dir);
     const partes=dirFull.split('|').map(clean).filter(Boolean);
     const dir=partes[0]||dirFull;
