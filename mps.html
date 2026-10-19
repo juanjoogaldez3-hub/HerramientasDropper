@@ -270,7 +270,7 @@ function limpiarTel(s){
 // Forma de pago de Odoo -> método de pago de la plataforma + si ya está pagado
 function mapPago(s){
   const n=norm(s);
-  if(/link|anticipad/.test(n)) return {metodo:'Link de Pago', pagado:/anticipad/.test(n)}; // solo Link Anticipado va como ya pagado
+  if(/link|anticipad|transferencia/.test(n)) return {metodo:'Link de Pago', pagado:true}; // Link de Pago (incluye transferencia): siempre ya pagado
   if(/efectivo/.test(n)) return {metodo:'Efectivo', pagado:false};
   if(/tarjeta|pos\b|pos /.test(n)) return {metodo:'Tarjeta Crédito/Débito', pagado:false};
   return {metodo:'', pagado:false};
@@ -409,7 +409,7 @@ function render(){
     if(f==='muni') v=canonMuni(v);
     if(f==='loc' && /^\d{1,2}$/.test(v)) v='Zona '+parseInt(v,10);
     r[f]=v;
-    if(f==='pago') r.pagado=(v==='Link de Pago' && /anticipad/.test(norm(r.pagoOdoo)));
+    if(f==='pago') r.pagado=(v==='Link de Pago');
     render();
   }));
   updateStats();
