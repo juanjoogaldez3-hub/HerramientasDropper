@@ -19,6 +19,8 @@ Conserva toda la lógica de tu generador original (lectura de Excel, corrección
 | `generador.html` | **Generador de Reportes** (Excel/PDF por cliente, consolidado, filtros) |
 | `pagos.html` | **Pagos a Mensajeros** (pago = entregas × tarifa fija, con planilla y detalle) |
 | `historial.html` | **Historial** de reportes generados |
+| `cobertura.html` | **Mapa de Cobertura** (zonas y municipios con / sin cobertura, áreas dibujadas, consulta por dirección) |
+| `assets/data/gt-areas.js` | Límites de los municipios del departamento y de las zonas de la capital (© OpenStreetMap) |
 | `assets/js/config.js` | 👈 **Aquí pegás tus llaves de Supabase** |
 | `assets/css/app.css` | Estilos compartidos del sitio |
 | `supabase/schema.sql` | El "molde" de la base de datos (se pega una vez en Supabase) |
@@ -111,7 +113,9 @@ En Supabase → **Authentication → URL Configuration**, agregá tu URL final (
 
 6. **Control de recibos (no pagar dos veces):** cuando generás **Recibos (PDF)** en Pagos, cada envío (por su **ID de Orden**) queda registrado como "con recibo". Al subir un Excel nuevo, los mensajeros muestran un aviso *"⚠ N envíos ya con recibo"* (no se excluyen solos — vos decidís). En **Historial → Recibos** ves cada recibo y podés **Anular** uno: eso libera sus envíos y vuelven a quedar como no pagados.
 
-> El `schema.sql` crea **cuatro** tablas: `report_sessions`, `payment_sessions`, `receipts` y `paid_deliveries`. Si ya lo habías corrido antes, **volvé a correrlo** para crear las que falten (es seguro re-ejecutarlo).
+7. **Mapa de Cobertura:** marcá cada **zona** de la Ciudad de Guatemala y cada **municipio** del departamento como *Con cobertura*, *Parcial* o *Sin cobertura* (tocándolo en el mapa o en la lista), con una nota opcional (horarios, recargos, colonias excluidas). Para casos más finos dibujá **áreas** a mano (polígono o rectángulo) sobre colonias o sectores: al consultar un punto, el área dibujada manda sobre la zona y la zona sobre el municipio. Con **"¿Tenemos cobertura en…?"** buscás una dirección (o clic derecho en el mapa) y te dice en qué zona/municipio cae y si hay cobertura. Todo el equipo ve y edita el mismo mapa; el botón **GeoJSON** descarga las áreas con su estado.
+
+> El `schema.sql` crea las tablas de todas las herramientas (`report_sessions`, `payment_sessions`, `receipts`, `paid_deliveries`, `cobertura_lugares`, etc.). Si ya lo habías corrido antes, **volvé a correrlo** para crear las que falten (es seguro re-ejecutarlo).
 
 ---
 
@@ -124,6 +128,7 @@ En Supabase → **Authentication → URL Configuration**, agregá tu URL final (
 | Creé la cuenta pero no me deja entrar | Está pendiente confirmar el correo. Revisá tu bandeja o desactivá "Confirm email" (Paso 4). |
 | El historial sale vacío | Aún no le diste a "Guardar en historial" en el Generador. |
 | "No se pudo guardar en el historial" | Verificá que corriste el `schema.sql` (Paso 2). |
+| En Cobertura sale "Falta la tabla cobertura_lugares" | Volvé a correr el `schema.sql` completo en el SQL Editor; mientras tanto los cambios quedan solo en tu navegador. |
 
 ---
 

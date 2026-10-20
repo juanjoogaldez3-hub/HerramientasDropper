@@ -439,3 +439,37 @@ drop policy if exists "cfg_update" on public.asistencia_config;
 create policy "cfg_update" on public.asistencia_config for update to authenticated using (public.is_asis_admin()) with check (public.is_asis_admin());
 drop policy if exists "cfg_insert" on public.asistencia_config;
 create policy "cfg_insert" on public.asistencia_config for insert to authenticated with check (public.is_asis_admin());
+
+-- ============================================================
+--  MAPA DE COBERTURA — estado por municipio / zona / área dibujada
+-- ============================================================
+-- Una fila por lugar. Los municipios y las zonas de la capital ya vienen
+-- dibujados en assets/data/gt-areas.js (clave 'muni:mixco', 'zona:10'…);
+-- aquí solo se guarda su estado y nota. Las áreas que el equipo dibuja a
+-- mano (clave 'area:<uuid>') guardan además su polígono en geom (GeoJSON).
+create table if not exists public.cobertura_lugares (
+  id               uuid primary key default gen_random_uuid(),
+  created_at       timestamptz not null default now(),
+  updated_at       timestamptz not null default now(),
+  updated_by_email text,
+  clave            text not null unique,
+  tipo             text not null,                   -- municipio | zona | area
+  nombre           text not null,
+  estado           text not null default 'nd',      -- con | par | sin | nd (sin definir)
+  nota             text,
+  geom             jsonb,                           -- GeoJSON geometry (solo para tipo 'area')
+  constraint cobertura_tipo_chk   check (tipo in ('municipio','zona','area')),
+  constraint cobertura_estado_chk check (estado in ('con','par','sin','nd'))
+);
+create index if not exists cobertura_tipo_idx on public.cobertura_lugares (tipo);
+alter table public.cobertura_lugares enable row level security;
+
+-- El mapa lo mantiene todo el equipo: cualquier usuario autenticado ve y edita.
+drop policy if exists "team_select" on public.cobertura_lugares;
+create policy "team_select" on public.cobertura_lugares for select to authenticated using (true);
+drop policy if exists "team_insert" on public.cobertura_lugares;
+create policy "team_insert" on public.cobertura_lugares for insert to authenticated with check (true);
+drop policy if exists "team_update" on public.cobertura_lugares;
+create policy "team_update" on public.cobertura_lugares for update to authenticated using (true) with check (true);
+drop policy if exists "team_delete" on public.cobertura_lugares;
+create policy "team_delete" on public.cobertura_lugares for delete to authenticated using (true);
