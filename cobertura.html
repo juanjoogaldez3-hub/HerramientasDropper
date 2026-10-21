@@ -1,0 +1,710 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mapa de Cobertura · Herramientas Dropper</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/css/app.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="assets/js/config.js"></script>
+<script src="assets/js/supabaseClient.js"></script>
+<script src="assets/js/auth-guard.js"></script>
+<script src="assets/js/brand.js"></script>
+<script src="assets/js/nav.js"></script>
+<script src="assets/data/gt-areas.js"></script>
+<style>
+  :root{
+    --c-con:#1F7A3D; --c-con-soft:#DDF0E2;
+    --c-par:#c98a00; --c-par-soft:#fff3d6;
+    --c-sin:#c0392b; --c-sin-soft:#fde8e5;
+    --c-nd:#7d8a81;  --c-nd-soft:#eef1ef;
+  }
+  .wrap{max-width:1280px}
+
+  .cov-layout{display:grid;grid-template-columns:360px minmax(0,1fr);gap:18px;align-items:start}
+  @media (max-width:900px){ .cov-layout{grid-template-columns:1fr} }
+
+  /* ---------- Panel lateral ---------- */
+  .side{display:flex;flex-direction:column;gap:14px}
+  .card{background:var(--white);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:16px}
+  .card h3{font-family:'Sora',sans-serif;font-weight:700;font-size:.95rem;letter-spacing:-.01em;margin-bottom:10px;display:flex;align-items:center;gap:8px}
+  .card h3 svg{width:17px;height:17px;color:var(--green-dk)}
+  .card .hint{font-size:.78rem;color:#8a988e;margin-top:8px;line-height:1.45}
+
+  .search{display:flex;gap:8px}
+  .search input{flex:1;min-width:0;font-family:inherit;font-size:.9rem;color:var(--ink);border:1px solid #cdd8cf;
+    border-radius:11px;padding:10px 12px;background:#fcfdfc}
+  .search input:focus{outline:none;border-color:var(--green);box-shadow:0 0 0 3px rgba(31,122,61,.12)}
+  .search .btn{width:auto;padding:10px 14px}
+
+  .result{display:none;margin-top:12px;border-radius:12px;padding:12px 14px;border:1px solid var(--line);background:#fbfdfb}
+  .result.show{display:block}
+  .result .r-addr{font-size:.8rem;color:var(--muted);line-height:1.4;margin-bottom:8px}
+  .result .r-main{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .result .r-place{font-family:'Sora',sans-serif;font-weight:700;font-size:.95rem}
+  .result .r-sub{font-size:.8rem;color:var(--muted);margin-top:4px}
+  .result .r-areas{margin-top:8px;display:flex;flex-direction:column;gap:4px;font-size:.82rem}
+  .result.err{background:#fdecea;border-color:#f5c6c0;color:#a3261a}
+
+  .tabs.full{display:flex;width:100%}
+  .tabs.full button{flex:1;padding:8px 6px;font-size:.82rem}
+
+  .chips{display:flex;gap:6px;flex-wrap:wrap;margin:10px 0 8px}
+  .chip{font-family:inherit;font-size:.74rem;font-weight:600;border-radius:20px;padding:4px 10px;cursor:pointer;
+    border:1px solid var(--line);background:var(--white);color:var(--muted);transition:.15s}
+  .chip:hover{border-color:#cdd8cf;color:var(--ink)}
+  .chip.active{background:var(--ink);color:#fff;border-color:var(--ink)}
+  .chip .n{opacity:.7;margin-left:3px}
+
+  .list{display:flex;flex-direction:column;gap:5px;max-height:520px;overflow:auto;padding-right:2px}
+  .item{display:grid;grid-template-columns:10px 1fr auto;gap:10px;align-items:center;padding:8px 10px;border-radius:10px;
+    border:1px solid transparent;cursor:pointer;transition:.12s}
+  .item:hover{background:#f7faf7;border-color:var(--line)}
+  .item.sel{background:var(--lime-soft);border-color:#c4e3cd}
+  .item .sw{width:10px;height:10px;border-radius:50%;background:var(--c-nd)}
+  .item .nm{font-size:.88rem;font-weight:600;color:var(--ink);line-height:1.25}
+  .item .nm small{display:block;font-weight:500;font-size:.72rem;color:var(--muted)}
+  .item .nm .nt{display:block;font-weight:500;font-size:.72rem;color:#8a988e;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:210px}
+  .list .empty{padding:26px 10px}
+
+  .pill{gap:5px}
+  .pill.con{color:var(--c-con);background:var(--c-con-soft);border-color:#c4e3cd}
+  .pill.par{color:var(--c-par);background:var(--c-par-soft);border-color:#f0e2b6}
+  .pill.sin{color:var(--c-sin);background:var(--c-sin-soft);border-color:#f5c6c0}
+  .pill.nd{color:var(--c-nd);background:var(--c-nd-soft);border-color:#dfe5e1}
+
+  /* ---------- Mapa ---------- */
+  .mapcard{background:var(--white);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden;position:relative}
+  #map{height:min(78vh,760px);min-height:460px;width:100%;background:#eef1ef;font-family:'Plus Jakarta Sans',sans-serif}
+  .maptools{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:10px 14px;border-bottom:1px solid var(--line);background:#fbfdfb}
+  .maptools label{display:inline-flex;align-items:center;gap:6px;font-size:.82rem;font-weight:600;color:var(--muted);cursor:pointer;user-select:none}
+  .maptools input{accent-color:var(--green-dk)}
+  .maptools .sep{width:1px;height:20px;background:var(--line)}
+  .maptools .right{margin-left:auto;display:flex;gap:8px;align-items:center}
+  .maptools .btn{width:auto;padding:8px 12px;font-size:.82rem}
+  .legend{display:flex;gap:12px;flex-wrap:wrap;font-size:.78rem;font-weight:600;color:var(--muted)}
+  .legend span{display:inline-flex;align-items:center;gap:5px}
+  .legend i{width:12px;height:12px;border-radius:3px;display:inline-block;border:1px solid rgba(0,0,0,.12)}
+
+  .leaflet-container{font-family:'Plus Jakarta Sans',sans-serif}
+  .leaflet-popup-content-wrapper{border-radius:14px;box-shadow:var(--shadow);font-family:'Plus Jakarta Sans',sans-serif}
+  .leaflet-popup-content{margin:14px 16px;min-width:230px;line-height:1.4}
+  .pp-title{font-family:'Sora',sans-serif;font-weight:700;font-size:1rem;letter-spacing:-.01em;margin-bottom:2px}
+  .pp-sub{font-size:.76rem;color:var(--muted);margin-bottom:10px}
+  .pp-name{width:100%;font-family:inherit;font-size:.9rem;border:1px solid #cdd8cf;border-radius:9px;padding:7px 10px;margin-bottom:8px;background:#fcfdfc}
+  .seg{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;background:var(--grey);border-radius:10px;padding:4px;margin-bottom:8px}
+  .seg button{font-family:inherit;font-size:.76rem;font-weight:700;border:none;background:none;border-radius:7px;padding:7px 4px;cursor:pointer;color:var(--muted);transition:.12s}
+  .seg button.con.on{background:var(--c-con);color:#fff}
+  .seg button.par.on{background:var(--c-par);color:#fff}
+  .seg button.sin.on{background:var(--c-sin);color:#fff}
+  .seg button:hover:not(.on){background:#fff;color:var(--ink)}
+  .pp-note{width:100%;font-family:inherit;font-size:.84rem;border:1px solid #cdd8cf;border-radius:9px;padding:7px 10px;resize:vertical;min-height:54px;background:#fcfdfc}
+  .pp-note:focus,.pp-name:focus{outline:none;border-color:var(--green);box-shadow:0 0 0 3px rgba(31,122,61,.12)}
+  .pp-actions{display:flex;gap:6px;margin-top:8px;align-items:center}
+  .pp-actions .btn{width:auto;padding:8px 12px;font-size:.8rem}
+  .pp-actions .del{margin-left:auto;background:none;border:none;color:var(--c-sin);font-family:inherit;font-weight:600;font-size:.78rem;cursor:pointer;padding:6px}
+  .pp-actions .del:hover{text-decoration:underline}
+  .pp-clear{background:none;border:none;color:var(--muted);font-family:inherit;font-weight:600;font-size:.76rem;cursor:pointer;padding:6px}
+  .pp-clear:hover{color:var(--ink);text-decoration:underline}
+  .pp-point{font-size:.84rem}
+  .pp-point b{font-family:'Sora',sans-serif}
+  .pp-point .ln{margin-top:4px}
+
+  .leaflet-draw-toolbar a{background-color:#fff}
+  .leaflet-bar a{color:var(--ink)}
+
+  /* Toast de guardado */
+  .toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%) translateY(20px);opacity:0;pointer-events:none;
+    background:var(--black);color:#fff;font-size:.85rem;font-weight:600;padding:10px 16px;border-radius:12px;
+    box-shadow:0 14px 30px -12px rgba(0,0,0,.6);transition:.22s ease;z-index:9999}
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+  .toast.err{background:#a3261a}
+
+  .summary .stat .v.con{color:var(--c-con)}
+  .summary .stat .v.par{color:var(--c-par)}
+  .summary .stat .v.sin{color:var(--c-sin)}
+  .summary .stat .v.nd{color:var(--c-nd)}
+  .page-head .pa{display:flex;gap:8px;flex-wrap:wrap}
+  .page-head .btn{width:auto;padding:9px 14px;font-size:.84rem}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="topbar">
+    <a class="brand" href="inicio.html"><img id="brand-logo" alt="Dropper · Herramientas"></a>
+    <nav class="nav">
+      <div class="nav-links">
+        <a href="inicio.html">Inicio</a>
+        <a href="generador.html">Generador</a>
+        <a href="pagos.html">Pagos</a>
+        <a href="comisiones.html">Comisiones</a>
+        <a href="productividad.html">Productividad</a>
+        <a href="metodos.html">Métodos</a>
+        <a href="distribucion.html">Distribución</a>
+        <a href="cobertura.html" class="active">Cobertura</a>
+        <a href="mps.html">MPS</a>
+        <a href="motoristas.html">Motoristas</a>
+        <a href="asistencia.html">Asistencia</a>
+        <a href="marcaje.html">Marcaje</a>
+        <a href="historial.html">Historial</a>
+      </div>
+      <span class="nav-sep"></span>
+      <span class="nav-av" id="nav-av"></span>
+      <a href="#" class="nav-logout" id="logout">Salir</a>
+    </nav>
+  </div>
+
+  <div class="notice" id="notice">
+    <b>Modo vista previa.</b> Supabase aún no está configurado: los cambios se guardan solo en este navegador.
+    Pegá tus llaves en <code>assets/js/config.js</code> (ver README) para compartirlos con el equipo.
+  </div>
+  <div class="notice" id="notice-table">
+    <b>Falta la tabla <code>cobertura_lugares</code> en Supabase.</b> Volvé a correr <code>supabase/schema.sql</code> en el SQL Editor.
+    Mientras tanto los cambios se guardan solo en este navegador.
+  </div>
+
+  <div class="page-head">
+    <div>
+      <h2>Mapa de Cobertura</h2>
+      <div class="sub">Dónde sí y dónde no entrega Dropper: Ciudad de Guatemala por zona y los municipios del departamento.</div>
+    </div>
+    <div class="pa">
+      <button class="btn btn-ghost" id="btn-export" title="Descargar todas las áreas con su estado en formato GeoJSON">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        GeoJSON
+      </button>
+    </div>
+  </div>
+
+  <div class="summary">
+    <div class="stat"><div class="k">Con cobertura</div><div class="v con" id="st-con">0</div></div>
+    <div class="stat"><div class="k">Cobertura parcial</div><div class="v par" id="st-par">0</div></div>
+    <div class="stat"><div class="k">Sin cobertura</div><div class="v sin" id="st-sin">0</div></div>
+    <div class="stat"><div class="k">Sin definir</div><div class="v nd" id="st-nd">0</div></div>
+  </div>
+
+  <div class="cov-layout">
+
+    <aside class="side">
+
+      <div class="card">
+        <h3>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          ¿Tenemos cobertura en…?
+        </h3>
+        <form class="search" id="search-form">
+          <input type="text" id="q" placeholder="Dirección, colonia o lugar" autocomplete="off">
+          <button type="submit" class="btn btn-primary" id="q-btn">Buscar</button>
+        </form>
+        <div class="result" id="result"></div>
+        <div class="hint">También podés hacer <b>clic derecho</b> en cualquier punto del mapa para consultar su cobertura.</div>
+      </div>
+
+      <div class="card">
+        <div class="tabs full" id="tabs">
+          <button class="active" data-tab="zona">Zonas</button>
+          <button data-tab="municipio">Municipios</button>
+          <button data-tab="area">Áreas</button>
+        </div>
+        <div class="chips" id="chips">
+          <button class="chip active" data-f="all">Todos <span class="n" id="c-all"></span></button>
+          <button class="chip" data-f="con">Con <span class="n" id="c-con"></span></button>
+          <button class="chip" data-f="par">Parcial <span class="n" id="c-par"></span></button>
+          <button class="chip" data-f="sin">Sin <span class="n" id="c-sin"></span></button>
+          <button class="chip" data-f="nd">Sin definir <span class="n" id="c-nd"></span></button>
+        </div>
+        <div class="list" id="list"></div>
+        <div class="hint" id="list-hint">Tocá un lugar para verlo en el mapa y cambiar su estado.</div>
+      </div>
+
+    </aside>
+
+    <div class="mapcard">
+      <div class="maptools">
+        <label><input type="checkbox" id="ly-muni" checked> Municipios</label>
+        <label><input type="checkbox" id="ly-zona" checked> Zonas de la capital</label>
+        <label><input type="checkbox" id="ly-area" checked> Áreas dibujadas</label>
+        <span class="sep"></span>
+        <div class="legend">
+          <span><i style="background:var(--c-con)"></i>Con cobertura</span>
+          <span><i style="background:var(--c-par)"></i>Parcial</span>
+          <span><i style="background:var(--c-sin)"></i>Sin cobertura</span>
+          <span><i style="background:#cfd6d2"></i>Sin definir</span>
+        </div>
+        <div class="right">
+          <button class="btn btn-ghost" id="btn-fit" title="Ver todo el departamento">Ver todo</button>
+        </div>
+      </div>
+      <div id="map"></div>
+    </div>
+
+  </div>
+
+  <footer>Dropper · Smart Delivery — Herramientas internas · Mapa © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors</footer>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(function(){
+  'use strict';
+  const $ = s => document.querySelector(s);
+  const $$ = s => Array.from(document.querySelectorAll(s));
+  const sb = window.sb;
+  const AREAS = window.DROPPER_AREAS || { municipios:[], zonas:[] };
+  const LS_KEY = 'dropper_cobertura_v1';
+  const TABLE = 'cobertura_lugares';
+
+  const ESTADOS = {
+    con: { label:'Con cobertura', color:'#1F7A3D', fill:'#41AC3A' },
+    par: { label:'Cobertura parcial', color:'#c98a00', fill:'#f0b429' },
+    sin: { label:'Sin cobertura', color:'#c0392b', fill:'#e74c3c' },
+    nd:  { label:'Sin definir', color:'#7d8a81', fill:'#cfd6d2' },
+  };
+  const estadoDe = e => (e && ESTADOS[e]) ? e : 'nd';
+
+  $("#logout").addEventListener("click", e=>{ e.preventDefault(); window.dropperAuth.signOut(); });
+
+  /* ============================================================
+     Estado en memoria
+     places: Map clave -> {clave, tipo, nombre, estado, nota, geom, lat, lng, layer}
+     ============================================================ */
+  const places = new Map();
+  let usingDb = false;       // true cuando Supabase está disponible y la tabla existe
+  let userEmail = '';
+
+  function seedPredefined(){
+    AREAS.municipios.forEach(m => places.set(m.clave, Object.assign({ estado:'nd', nota:'', layer:null }, m)));
+    AREAS.zonas.forEach(z => places.set(z.clave, Object.assign({ estado:'nd', nota:'', layer:null }, z)));
+  }
+
+  /* ---------- localStorage (modo vista previa / respaldo) ---------- */
+  function lsLoad(){
+    try{ return JSON.parse(localStorage.getItem(LS_KEY) || '{}'); }catch(_){ return {}; }
+  }
+  function lsSaveAll(){
+    const out = {};
+    places.forEach(p => {
+      if(p.tipo === 'area') out[p.clave] = { tipo:p.tipo, nombre:p.nombre, estado:p.estado, nota:p.nota, geom:p.geom };
+      else if(p.estado !== 'nd' || p.nota) out[p.clave] = { estado:p.estado, nota:p.nota };
+    });
+    try{ localStorage.setItem(LS_KEY, JSON.stringify(out)); }catch(_){}
+  }
+  function applyRow(r){
+    const est = estadoDe(r.estado);
+    if(places.has(r.clave)){
+      const p = places.get(r.clave);
+      p.estado = est; p.nota = r.nota || '';
+      if(p.tipo === 'area'){ p.nombre = r.nombre || p.nombre; p.geom = r.geom || p.geom; }
+    }else if(r.tipo === 'area' && r.geom){
+      places.set(r.clave, { clave:r.clave, tipo:'area', nombre:r.nombre || 'Área', estado:est, nota:r.nota || '', geom:r.geom, layer:null });
+    }
+  }
+
+  /* ---------- Supabase ---------- */
+  async function dbLoad(){
+    const { data, error } = await sb.from(TABLE).select('clave,tipo,nombre,estado,nota,geom').limit(5000);
+    if(error) throw error;
+    (data || []).forEach(applyRow);
+  }
+  async function dbUpsert(p){
+    const row = { clave:p.clave, tipo:p.tipo, nombre:p.nombre, estado:p.estado, nota:p.nota || null,
+      geom: p.tipo === 'area' ? p.geom : null, updated_at:new Date().toISOString(), updated_by_email:userEmail || null };
+    const { error } = await sb.from(TABLE).upsert(row, { onConflict:'clave' });
+    if(error) throw error;
+  }
+  async function dbDelete(clave){
+    const { error } = await sb.from(TABLE).delete().eq('clave', clave);
+    if(error) throw error;
+  }
+
+  /* ---------- guardar (ruta única) ---------- */
+  let toastTimer = null;
+  function toast(msg, err){
+    const t = $("#toast"); t.textContent = msg; t.classList.toggle('err', !!err); t.classList.add('show');
+    clearTimeout(toastTimer); toastTimer = setTimeout(()=> t.classList.remove('show'), err ? 4200 : 1800);
+  }
+  async function persist(p){
+    lsSaveAll();
+    if(!usingDb){ toast('Guardado en este navegador'); return; }
+    try{ await dbUpsert(p); toast('Guardado'); }
+    catch(e){ console.error(e); toast('No se pudo guardar en Supabase: ' + (e.message || e), true); }
+  }
+  async function persistDelete(clave){
+    lsSaveAll();
+    if(!usingDb){ toast('Área eliminada'); return; }
+    try{ await dbDelete(clave); toast('Área eliminada'); }
+    catch(e){ console.error(e); toast('No se pudo eliminar en Supabase: ' + (e.message || e), true); }
+  }
+
+  /* ============================================================
+     Geometría: punto en polígono (GeoJSON [lng,lat])
+     ============================================================ */
+  function inRing(pt, ring){
+    let inside = false;
+    for(let i=0, j=ring.length-1; i<ring.length; j=i++){
+      const xi=ring[i][0], yi=ring[i][1], xj=ring[j][0], yj=ring[j][1];
+      const cross = ((yi>pt[1]) !== (yj>pt[1])) && (pt[0] < (xj-xi)*(pt[1]-yi)/(yj-yi)+xi);
+      if(cross) inside = !inside;
+    }
+    return inside;
+  }
+  function inPolygon(pt, coords){ // coords = [outer, hole, hole...]
+    if(!inRing(pt, coords[0])) return false;
+    for(let k=1;k<coords.length;k++) if(inRing(pt, coords[k])) return false;
+    return true;
+  }
+  function inGeom(pt, geom){
+    if(!geom) return false;
+    if(geom.type === 'Polygon') return inPolygon(pt, geom.coordinates);
+    if(geom.type === 'MultiPolygon') return geom.coordinates.some(c => inPolygon(pt, c));
+    return false;
+  }
+  // Devuelve lo que hay en un punto: áreas dibujadas, zona y municipio.
+  function lookup(lat, lng){
+    const pt = [lng, lat];
+    const areas = [], zonas = [], munis = [];
+    places.forEach(p => {
+      if(!inGeom(pt, p.geom)) return;
+      if(p.tipo === 'area') areas.push(p); else if(p.tipo === 'zona') zonas.push(p); else munis.push(p);
+    });
+    // Prioridad: área dibujada definida > zona definida > municipio.
+    let decisive = areas.find(a => a.estado !== 'nd') || zonas.find(z => z.estado !== 'nd') || munis.find(m => m.estado !== 'nd') || null;
+    const place = zonas[0] || munis[0] || null;
+    return { areas, zonas, munis, place, estado: decisive ? decisive.estado : 'nd', decisive };
+  }
+
+  /* ============================================================
+     Mapa
+     ============================================================ */
+  const map = L.map('map', { zoomControl:true, preferCanvas:false }).setView([14.62, -90.53], 11);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19, attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+  }).addTo(map);
+
+  const gMuni = L.featureGroup().addTo(map);
+  const gZona = L.featureGroup().addTo(map);
+  const gArea = L.featureGroup().addTo(map);
+  const gPoint = L.layerGroup().addTo(map);
+  const DEPT_BOUNDS = L.latLngBounds([[14.30,-90.80],[14.95,-90.25]]);
+
+  function styleFor(p, selected){
+    const e = ESTADOS[estadoDe(p.estado)];
+    if(p.tipo === 'zona'){
+      return p.estado === 'nd'
+        ? { color:'#4e5e54', weight: selected?3:1.2, dashArray:'4 4', fillColor:'#ffffff', fillOpacity: selected?.18:.02 }
+        : { color:e.color, weight: selected?3:1.4, fillColor:e.fill, fillOpacity: selected?.6:.45 };
+    }
+    if(p.tipo === 'area'){
+      return { color:e.color, weight: selected?3:2, fillColor:e.fill, fillOpacity: selected?.6:.5 };
+    }
+    return { color: p.estado==='nd' ? '#6d7a72' : e.color, weight: selected?3:1.6, fillColor:e.fill, fillOpacity: selected?.5:.3 };
+  }
+  const TIPO_LABEL = { municipio:'Municipio', zona:'Zona de la Ciudad de Guatemala', area:'Área dibujada' };
+
+  function buildLayer(p){
+    const group = p.tipo==='zona' ? gZona : p.tipo==='area' ? gArea : gMuni;
+    // Las áreas dibujadas son polígonos simples (L.Polygon) para que Leaflet.draw pueda editarlas.
+    const lyr = p.tipo==='area'
+      ? L.polygon(L.GeoJSON.coordsToLatLngs(p.geom.coordinates, 1), styleFor(p,false))
+      : L.geoJSON({ type:'Feature', geometry:p.geom }, { style: () => styleFor(p,false) });
+    lyr._clave = p.clave;
+    lyr.on('click', ev => { L.DomEvent.stopPropagation(ev); select(p.clave, false); openEditor(p, ev.latlng); });
+    lyr.bindTooltip(p.nombre, { sticky:true, direction:'top', opacity:.92 });
+    group.addLayer(lyr);
+    p.layer = lyr;
+  }
+  function restyle(p){ if(p.layer) p.layer.setStyle(styleFor(p, p.clave === selected)); }
+  function rebuildAllLayers(){
+    gMuni.clearLayers(); gZona.clearLayers(); gArea.clearLayers();
+    // Municipios primero (abajo), zonas encima, áreas al frente.
+    places.forEach(p => { if(p.tipo==='municipio') buildLayer(p); });
+    places.forEach(p => { if(p.tipo==='zona') buildLayer(p); });
+    places.forEach(p => { if(p.tipo==='area') buildLayer(p); });
+    gMuni.bringToBack(); gArea.bringToFront();
+  }
+
+  /* ---------- selección ---------- */
+  let selected = null;
+  function select(clave, zoom){
+    const prev = selected ? places.get(selected) : null;
+    selected = clave;
+    if(prev) restyle(prev);
+    const p = places.get(clave);
+    if(p){ restyle(p); if(p.layer) p.layer.bringToFront(); if(zoom && p.layer) map.fitBounds(p.layer.getBounds().pad(.15)); }
+    $$('#list .item').forEach(el => el.classList.toggle('sel', el.dataset.clave === clave));
+  }
+
+  /* ---------- popup editor ---------- */
+  function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+  function openEditor(p, latlng){
+    const el = document.createElement('div');
+    el.innerHTML = `
+      <div class="pp-title">${p.tipo==='area' ? '' : esc(p.nombre)}</div>
+      ${p.tipo==='area' ? `<input class="pp-name" value="${esc(p.nombre)}" placeholder="Nombre del área" maxlength="80">` : ''}
+      <div class="pp-sub">${TIPO_LABEL[p.tipo]}</div>
+      <div class="seg">
+        <button class="con ${p.estado==='con'?'on':''}" data-e="con">Con</button>
+        <button class="par ${p.estado==='par'?'on':''}" data-e="par">Parcial</button>
+        <button class="sin ${p.estado==='sin'?'on':''}" data-e="sin">Sin</button>
+      </div>
+      <textarea class="pp-note" placeholder="Nota (opcional): horarios, restricciones, tarifa, colonias…">${esc(p.nota)}</textarea>
+      <div class="pp-actions">
+        <button class="btn btn-primary pp-save">Guardar</button>
+        ${p.estado!=='nd' ? '<button class="pp-clear" title="Volver a Sin definir">Quitar estado</button>' : ''}
+        ${p.tipo==='area' ? '<button class="del">Eliminar área</button>' : ''}
+      </div>`;
+    let est = p.estado;
+    el.querySelectorAll('.seg button').forEach(b => b.addEventListener('click', () => {
+      est = b.dataset.e;
+      el.querySelectorAll('.seg button').forEach(x => x.classList.toggle('on', x===b));
+    }));
+    const popup = L.popup({ maxWidth:300, autoPan:true }).setLatLng(latlng || p.layer.getBounds().getCenter()).setContent(el).openOn(map);
+    el.querySelector('.pp-save').addEventListener('click', async () => {
+      p.estado = est; p.nota = el.querySelector('.pp-note').value.trim();
+      const nm = el.querySelector('.pp-name'); if(nm && nm.value.trim()) p.nombre = nm.value.trim();
+      if(p.layer) p.layer.setTooltipContent(p.nombre);
+      restyle(p); renderList(); renderStats(); map.closePopup(popup);
+      await persist(p);
+    });
+    const clr = el.querySelector('.pp-clear');
+    if(clr) clr.addEventListener('click', async () => {
+      p.estado = 'nd'; p.nota = el.querySelector('.pp-note').value.trim();
+      restyle(p); renderList(); renderStats(); map.closePopup(popup);
+      await persist(p);
+    });
+    const del = el.querySelector('.del');
+    if(del) del.addEventListener('click', async () => {
+      if(!confirm(`¿Eliminar el área "${p.nombre}"?`)) return;
+      if(p.layer) gArea.removeLayer(p.layer);
+      places.delete(p.clave); if(selected===p.clave) selected=null;
+      renderList(); renderStats(); map.closePopup(popup);
+      await persistDelete(p.clave);
+    });
+    setTimeout(() => { const nm = el.querySelector('.pp-name'); if(nm && !p.nombre) nm.focus(); }, 50);
+  }
+
+  /* ---------- consulta de punto ---------- */
+  function describeLookup(r){
+    const e = ESTADOS[r.estado];
+    const where = r.place ? r.place.nombre + (r.place.tipo==='zona' ? ', Ciudad de Guatemala' : '') : 'Fuera del departamento de Guatemala';
+    return { e, where };
+  }
+  function showPointPopup(latlng){
+    const r = lookup(latlng.lat, latlng.lng);
+    const { e, where } = describeLookup(r);
+    gPoint.clearLayers();
+    L.circleMarker(latlng, { radius:7, color:'#fff', weight:2, fillColor:e.color, fillOpacity:1 }).addTo(gPoint);
+    const extra = r.areas.map(a => `<div class="ln">Área: <b>${esc(a.nombre)}</b> · ${ESTADOS[a.estado].label}</div>`).join('');
+    const html = `<div class="pp-point"><div class="pp-title" style="color:${e.color}">${e.label}</div><div>${esc(where)}</div>${extra}
+      ${r.decisive && r.decisive.nota ? `<div class="ln" style="color:var(--muted)">${esc(r.decisive.nota)}</div>` : ''}
+      <div class="ln" style="color:var(--muted);font-size:.74rem">${latlng.lat.toFixed(5)}, ${latlng.lng.toFixed(5)}</div></div>`;
+    L.popup({ maxWidth:280 }).setLatLng(latlng).setContent(html).openOn(map);
+    return r;
+  }
+  map.on('contextmenu', ev => showPointPopup(ev.latlng));
+
+  /* ---------- búsqueda de dirección (Nominatim) ---------- */
+  async function geocode(q){
+    const u = new URL('https://nominatim.openstreetmap.org/search');
+    u.searchParams.set('q', q);
+    u.searchParams.set('format', 'jsonv2');
+    u.searchParams.set('limit', '5');
+    u.searchParams.set('countrycodes', 'gt');
+    u.searchParams.set('viewbox', '-90.80,14.95,-90.25,14.30');
+    u.searchParams.set('accept-language', 'es');
+    const res = await fetch(u.toString(), { headers:{ 'Accept':'application/json' } });
+    if(!res.ok) throw new Error('Nominatim ' + res.status);
+    return res.json();
+  }
+  $("#search-form").addEventListener('submit', async ev => {
+    ev.preventDefault();
+    const q = $("#q").value.trim(); if(!q) return;
+    const box = $("#result"); box.className = 'result show'; box.innerHTML = '<div class="r-addr">Buscando…</div>';
+    $("#q-btn").disabled = true;
+    try{
+      let hits = await geocode(q);
+      if(!hits.length) hits = await geocode(q + ', Guatemala');
+      if(!hits.length){ box.className='result show err'; box.innerHTML = 'No encontré esa dirección. Probá con la colonia y el municipio, o hacé clic derecho en el mapa.'; return; }
+      const h = hits[0];
+      const latlng = L.latLng(parseFloat(h.lat), parseFloat(h.lon));
+      map.setView(latlng, Math.max(map.getZoom(), 14));
+      const r = showPointPopup(latlng);
+      const { e, where } = describeLookup(r);
+      box.innerHTML = `<div class="r-addr">${esc(h.display_name)}</div>
+        <div class="r-main"><span class="pill ${r.estado}">${e.label}</span><span class="r-place">${esc(where)}</span></div>
+        ${r.areas.length ? `<div class="r-areas">${r.areas.map(a=>`<span>Área <b>${esc(a.nombre)}</b> · ${ESTADOS[a.estado].label}</span>`).join('')}</div>` : ''}
+        ${r.decisive && r.decisive.nota ? `<div class="r-sub">${esc(r.decisive.nota)}</div>` : ''}`;
+    }catch(e){
+      console.error(e);
+      box.className='result show err'; box.innerHTML = 'No se pudo consultar el servicio de direcciones. Revisá tu conexión o hacé clic derecho en el mapa.';
+    }finally{ $("#q-btn").disabled = false; }
+  });
+
+  /* ---------- dibujo de áreas (Leaflet.draw) ---------- */
+  (function localizeDraw(){
+    const d = L.drawLocal;
+    d.draw.toolbar.actions = { title:'Cancelar dibujo', text:'Cancelar' };
+    d.draw.toolbar.finish = { title:'Terminar dibujo', text:'Terminar' };
+    d.draw.toolbar.undo = { title:'Borrar el último punto', text:'Deshacer' };
+    d.draw.toolbar.buttons.polygon = 'Dibujar un área (polígono)';
+    d.draw.toolbar.buttons.rectangle = 'Dibujar un área (rectángulo)';
+    d.draw.handlers.polygon.tooltip = { start:'Clic para empezar a dibujar el área.', cont:'Clic para seguir dibujando.', end:'Clic en el primer punto para cerrar el área.' };
+    d.draw.handlers.rectangle.tooltip = { start:'Clic y arrastrá para dibujar el rectángulo.' };
+    d.draw.handlers.simpleshape.tooltip = { end:'Soltá para terminar.' };
+    d.edit.toolbar.actions = { save:{ title:'Guardar cambios', text:'Guardar' }, cancel:{ title:'Cancelar', text:'Cancelar' }, clearAll:{ title:'Borrar todas las áreas', text:'Borrar todo' } };
+    d.edit.toolbar.buttons = { edit:'Editar áreas dibujadas', editDisabled:'No hay áreas para editar', remove:'Eliminar áreas dibujadas', removeDisabled:'No hay áreas para eliminar' };
+    d.edit.handlers.edit.tooltip = { text:'Arrastrá los puntos para editar el área.', subtext:'Clic en Cancelar para deshacer.' };
+    d.edit.handlers.remove.tooltip = { text:'Clic en un área para eliminarla.' };
+  })();
+  const drawControl = new L.Control.Draw({
+    position:'topleft',
+    draw: { polyline:false, circle:false, circlemarker:false, marker:false,
+      polygon:{ allowIntersection:false, showArea:false, shapeOptions:{ color:'#1F7A3D', weight:2 } },
+      rectangle:{ shapeOptions:{ color:'#1F7A3D', weight:2 } } },
+    edit: { featureGroup: gArea, remove:true }
+  });
+  map.addControl(drawControl);
+
+  function uid(){ return (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36)+Math.random().toString(36).slice(2)); }
+
+  map.on(L.Draw.Event.CREATED, async ev => {
+    const geom = ev.layer.toGeoJSON().geometry;
+    const n = listOf('area').length + 1;
+    const p = { clave:'area:'+uid(), tipo:'area', nombre:'Área '+n, estado:'con', nota:'', geom, layer:null };
+    places.set(p.clave, p);
+    buildLayer(p);
+    renderList(); renderStats(); select(p.clave, false);
+    await persist(p);                                   // queda guardada de una vez…
+    openEditor(p, p.layer.getBounds().getCenter());      // …y el popup permite ponerle nombre y estado.
+  });
+  map.on(L.Draw.Event.EDITED, async ev => {
+    const changed = [];
+    ev.layers.eachLayer(l => {
+      const p = places.get(l._clave); if(!p) return;
+      p.geom = l.toGeoJSON().geometry;
+      changed.push(p);
+    });
+    for(const p of changed) await persist(p);
+  });
+  map.on(L.Draw.Event.DELETED, async ev => {
+    const gone = [];
+    ev.layers.eachLayer(l => { if(places.has(l._clave)){ gone.push(l._clave); places.delete(l._clave); } });
+    if(selected && gone.includes(selected)) selected = null;
+    renderList(); renderStats();
+    for(const c of gone) await persistDelete(c);
+  });
+
+  /* ---------- capas visibles ---------- */
+  function bindLayerToggle(id, group){
+    $(id).addEventListener('change', e => { if(e.target.checked) map.addLayer(group); else map.removeLayer(group); });
+  }
+  bindLayerToggle('#ly-muni', gMuni); bindLayerToggle('#ly-zona', gZona); bindLayerToggle('#ly-area', gArea);
+  function fitAll(){ const b = gMuni.getLayers().length ? gMuni.getBounds() : DEPT_BOUNDS; map.fitBounds(b.pad(.03)); }
+  $("#btn-fit").addEventListener('click', fitAll);
+
+  /* ============================================================
+     Lista lateral y estadísticas
+     ============================================================ */
+  let tab = 'zona', filter = 'all';
+  $$('#tabs button').forEach(b => b.addEventListener('click', () => {
+    tab = b.dataset.tab; $$('#tabs button').forEach(x => x.classList.toggle('active', x===b)); renderList();
+    if(tab==='zona' && map.getZoom() < 12) map.fitBounds(places.get('muni:guatemala')?.layer?.getBounds() || DEPT_BOUNDS);
+  }));
+  $$('#chips .chip').forEach(b => b.addEventListener('click', () => {
+    filter = b.dataset.f; $$('#chips .chip').forEach(x => x.classList.toggle('active', x===b)); renderList();
+  }));
+
+  function listOf(t){
+    const arr = []; places.forEach(p => { if(p.tipo===t) arr.push(p); });
+    if(t==='zona') arr.sort((a,b)=> parseInt(a.clave.split(':')[1]) - parseInt(b.clave.split(':')[1]));
+    else arr.sort((a,b)=> a.nombre.localeCompare(b.nombre,'es'));
+    return arr;
+  }
+  function renderList(){
+    const all = listOf(tab);
+    const cnt = { all:all.length, con:0, par:0, sin:0, nd:0 };
+    all.forEach(p => cnt[p.estado]++);
+    Object.keys(cnt).forEach(k => { const el = $('#c-'+k); if(el) el.textContent = cnt[k]; });
+    const rows = filter==='all' ? all : all.filter(p => p.estado===filter);
+    const list = $("#list");
+    if(!rows.length){
+      list.innerHTML = `<div class="empty">${tab==='area' && !all.length
+        ? 'Todavía no hay áreas dibujadas. Usá los botones de <b>polígono</b> o <b>rectángulo</b> en el mapa (arriba a la izquierda) para marcar colonias, sectores o rutas específicas.'
+        : 'Nada que mostrar con este filtro.'}</div>`;
+      return;
+    }
+    list.innerHTML = rows.map(p => `
+      <div class="item ${p.clave===selected?'sel':''}" data-clave="${esc(p.clave)}">
+        <span class="sw" style="background:${ESTADOS[p.estado].color}"></span>
+        <div class="nm">${esc(p.nombre)}${p.nota ? `<span class="nt" title="${esc(p.nota)}">${esc(p.nota)}</span>` : ''}</div>
+        <span class="pill ${p.estado}">${p.estado==='nd'?'Sin definir':p.estado==='con'?'Con':p.estado==='par'?'Parcial':'Sin'}</span>
+      </div>`).join('');
+    $$('#list .item').forEach(el => el.addEventListener('click', () => {
+      const p = places.get(el.dataset.clave); if(!p) return;
+      select(p.clave, true);
+      if(p.layer) openEditor(p, p.layer.getBounds().getCenter());
+    }));
+    $("#list-hint").textContent = tab==='area'
+      ? 'Las áreas dibujadas mandan sobre la zona y el municipio al consultar un punto.'
+      : tab==='zona' ? 'Las zonas 20, 22 y 23 no existen oficialmente. Una zona sin definir hereda el estado del municipio.'
+      : 'Tocá un municipio para verlo en el mapa y cambiar su estado.';
+  }
+  function renderStats(){
+    const c = { con:0, par:0, sin:0, nd:0 };
+    places.forEach(p => { if(p.tipo!=='area') c[p.estado]++; });
+    $("#st-con").textContent = c.con; $("#st-par").textContent = c.par; $("#st-sin").textContent = c.sin; $("#st-nd").textContent = c.nd;
+  }
+
+  /* ---------- exportar GeoJSON ---------- */
+  $("#btn-export").addEventListener('click', () => {
+    const features = [];
+    places.forEach(p => features.push({ type:'Feature', properties:{ clave:p.clave, tipo:p.tipo, nombre:p.nombre, estado:p.estado, estado_label:ESTADOS[p.estado].label, nota:p.nota||'' }, geometry:p.geom }));
+    const blob = new Blob([JSON.stringify({ type:'FeatureCollection', features }, null, 1)], { type:'application/geo+json' });
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+    a.download = 'cobertura-dropper-' + new Date().toISOString().slice(0,10) + '.geojson'; a.click();
+    setTimeout(()=> URL.revokeObjectURL(a.href), 2000);
+  });
+
+  /* ============================================================
+     Inicio
+     ============================================================ */
+  (async function init(){
+    seedPredefined();
+    const guard = await window.dropperAuth.requireSession();
+    if(guard === null) return; // redirigiendo al login
+    if(guard.previewMode){
+      $("#notice").classList.add('show');
+      Object.entries(lsLoad()).forEach(([clave, r]) => applyRow(Object.assign({ clave }, r)));
+    }else{
+      userEmail = guard.user.email || '';
+      window.dropperNav.setUser(userEmail);
+      try{
+        await dbLoad(); usingDb = true;
+        lsSaveAll(); // respaldo local de lo que hay en la base
+      }catch(e){
+        console.error('cobertura_lugares', e);
+        $("#notice-table").classList.add('show');
+        Object.entries(lsLoad()).forEach(([clave, r]) => applyRow(Object.assign({ clave }, r)));
+      }
+    }
+    rebuildAllLayers();
+    renderList(); renderStats();
+    fitAll();
+    setTimeout(()=> { map.invalidateSize(); fitAll(); }, 250);
+  })();
+
+  // Acceso para depuración desde la consola del navegador.
+  window.dropperCobertura = { map, lookup, places };
+})();
+</script>
+</body>
+</html>
