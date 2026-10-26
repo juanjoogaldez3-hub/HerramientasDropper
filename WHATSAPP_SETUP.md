@@ -69,8 +69,8 @@ supabase secrets set \
   WHATSAPP_APP_SECRET="xxxxxxxx" \
   ANTHROPIC_API_KEY="sk-ant-…"
 
-# (Opcional) elegir modelo; por defecto usa claude-opus-5-5.
-# Para gastar ~5x menos, podés usar Sonnet:
+# (Opcional) elegir modelo. Por defecto usa claude-haiku-5-5 (barato, ideal
+# para ventas de volumen). Para más capacidad podés usar Sonnet u Opus:
 #   supabase secrets set ANTHROPIC_MODEL="claude-sonnet-5-5"
 
 # Desplegar las dos funciones:

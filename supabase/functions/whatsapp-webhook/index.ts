@@ -20,7 +20,7 @@ const VERIFY_TOKEN = Deno.env.get("WHATSAPP_VERIFY_TOKEN") ?? "";
 const APP_SECRET   = Deno.env.get("WHATSAPP_APP_SECRET") ?? "";
 const GRAPH_VER    = Deno.env.get("WHATSAPP_GRAPH_VERSION") ?? "v21.0";
 const ANTHROPIC_KEY = Deno.env.get("ANTHROPIC_API_KEY") ?? "";
-const MODEL        = Deno.env.get("ANTHROPIC_MODEL") ?? "claude-opus-5-5";
+const MODEL        = Deno.env.get("ANTHROPIC_MODEL") ?? "claude-haiku-5-5";
 
 const sb = createClient(SUPABASE_URL, SERVICE_KEY);
 
