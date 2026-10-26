@@ -25,10 +25,10 @@ const MODEL        = Deno.env.get("ANTHROPIC_MODEL") ?? "claude-opus-5-5";
 const sb = createClient(SUPABASE_URL, SERVICE_KEY);
 
 const DEFAULT_PROMPT =
-  "Sos el asistente de ventas de Dropper por WhatsApp (entregas a domicilio en Guatemala). " +
+  "Sos el asistente de ventas de Dropper por WhatsApp (entregas de última milla en Guatemala). " +
   "Respondé breve y cálido (de vos). Entendé qué vende el prospecto y conseguí que acepte una prueba. " +
-  "Cuando acepte la prueba, pida una persona, o pregunte algo que no sabés, agregá como última línea: " +
-  "[[HUMANO]] motivo: <motivo> | resumen: <qué vende y qué necesita>";
+  "Cuando acepte la prueba, pida una persona, o pregunte algo que no sabés, agregá como ÚLTIMA línea: " +
+  "[HUMANO] resumen de una línea (qué vende, pedidos por semana, zonas, qué quiere).";
 
 // ---------- WhatsApp ----------
 async function sendWhatsApp(to: string, body: string) {
@@ -62,13 +62,15 @@ async function callClaude(system: string, messages: { role: string; content: str
 }
 
 // Separa la respuesta al cliente del marcador de handoff.
+// Acepta "[HUMANO] <resumen>" y también "[[HUMANO]] motivo: … | resumen: …".
 function parseHandoff(raw: string): { reply: string; handoff: { motivo: string; resumen: string } | null } {
-  const idx = raw.indexOf("[[HUMANO]]");
-  if (idx === -1) return { reply: raw.trim(), handoff: null };
-  const reply = raw.slice(0, idx).trim();
-  const tail = raw.slice(idx + "[[HUMANO]]".length);
-  const motivo = (tail.match(/motivo:\s*([^|]+)/i)?.[1] ?? "").trim();
-  const resumen = (tail.match(/resumen:\s*(.+)/is)?.[1] ?? "").trim();
+  const m = raw.match(/\[\[?HUMANO\]?\]/);
+  if (!m || m.index === undefined) return { reply: raw.trim(), handoff: null };
+  const reply = raw.slice(0, m.index).trim();
+  const tail = raw.slice(m.index + m[0].length).trim();
+  let motivo = (tail.match(/motivo:\s*([^|]+)/i)?.[1] ?? "").trim();
+  let resumen = (tail.match(/resumen:\s*(.+)/is)?.[1] ?? "").trim();
+  if (!resumen && !motivo) resumen = tail;   // formato simple: [HUMANO] <resumen de una línea>
   return { reply, handoff: { motivo: motivo || "El bot pasó la conversación", resumen } };
 }
 
