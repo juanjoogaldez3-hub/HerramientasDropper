@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WhatsApp · Herramientas Dropper</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/css/app.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="assets/js/config.js"></script>
+<script src="assets/js/supabaseClient.js"></script>
+<script src="assets/js/auth-guard.js"></script>
+<script src="assets/js/brand.js"></script>
+<script src="assets/js/nav.js"></script>
+<style>
+  .notice{display:none;margin:12px 0;font-size:.9rem;padding:11px 15px;border-radius:12px;background:var(--lime-soft);color:var(--green-dk);border:1px solid #c4e3cd}
+  .notice.show{display:block}
+  .wa-wrap{display:grid;grid-template-columns:minmax(260px,340px) 1fr;gap:14px;margin-top:14px;
+    height:calc(100vh - 150px);min-height:460px}
+  .wa-list,.wa-chat{background:var(--white);border:1px solid var(--line);border-radius:16px;box-shadow:var(--shadow);overflow:hidden;display:flex;flex-direction:column}
+  .wa-list-head{padding:10px;border-bottom:1px solid var(--line)}
+  .wa-list-head input{width:100%;font:inherit;font-size:.9rem;border:1px solid #cdd8cf;border-radius:10px;padding:9px 12px;background:#fcfdfc}
+  .wa-list-items{overflow-y:auto;flex:1}
+  .wa-item{display:flex;flex-direction:column;gap:3px;padding:11px 13px;border-bottom:1px solid var(--line);cursor:pointer;position:relative}
+  .wa-item:hover{background:#f7faf8}
+  .wa-item.active{background:var(--lime-soft)}
+  .wa-item .l1{display:flex;justify-content:space-between;align-items:center;gap:8px}
+  .wa-item .nm{font-weight:700;font-size:.92rem;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .wa-item .tm{font-size:.72rem;color:var(--muted);flex:none}
+  .wa-item .l2{font-size:.82rem;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .wa-badge{font-size:.68rem;font-weight:700;padding:2px 8px;border-radius:999px;flex:none}
+  .wa-badge.humano{background:#fdecea;color:#a3261a}
+  .wa-badge.bot{background:#eef6ef;color:var(--green-dk)}
+  .wa-dot24{color:#c9820a;font-weight:700}
+  .wa-empty{flex:1;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:.95rem;padding:24px;text-align:center}
+  .wa-chat-inner{display:flex;flex-direction:column;height:100%}
+  .wa-chat-head{display:flex;align-items:center;gap:10px;padding:11px 14px;border-bottom:1px solid var(--line)}
+  .wa-back{display:none;background:none;border:none;font-size:1.3rem;cursor:pointer;color:var(--ink);padding:2px 6px}
+  .wa-chat-who{flex:1;min-width:0;display:flex;flex-direction:column}
+  .wa-chat-who b{font-family:'Sora',sans-serif;font-size:1rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .wa-chat-who span{font-size:.78rem;color:var(--muted)}
+  .wa-chat-actions{display:flex;gap:6px;flex-wrap:wrap}
+  .wa-chat-actions button{font:inherit;font-size:.78rem;font-weight:600;padding:7px 11px;border-radius:9px;border:1px solid #cdd8cf;background:#fff;cursor:pointer;white-space:nowrap}
+  .wa-chat-actions button.primary{background:var(--green-dk);color:#fff;border-color:var(--green-dk)}
+  .wa-chat-actions button[disabled]{opacity:.45;cursor:default}
+  .wa-24h{background:#fff7e6;color:#8a5a00;border-bottom:1px solid #f0e0b8;font-size:.8rem;padding:9px 14px}
+  .wa-msgs{flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:8px;background:#f6f8f6}
+  .wa-b{max-width:78%;padding:8px 12px;border-radius:14px;font-size:.9rem;line-height:1.35;white-space:pre-wrap;word-wrap:break-word}
+  .wa-b .meta{display:block;font-size:.66rem;opacity:.7;margin-top:3px}
+  .wa-b.in{align-self:flex-start;background:#fff;border:1px solid var(--line);border-bottom-left-radius:4px}
+  .wa-b.out{align-self:flex-end;background:#dcf5e1;border-bottom-right-radius:4px}
+  .wa-b.bot{align-self:flex-end;background:#eaf2ff;border-bottom-right-radius:4px}
+  .wa-composer{display:flex;gap:8px;padding:10px;border-top:1px solid var(--line);align-items:flex-end}
+  .wa-composer textarea{flex:1;font:inherit;font-size:.92rem;border:1px solid #cdd8cf;border-radius:12px;padding:10px 12px;resize:none;max-height:120px;background:#fcfdfc}
+  .wa-composer button{font:inherit;font-weight:700;padding:10px 16px;border-radius:12px;border:none;background:var(--green-dk);color:#fff;cursor:pointer;flex:none}
+  .wa-composer button[disabled]{opacity:.5;cursor:default}
+  @media (max-width:760px){
+    .wa-wrap{grid-template-columns:1fr;height:calc(100vh - 128px)}
+    .wa-chat{display:none}
+    .wa-wrap.chat-open .wa-list{display:none}
+    .wa-wrap.chat-open .wa-chat{display:flex}
+    .wa-back{display:block}
+    .wa-chat-actions button{font-size:.74rem;padding:6px 9px}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="topbar">
+    <a class="brand" href="inicio.html"><img id="brand-logo" alt="Dropper · Herramientas"></a>
+    <nav class="nav">
+      <div class="nav-links">
+        <a href="inicio.html">Inicio</a>
+        <a href="generador.html">Generador</a>
+        <a href="pagos.html">Pagos</a>
+        <a href="comisiones.html">Comisiones</a>
+        <a href="productividad.html">Productividad</a>
+        <a href="metodos.html">Métodos</a>
+        <a href="distribucion.html">Distribución</a>
+        <a href="mps.html">MPS</a>
+        <a href="motoristas.html">Motoristas</a>
+        <a href="asistencia.html">Asistencia</a>
+        <a href="marcaje.html">Marcaje</a>
+        <a href="whatsapp.html" class="active">WhatsApp</a>
+        <a href="historial.html">Historial</a>
+      </div>
+      <span class="nav-sep"></span>
+      <span class="nav-av" id="nav-av"></span>
+      <a href="#" class="nav-logout" id="logout">Salir</a>
+    </nav>
+  </div>
+
+  <div class="notice" id="notice"></div>
+
+  <div class="wa-wrap" id="wa-wrap">
+    <aside class="wa-list" id="wa-list-pane">
+      <div class="wa-list-head"><input id="wa-search" placeholder="Buscar nombre o número…"></div>
+      <div class="wa-list-items" id="wa-list"></div>
+    </aside>
+    <section class="wa-chat" id="wa-chat-pane">
+      <div class="wa-empty" id="wa-empty">Elegí una conversación para ver el chat.</div>
+      <div class="wa-chat-inner" id="wa-chat-inner" hidden>
+        <header class="wa-chat-head">
+          <button class="wa-back" id="wa-back" title="Volver">←</button>
+          <div class="wa-chat-who"><b id="wa-name"></b><span id="wa-sub"></span></div>
+          <div class="wa-chat-actions">
+            <button id="wa-attend">Atender yo</button>
+            <button id="wa-return">Devolver al bot</button>
+          </div>
+        </header>
+        <div class="wa-24h" id="wa-24h" hidden>⚠ Pasaron más de 24 h desde el último mensaje del cliente. WhatsApp no deja enviar texto libre fuera de esa ventana; esperá a que el cliente escriba.</div>
+        <div class="wa-msgs" id="wa-msgs"></div>
+        <form class="wa-composer" id="wa-composer">
+          <textarea id="wa-text" rows="1" placeholder="Escribí un mensaje…"></textarea>
+          <button type="submit" id="wa-send">Enviar</button>
+        </form>
+      </div>
+    </section>
+  </div>
+</div>
+
+<script>
+const $=s=>document.querySelector(s);
+const CFG=window.DROPPER_CONFIG;
+let USER=null, PREVIEW=true;
+let CONTACTS=new Map();      // id -> contacto
+let LAST=new Map();          // id -> último body (para la lista)
+let CURRENT=null;            // id del contacto abierto
+let SEARCH='';
+
+function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+function notice(msg,show=true){ const n=$('#notice'); n.innerHTML=msg; n.classList.toggle('show',show); }
+function fmtTime(ts){ if(!ts) return ''; const d=new Date(ts), n=new Date(); const p=x=>String(x).padStart(2,'0');
+  return (d.toDateString()===n.toDateString()) ? `${p(d.getHours())}:${p(d.getMinutes())}` : `${p(d.getDate())}/${p(d.getMonth()+1)}`; }
+function over24h(c){ if(!c.last_customer_message_at) return false; return (Date.now()-new Date(c.last_customer_message_at).getTime())>24*3600*1000; }
+
+/* ---------- lista ---------- */
+function sortedContacts(){
+  let arr=[...CONTACTS.values()];
+  if(SEARCH){ const q=SEARCH.toLowerCase(); arr=arr.filter(c=>(`${c.name||''} ${c.wa_id}`).toLowerCase().includes(q)); }
+  // humano primero, luego por último mensaje
+  arr.sort((a,b)=>{
+    const ma=a.mode==='humano'?0:1, mb=b.mode==='humano'?0:1;
+    if(ma!==mb) return ma-mb;
+    return new Date(b.last_message_at||0)-new Date(a.last_message_at||0);
+  });
+  return arr;
+}
+function renderList(){
+  const box=$('#wa-list'); const arr=sortedContacts();
+  if(!arr.length){ box.innerHTML='<div class="wa-empty" style="height:auto;padding:30px">Sin conversaciones todavía.</div>'; return; }
+  box.innerHTML=arr.map(c=>{
+    const nm=esc(c.name||c.wa_id);
+    const sub=esc(c.lead_summary || LAST.get(c.id) || c.wa_id);
+    const badge=c.mode==='humano'?'<span class="wa-badge humano">Humano</span>':'<span class="wa-badge bot">Bot</span>';
+    const d24=over24h(c)?'<span class="wa-dot24" title="Más de 24 h">⏱</span> ':'';
+    return `<div class="wa-item ${c.id===CURRENT?'active':''}" data-id="${c.id}">
+      <div class="l1"><span class="nm">${d24}${nm}</span><span class="tm">${fmtTime(c.last_message_at)}</span></div>
+      <div class="l1"><span class="l2">${sub}</span>${badge}</div>
+    </div>`;
+  }).join('');
+  box.querySelectorAll('.wa-item').forEach(el=>el.addEventListener('click',()=>openChat(el.dataset.id)));
+}
+
+/* ---------- chat ---------- */
+function bubble(m){
+  const cls = m.direction==='in' ? 'in' : (m.sender==='bot' ? 'bot' : 'out');
+  const who = m.sender==='bot' ? 'Bot' : (m.sender==='agent' ? (m.agent_email? m.agent_email.split('@')[0] : 'Equipo') : '');
+  const meta = `${who?esc(who)+' · ':''}${fmtTime(m.created_at)}`;
+  return `<div class="wa-b ${cls}">${esc(m.body||'')}<span class="meta">${meta}</span></div>`;
+}
+function paintHead(c){
+  $('#wa-name').textContent=c.name||c.wa_id;
+  $('#wa-sub').textContent = c.wa_id + (c.mode==='humano'?(c.assigned_to?` · lo atiende ${c.assigned_to.split('@')[0]}`:' · en humano'):' · en bot');
+  $('#wa-24h').hidden=!over24h(c);
+  const human=c.mode==='humano';
+  $('#wa-attend').disabled=human; $('#wa-return').disabled=!human;
+  $('#wa-attend').classList.toggle('primary',!human);
+  const can = human && !over24h(c);
+  $('#wa-text').disabled=!can; $('#wa-send').disabled=!can;
+  $('#wa-text').placeholder = human ? (over24h(c)?'Fuera de la ventana de 24 h':'Escribí un mensaje…') : 'Tocá "Atender yo" para responder';
+}
+async function openChat(id){
+  CURRENT=id; renderList();
+  $('#wa-wrap').classList.add('chat-open');
+  $('#wa-empty').hidden=true; $('#wa-chat-inner').hidden=false;
+  const c=CONTACTS.get(id); if(c) paintHead(c);
+  const msgs=$('#wa-msgs'); msgs.innerHTML='<div class="wa-empty" style="height:auto">Cargando…</div>';
+  const {data,error}=await window.sb.from('wa_messages').select('*').eq('contact_id',id).order('created_at',{ascending:true}).limit(500);
+  if(error){ msgs.innerHTML='<div class="wa-empty" style="height:auto">No se pudo cargar.</div>'; return; }
+  msgs.innerHTML=(data||[]).map(bubble).join('');
+  msgs.scrollTop=msgs.scrollHeight;
+}
+function appendMessage(m){
+  if(m.contact_id!==CURRENT) return;
+  const msgs=$('#wa-msgs'); msgs.insertAdjacentHTML('beforeend',bubble(m));
+  msgs.scrollTop=msgs.scrollHeight;
+}
+
+/* ---------- acciones ---------- */
+async function setMode(mode){
+  const id=CURRENT; if(!id) return;
+  const upd = mode==='humano' ? {mode:'humano',assigned_to:USER.email} : {mode:'bot',assigned_to:null};
+  const {error}=await window.sb.from('wa_contacts').update(upd).eq('id',id);
+  if(error){ notice('No se pudo cambiar el modo: '+esc(error.message)); return; }
+  const c=CONTACTS.get(id); if(c){ Object.assign(c,upd); paintHead(c); renderList(); }
+}
+async function sendMessage(text){
+  const id=CURRENT; if(!id||!text.trim()) return;
+  const {data:{session}}=await window.sb.auth.getSession();
+  const btn=$('#wa-send'); btn.disabled=true;
+  try{
+    const r=await fetch(CFG.SUPABASE_URL+'/functions/v1/whatsapp-send',{
+      method:'POST',
+      headers:{'content-type':'application/json','authorization':'Bearer '+session.access_token,'apikey':CFG.SUPABASE_ANON_KEY},
+      body:JSON.stringify({contact_id:id,text:text.trim()})
+    });
+    const out=await r.json().catch(()=>({}));
+    if(!r.ok){ notice('No se pudo enviar: '+esc(out.error||r.status)+(out.detail?(' · '+esc(out.detail)):'')); btn.disabled=false; return; }
+    $('#wa-text').value=''; $('#wa-text').style.height='auto';
+    // el mensaje saliente llega por realtime; marcar como humano localmente
+    const c=CONTACTS.get(id); if(c){ c.mode='humano'; c.assigned_to=USER.email; paintHead(c); renderList(); }
+  }catch(e){ notice('Error de red al enviar.'); }
+  btn.disabled=false;
+}
+
+/* ---------- carga + realtime ---------- */
+async function loadContacts(){
+  const {data,error}=await window.sb.from('wa_contacts').select('*').order('last_message_at',{ascending:false}).limit(300);
+  if(error){
+    notice('⚠ Falta crear las tablas de WhatsApp en la base (migración pendiente). Detalle: '+esc(error.message));
+    return false;
+  }
+  CONTACTS=new Map((data||[]).map(c=>[c.id,c]));
+  renderList();
+  return true;
+}
+function startRealtime(){
+  window.sb.channel('wa-inbox')
+    .on('postgres_changes',{event:'*',schema:'public',table:'wa_contacts'},payload=>{
+      const c=payload.new; if(!c||!c.id) return;
+      CONTACTS.set(c.id,c);
+      if(c.id===CURRENT) paintHead(c);
+      renderList();
+    })
+    .on('postgres_changes',{event:'INSERT',schema:'public',table:'wa_messages'},payload=>{
+      const m=payload.new; if(!m) return;
+      LAST.set(m.contact_id,m.body||'');
+      appendMessage(m);
+      // refrescar hora/orden de la lista aunque el contacto tarde en actualizar
+      const c=CONTACTS.get(m.contact_id); if(c){ c.last_message_at=m.created_at; }
+      renderList();
+    })
+    .subscribe();
+}
+
+/* ---------- init ---------- */
+$('#logout').addEventListener('click',e=>{ e.preventDefault(); window.dropperAuth.signOut(); });
+$('#wa-back').addEventListener('click',()=>{ $('#wa-wrap').classList.remove('chat-open'); });
+$('#wa-attend').addEventListener('click',()=>setMode('humano'));
+$('#wa-return').addEventListener('click',()=>setMode('bot'));
+$('#wa-search').addEventListener('input',e=>{ SEARCH=e.target.value; renderList(); });
+$('#wa-composer').addEventListener('submit',e=>{ e.preventDefault(); sendMessage($('#wa-text').value); });
+const ta=$('#wa-text');
+ta.addEventListener('input',()=>{ ta.style.height='auto'; ta.style.height=Math.min(ta.scrollHeight,120)+'px'; });
+ta.addEventListener('keydown',e=>{ if(e.key==='Enter'&&!e.shiftKey){ e.preventDefault(); sendMessage(ta.value); } });
+
+(async function init(){
+  const guard=await window.dropperAuth.requireSession();
+  if(guard===null) return;
+  if(guard.previewMode){ PREVIEW=true; notice('Modo vista previa: Supabase no está configurado.'); return; }
+  PREVIEW=false; USER=guard.user; window.dropperNav.setUser(USER.email||'');
+  const ok=await loadContacts();
+  if(ok) startRealtime();
+})();
+</script>
+</body>
+</html>

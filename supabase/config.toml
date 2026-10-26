@@ -1,0 +1,12 @@
+# Dropper · Supabase (proyecto que ya corre los reportes)
+project_id = "uroqcxlwdzkjmkrpjmxf"
+
+# El webhook de WhatsApp es público (Meta lo llama sin sesión de usuario).
+# Verificamos la firma de Meta DENTRO de la función.
+[functions.whatsapp-webhook]
+verify_jwt = false
+
+# El envío desde la bandeja verifica el JWT del usuario MANUALMENTE dentro de la
+# función (así podemos responder bien el preflight CORS del navegador).
+[functions.whatsapp-send]
+verify_jwt = false
