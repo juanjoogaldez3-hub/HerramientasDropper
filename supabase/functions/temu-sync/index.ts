@@ -21,8 +21,6 @@ const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_KEY  = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const ANON_KEY     = Deno.env.get("SUPABASE_ANON_KEY")!;
 const CPS_API      = (Deno.env.get("CPS_API_URL") ?? "https://app.cpslogistics.com:8042/CpsLastMile").replace(/\/$/, "");
-const CPS_USER     = Deno.env.get("CPS_USERNAME") ?? "";
-const CPS_PASS     = Deno.env.get("CPS_PASSWORD") ?? "";
 const CRON_SECRET  = Deno.env.get("TEMU_CRON_SECRET") ?? "";
 
 const MAX_DIAS     = 31;          // rango máximo por corrida
@@ -64,7 +62,11 @@ async function cps(path: string, opts: { method?: string; token?: string; body?:
 }
 
 async function loginCps(): Promise<{ token: string; idEmpresa: number | null }> {
-  if (!CPS_USER || !CPS_PASS) throw new Error("Faltan los secretos CPS_USERNAME / CPS_PASSWORD");
+  // Se leen en cada corrida para tomar enseguida un secreto recién cambiado.
+  const CPS_USER = (Deno.env.get("CPS_USERNAME") ?? "").trim();
+  const CPS_PASS = Deno.env.get("CPS_PASSWORD") ?? "";
+  const faltan = [!CPS_USER && "CPS_USERNAME", !CPS_PASS && "CPS_PASSWORD"].filter(Boolean);
+  if (faltan.length) throw new Error("Falta el secreto " + faltan.join(" y ") + " en Supabase (Edge Functions → Secrets)");
   const r = await cps("/authenticate", { body: { username: CPS_USER, password: CPS_PASS } });
   const token = r?.DATA?.TOKEN;
   if (r?.MSM !== "OK" || !token) throw new Error("CPS no aceptó el usuario o la contraseña");
