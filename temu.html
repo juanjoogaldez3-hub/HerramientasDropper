@@ -1,0 +1,821 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tablero Temu · Herramientas Dropper</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/css/app.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="assets/js/config.js"></script>
+<script src="assets/js/supabaseClient.js"></script>
+<script src="assets/js/auth-guard.js"></script>
+<script src="assets/js/brand.js"></script>
+<script src="assets/js/nav.js"></script>
+<style>
+  .tm-bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px;
+    background:var(--white);border:1px solid var(--line);border-radius:14px;padding:12px 16px;box-shadow:var(--shadow)}
+  .tm-bar .presets{display:flex;gap:6px;flex-wrap:wrap}
+  .tm-bar .presets button{font-family:inherit;font-size:.82rem;font-weight:600;color:var(--muted);background:var(--grey);
+    border:1px solid transparent;border-radius:9px;padding:7px 12px;cursor:pointer;transition:.15s}
+  .tm-bar .presets button:hover{color:var(--green-dk)}
+  .tm-bar .presets button.active{background:var(--lime-soft);color:var(--green-dk);border-color:#c4e3cd}
+  .tm-bar label{display:inline-flex;align-items:center;gap:7px;font-size:.84rem;font-weight:600;color:var(--muted)}
+  .tm-bar input[type=date]{font-family:inherit;font-size:.88rem;color:var(--ink);border:1px solid #cdd8cf;border-radius:9px;padding:7px 10px;background:#fcfdfc}
+  .tm-bar .grow{flex:1}
+  .tm-bar .btn{width:auto;padding:9px 16px;font-size:.86rem}
+  .tm-sync{font-size:.8rem;color:var(--muted);margin:-6px 2px 16px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .tm-sync .dot{width:8px;height:8px;border-radius:50%;background:#9aa89e;flex:none}
+  .tm-sync .dot.ok{background:var(--lime)} .tm-sync .dot.bad{background:#d0402b} .tm-sync .dot.run{background:#e0a800;animation:pulse 1s infinite}
+  @keyframes pulse{50%{opacity:.35}}
+  .status{margin:0 0 16px;font-size:.9rem;display:none;align-items:center;gap:9px;padding:12px 16px;border-radius:12px}
+  .status.show{display:flex}
+  .status.err{background:#fdecea;color:#a3261a;border:1px solid #f5c6c0}
+  .status.work{background:var(--lime-soft);color:var(--green-dk);border:1px solid #c4e3cd}
+  .status.ok{background:var(--lime-soft);color:var(--green-dk);border:1px solid #c4e3cd}
+  .spin{width:15px;height:15px;border:2px solid #bcd9c4;border-top-color:var(--green-dk);border-radius:50%;animation:sp .7s linear infinite;flex:none}
+  @keyframes sp{to{transform:rotate(360deg)}}
+
+  .stat .d{font-size:.78rem;font-weight:600;margin-top:4px;color:var(--muted)}
+  .stat .d.up{color:var(--green)} .stat .d.down{color:#c0392b}
+  .stat.hero .v{color:var(--green-dk)}
+
+  .tm-tabs{margin:6px 0 16px;max-width:100%;overflow-x:auto;scrollbar-width:none}
+  .tm-tabs::-webkit-scrollbar{display:none}
+  .tm-tabs button{white-space:nowrap;flex:none}
+  .tm-tab{display:none} .tm-tab.show{display:block}
+  .grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,420px),1fr));gap:16px}
+  .card{background:var(--white);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:18px 20px;min-width:0}
+  .card h3{font-family:'Sora',sans-serif;font-weight:700;font-size:1rem;letter-spacing:-.01em}
+  .card .note{color:var(--muted);font-size:.82rem;margin:2px 0 12px}
+  .chart{position:relative;min-height:120px}
+  .chart svg{display:block;width:100%;overflow:visible}
+  .chart text{font-family:'Plus Jakarta Sans',sans-serif}
+  .tick{fill:var(--muted);font-size:11px;font-variant-numeric:tabular-nums}
+  .lbl{fill:var(--ink);font-size:12px;font-weight:600}
+  .val{fill:var(--ink);font-size:11px;font-weight:700;font-variant-numeric:tabular-nums}
+  .tip{position:absolute;pointer-events:none;background:#fff;border:1px solid var(--line);border-radius:10px;
+    box-shadow:0 10px 24px -10px rgba(13,58,28,.35);padding:7px 10px;font-size:.78rem;white-space:nowrap;z-index:5;display:none}
+  .tip b{display:block;color:var(--muted);font-weight:600;margin-bottom:2px}
+  .tip div{display:flex;justify-content:space-between;gap:14px} .tip span:last-child{font-weight:700}
+  .heatwrap{overflow-x:auto}
+  .empty-in{padding:30px 10px;text-align:center;color:var(--muted);font-size:.9rem}
+
+  table.hist th button{all:unset;cursor:pointer;display:block;width:100%}
+  table.hist th[aria-sort=descending] button::after{content:" ↓"} table.hist th[aria-sort=ascending] button::after{content:" ↑"}
+  table.hist td.r, table.hist th.r{text-align:right}
+  table.hist tr.apoyo td{color:var(--muted)}
+  table.hist td.good{color:var(--green);font-weight:700} table.hist td.bad{color:#c0392b;font-weight:700}
+  table.hist select{font-family:inherit;font-size:.82rem;border:1px solid #cdd8cf;border-radius:8px;padding:4px 6px;background:#fcfdfc;color:var(--ink)}
+  .tablebox{overflow-x:auto}
+
+  .flow{display:grid}
+  .flow div{display:flex;justify-content:space-between;gap:12px;padding:9px 0;border-bottom:1px solid var(--line);font-size:.92rem;font-variant-numeric:tabular-nums}
+  .flow div span:first-child{color:var(--muted)}
+  .flow div.sum span:first-child{color:var(--ink);font-weight:600}
+  .flow div.fin{border-bottom:none;padding-top:12px}
+  .flow div.fin span:first-child{color:var(--ink);font-weight:700}
+  .flow div.fin span:last-child{font-family:'Sora',sans-serif;font-weight:800;font-size:1.25rem;color:var(--green-dk)}
+  .flow b{font-weight:700}
+
+  .cfg{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px 16px}
+  .cfg label{display:block;font-size:.8rem;font-weight:600;color:var(--ink)}
+  .cfg label small{display:block;font-weight:500;color:var(--muted);font-size:.74rem}
+  .cfg input{width:100%;margin-top:5px;font-family:inherit;font-size:.92rem;border:1px solid #cdd8cf;border-radius:10px;padding:9px 11px;background:#fcfdfc}
+  .cfg input:focus{outline:none;border-color:var(--green);box-shadow:0 0 0 3px rgba(31,122,61,.12)}
+  .runs td{font-size:.84rem}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="topbar">
+    <a class="brand" href="inicio.html"><img id="brand-logo" alt="Dropper · Herramientas"></a>
+    <nav class="nav">
+      <div class="nav-links">
+        <a href="inicio.html">Inicio</a>
+        <a href="generador.html">Generador</a>
+        <a href="pagos.html">Pagos</a>
+        <a href="comisiones.html">Comisiones</a>
+        <a href="productividad.html">Productividad</a>
+        <a href="metodos.html">Métodos</a>
+        <a href="distribucion.html">Distribución</a>
+        <a href="cobertura.html">Cobertura</a>
+        <a href="mps.html">MPS</a>
+        <a href="motoristas.html">Motoristas</a>
+        <a href="asistencia.html">Asistencia</a>
+        <a href="marcaje.html">Marcaje</a>
+        <a href="whatsapp.html">WhatsApp</a>
+        <a href="temu.html" class="active">Temu</a>
+        <a href="historial.html">Historial</a>
+      </div>
+      <span class="nav-sep"></span>
+      <span class="nav-av" id="nav-av"></span>
+      <a href="#" class="nav-logout" id="logout">Salir</a>
+    </nav>
+  </div>
+
+  <div class="notice" id="notice">
+    <b>Modo vista previa.</b> Supabase aún no está configurado, así que no hay datos.
+    Pegá tus llaves en <code>assets/js/config.js</code> (ver README).
+  </div>
+
+  <div class="page-head">
+    <div>
+      <h2>Tablero Temu</h2>
+      <div class="sub">Entregas de Temu que vienen de CPS LastMile: meta diaria, pilotos, pago y ganancia, rechazos y pendientes.</div>
+    </div>
+  </div>
+
+  <div class="tm-bar">
+    <div class="presets" id="presets">
+      <button data-p="semana">Esta semana</button>
+      <button data-p="pasada">Semana pasada</button>
+      <button data-p="mes">Este mes</button>
+      <button data-p="30">Últimos 30 días</button>
+    </div>
+    <label>Desde <input type="date" id="f-desde"></label>
+    <label>Hasta <input type="date" id="f-hasta"></label>
+    <span class="grow"></span>
+    <button class="btn btn-ghost" id="btn-csv" title="Descargar resumen por piloto">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      CSV
+    </button>
+    <button class="btn btn-primary" id="btn-sync">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.5 9a9 9 0 0 1 14.9-3.4L23 10M1 14l4.6 4.4A9 9 0 0 0 20.5 15"/></svg>
+      Actualizar desde CPS
+    </button>
+  </div>
+  <div class="tm-sync" id="sync-info"><span class="dot"></span><span>Revisando última actualización…</span></div>
+  <div class="status" id="status"></div>
+
+  <div class="summary" id="summary">
+    <div class="stat hero"><div class="k">Entregados</div><div class="v" id="k-ent">—</div><div class="d" id="d-ent"></div></div>
+    <div class="stat"><div class="k">Promedio diario</div><div class="v" id="k-prom">—</div><div class="d" id="d-prom"></div></div>
+    <div class="stat"><div class="k">Por motorista al día</div><div class="v" id="k-moto-dia">—</div><div class="d" id="d-moto-dia"></div></div>
+    <div class="stat hero"><div class="k">Libre para Dropper</div><div class="v" id="k-libre">—</div><div class="d" id="d-libre"></div></div>
+    <div class="stat"><div class="k">Pago a motoristas</div><div class="v" id="k-pago">—</div><div class="d" id="d-pago"></div></div>
+    <div class="stat"><div class="k">Rechazos</div><div class="v" id="k-rech">—</div><div class="d" id="d-rech"></div></div>
+  </div>
+
+  <div class="tabs tm-tabs" id="tabs">
+    <button data-t="resumen" class="active">Resumen</button>
+    <button data-t="pilotos">Pilotos</button>
+    <button data-t="ganancia">Pago y ganancia</button>
+    <button data-t="rechazos">Rechazos</button>
+    <button data-t="ajustes">Ajustes</button>
+  </div>
+
+  <!-- RESUMEN -->
+  <section class="tm-tab show" data-t="resumen">
+    <div class="grid2">
+      <div class="card">
+        <h3>Entregas por día</h3>
+        <div class="note">Barras: entregados. Línea punteada: la meta diaria. Debajo, cuántos motoristas salieron.</div>
+        <div class="chart" id="ch-dias"></div>
+      </div>
+      <div class="card">
+        <h3>Promedio por día trabajado</h3>
+        <div class="note">Entregas por cada día que salió el motorista, contra la meta por motorista. En gris, los de apoyo.</div>
+        <div class="chart" id="ch-prom"></div>
+      </div>
+      <div class="card">
+        <h3>Pendientes por ruta</h3>
+        <div class="note" id="pend-note">Paquetes en CPS que aún no salen.</div>
+        <div class="chart" id="ch-pend"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- PILOTOS -->
+  <section class="tm-tab" data-t="pilotos">
+    <div class="card" style="margin-bottom:16px">
+      <h3>Entregas de cada piloto por día</h3>
+      <div class="note">Más oscuro, más entregas. Vacío: no salió ese día.</div>
+      <div class="chart heatwrap" id="ch-heat"></div>
+    </div>
+    <div class="panel tablebox">
+      <table class="hist" id="tbl-pil">
+        <thead><tr>
+          <th data-k="piloto"><button>Piloto</button></th>
+          <th data-k="tipo"><button>Tipo</button></th>
+          <th data-k="dias" class="r"><button>Días</button></th>
+          <th data-k="entregados" class="r" aria-sort="descending"><button>Entregados</button></th>
+          <th data-k="promedio" class="r"><button>Por día</button></th>
+          <th data-k="mejor" class="r"><button>Mejor día</button></th>
+          <th data-k="rechazos" class="r"><button>Rechazos</button></th>
+          <th data-k="pct" class="r"><button>% rechazo</button></th>
+          <th data-k="pago" class="r"><button>Pago</button></th>
+        </tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <div class="note" style="margin-top:8px;color:var(--muted);font-size:.8rem">"Tipo" se guarda para todos: marcá como <b>Apoyo</b> a quien sale solo de vez en cuando.</div>
+  </section>
+
+  <!-- GANANCIA -->
+  <section class="tm-tab" data-t="ganancia">
+    <div class="grid2">
+      <div class="card">
+        <h3>Período seleccionado</h3>
+        <div class="note" id="gan-note">Solo paquetes entregados.</div>
+        <div class="flow">
+          <div><span id="l-fact">Facturado a CPS</span><b id="g-fact">—</b></div>
+          <div><span id="l-iva">(−) IVA incluido</span><b id="g-iva">—</b></div>
+          <div class="sum"><span>Base sin IVA</span><b id="g-base">—</b></div>
+          <div><span id="l-isr">(−) ISR</span><b id="g-isr">—</b></div>
+          <div><span id="l-moto">(−) Pago a motoristas</span><b id="g-moto">—</b></div>
+          <div class="fin"><span>Libre para Dropper</span><span id="g-libre">—</span></div>
+        </div>
+        <div class="note" style="margin-top:8px" id="g-por">—</div>
+      </div>
+      <div class="card">
+        <h3>Proyección del mes</h3>
+        <div class="note" id="proy-note">—</div>
+        <div class="tablebox">
+          <table class="hist" id="tbl-proy">
+            <thead><tr><th>Escenario</th><th class="r">Paquetes</th><th class="r">Facturado</th><th class="r">ISR</th><th class="r">Motoristas</th><th class="r">Libre</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+    <div class="note" style="margin-top:12px;color:var(--muted);font-size:.8rem">No incluye otros gastos de Dropper (planilla, gasolina, renta) ni el crédito de IVA por compras. Las tarifas se cambian en <b>Ajustes</b>.</div>
+  </section>
+
+  <!-- RECHAZOS -->
+  <section class="tm-tab" data-t="rechazos">
+    <div class="grid2">
+      <div class="card">
+        <h3>Motivos de rechazo</h3>
+        <div class="note">Todos los pilotos en el período.</div>
+        <div class="chart" id="ch-mot"></div>
+      </div>
+      <div class="card">
+        <h3>Rechazos por piloto</h3>
+        <div class="note">Qué tanto de lo que sacó cada uno regresó. En rojo, 15% o más.</div>
+        <div class="chart" id="ch-rech-pil"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- AJUSTES -->
+  <section class="tm-tab" data-t="ajustes">
+    <div class="card" style="margin-bottom:16px">
+      <h3>Tarifas y metas</h3>
+      <div class="note">Se guardan para todo el equipo y cambian todos los cálculos del tablero.</div>
+      <form id="cfg-form" class="cfg">
+        <label>Tarifa por entrega (Q)<small>Lo que se factura, IVA incluido</small><input type="number" step="0.01" min="0" name="tarifa"></label>
+        <label>Pago al motorista (Q)<small>Por entrega</small><input type="number" step="0.01" min="0" name="pago_motorista"></label>
+        <label>IVA (%)<small>Incluido en la tarifa</small><input type="number" step="0.01" min="0" name="iva" data-pct></label>
+        <label>ISR del período (%)<small>Siempre pasan de Q30,000 al mes</small><input type="number" step="0.01" min="0" name="isr_tasa" data-pct></label>
+        <label>Meta diaria<small>Entregas por día</small><input type="number" step="1" min="1" name="meta_diaria"></label>
+        <label>Meta por motorista<small>Entregas por día</small><input type="number" step="1" min="1" name="meta_motorista"></label>
+        <label>Días de trabajo al mes<small>Para la proyección</small><input type="number" step="1" min="1" max="31" name="dias_mes"></label>
+        <label>ISR mes: límite (Q)<small>Sin IVA, para la proyección</small><input type="number" step="1" min="0" name="isr_limite_mes"></label>
+        <label>ISR mes: hasta el límite (%)<small>Para la proyección</small><input type="number" step="0.01" min="0" name="isr_bajo" data-pct></label>
+        <label>ISR mes: sobre el límite (%)<small>Para la proyección</small><input type="number" step="0.01" min="0" name="isr_alto" data-pct></label>
+      </form>
+      <div style="margin-top:14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+        <button class="btn btn-primary" id="cfg-save" style="width:auto">Guardar</button>
+        <span class="note" id="cfg-msg" style="margin:0"></span>
+      </div>
+    </div>
+    <div class="panel tablebox">
+      <table class="hist runs" id="tbl-runs">
+        <thead><tr><th>Actualización</th><th>Cómo</th><th>Rango</th><th class="r">Envíos</th><th>Resultado</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </section>
+
+  <footer>Dropper · Smart Delivery — los datos vienen de CPS LastMile; se guardan en la base de Dropper sin direcciones ni datos de quien recibe.</footer>
+</div>
+
+<script>
+(function(){
+  const $ = (s, r = document) => r.querySelector(s);
+  const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+  const sb = window.sb;
+
+  // ---------- Formatos ----------
+  const nf0 = new Intl.NumberFormat('es-GT', { maximumFractionDigits: 0 });
+  const nf1 = new Intl.NumberFormat('es-GT', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+  const nf2 = new Intl.NumberFormat('es-GT', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const Q = v => 'Q' + nf2.format(v || 0);
+  const N = v => nf0.format(v || 0);
+  const D1 = v => nf1.format(v || 0);
+  const P = (v, d = 0) => (isFinite(v) ? (v * 100).toFixed(d) : '0') + '%';
+  const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const DIAS = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'];
+  const MESES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+  const dia = f => DIAS[new Date(f + 'T12:00:00Z').getUTCDay()] + ' ' + Number(f.slice(8, 10));
+  const fechaLarga = f => Number(f.slice(8, 10)) + ' ' + MESES[Number(f.slice(5, 7)) - 1];
+  const cap = s => { const t = String(s || '').toLowerCase(); return t.charAt(0).toUpperCase() + t.slice(1); };
+  const cuando = iso => {
+    const d = new Date(iso);
+    return d.toLocaleString('es-GT', { timeZone: 'America/Guatemala', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' });
+  };
+
+  // ---------- Fechas en hora de Guatemala ----------
+  const hoyGT = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Guatemala' }).format(new Date());
+  const addDays = (f, n) => new Date(Date.parse(f + 'T00:00:00Z') + n * 864e5).toISOString().slice(0, 10);
+  const diffDays = (a, b) => Math.round((Date.parse(b) - Date.parse(a)) / 864e5);
+  const lunes = f => { const wd = new Date(f + 'T12:00:00Z').getUTCDay(); return addDays(f, -((wd + 6) % 7)); };
+  function preset(p) {
+    const h = hoyGT();
+    if (p === 'semana') return [lunes(h), h];
+    if (p === 'pasada') { const l = lunes(h); return [addDays(l, -7), addDays(l, -1)]; }
+    if (p === 'mes') return [h.slice(0, 8) + '01', h];
+    return [addDays(h, -29), h];
+  }
+
+  // ---------- Estado ----------
+  let CFG = { tarifa: 9.5, pago_motorista: 5, iva: 0.12, isr_tasa: 0.07, isr_limite_mes: 30000, isr_bajo: 0.05, isr_alto: 0.07, meta_diaria: 500, meta_motorista: 50, dias_mes: 26 };
+  let DP = [], DP_PREV = [], MOT = [], PEND = { corte: null, rows: [] };
+  let sortKey = 'entregados', sortDir = -1;
+
+  function status(msg, type) { const s = $('#status'); s.className = 'status show ' + (type || ''); s.innerHTML = (type === 'work' ? '<span class="spin"></span>' : '') + msg; }
+  function hideStatus() { $('#status').className = 'status'; }
+
+  // ---------- Carga de datos ----------
+  async function todas(q) {
+    const out = []; let from = 0;
+    for (;;) {
+      const { data, error } = await q().range(from, from + 999);
+      if (error) throw error;
+      out.push(...data);
+      if (data.length < 1000) return out;
+      from += 1000;
+    }
+  }
+  async function cargarConfig() {
+    const { data, error } = await sb.from('temu_config').select('*').eq('id', 1).maybeSingle();
+    if (!error && data) for (const k of Object.keys(CFG)) if (data[k] !== null && data[k] !== undefined) CFG[k] = Number(data[k]);
+  }
+  async function cargar() {
+    const desde = $('#f-desde').value, hasta = $('#f-hasta').value;
+    if (!desde || !hasta || desde > hasta) { status('Revisá el rango de fechas.', 'err'); return; }
+    const largo = diffDays(desde, hasta) + 1;
+    const pDesde = addDays(desde, -largo), pHasta = addDays(desde, -1);
+    status('Cargando datos…', 'work');
+    try {
+      const [dp, prev, mot, corte] = await Promise.all([
+        todas(() => sb.from('temu_dia_piloto').select('*').gte('fecha', desde).lte('fecha', hasta).order('fecha')),
+        todas(() => sb.from('temu_dia_piloto').select('fecha,piloto_id,entregados,rechazos').gte('fecha', pDesde).lte('fecha', pHasta)),
+        todas(() => sb.from('temu_motivos_dia').select('*').gte('fecha', desde).lte('fecha', hasta)),
+        sb.from('temu_pendientes').select('corte_at').order('corte_at', { ascending: false }).limit(1),
+      ]);
+      DP = dp.map(r => ({ ...r, entregados: Number(r.entregados), rechazos: Number(r.rechazos) }));
+      DP_PREV = prev.map(r => ({ ...r, entregados: Number(r.entregados), rechazos: Number(r.rechazos) }));
+      MOT = mot.map(r => ({ ...r, cantidad: Number(r.cantidad) }));
+      const c = corte.data && corte.data[0] ? corte.data[0].corte_at : null;
+      PEND = { corte: c, rows: [] };
+      if (c) {
+        const { data } = await sb.from('temu_pendientes').select('ruta,recepcion,activo').eq('corte_at', c);
+        PEND.rows = (data || []).map(r => ({ ruta: r.ruta, recepcion: Number(r.recepcion), activo: Number(r.activo) }));
+      }
+      hideStatus();
+      dibujar();
+    } catch (e) {
+      console.error(e);
+      status('No se pudieron cargar los datos. ' + esc(e.message || ''), 'err');
+    }
+  }
+
+  // ---------- Cálculos ----------
+  function totales(rows) {
+    const ent = rows.reduce((s, r) => s + r.entregados, 0);
+    const rech = rows.reduce((s, r) => s + r.rechazos, 0);
+    const con = rows.filter(r => r.entregados > 0);
+    const dias = new Set(con.map(r => r.fecha)).size;
+    const fact = ent * CFG.tarifa, base = fact / (1 + CFG.iva), isr = base * CFG.isr_tasa, moto = ent * CFG.pago_motorista;
+    return {
+      ent, rech, dias, turnos: con.length,
+      prom: dias ? ent / dias : 0,
+      porMoto: con.length ? ent / con.length : 0,
+      pctRech: ent + rech ? rech / (ent + rech) : 0,
+      fact, iva: fact - base, base, isr, moto, libre: base - isr - moto,
+    };
+  }
+  function mes(diario) {
+    const paq = Math.round(diario * CFG.dias_mes);
+    const fact = paq * CFG.tarifa, base = fact / (1 + CFG.iva);
+    const isr = base <= CFG.isr_limite_mes ? base * CFG.isr_bajo : CFG.isr_limite_mes * CFG.isr_bajo + (base - CFG.isr_limite_mes) * CFG.isr_alto;
+    const moto = paq * CFG.pago_motorista;
+    return { paq, fact, isr, moto, libre: base - isr - moto };
+  }
+  function porPiloto(rows) {
+    const g = new Map();
+    for (const r of rows) {
+      let p = g.get(r.piloto_id);
+      if (!p) { p = { piloto_id: r.piloto_id, piloto: r.piloto, tipo: r.tipo, dias: 0, entregados: 0, rechazos: 0, mejor: 0 }; g.set(r.piloto_id, p); }
+      p.entregados += r.entregados; p.rechazos += r.rechazos;
+      if (r.entregados > 0) p.dias++;
+      if (r.entregados > p.mejor) p.mejor = r.entregados;
+    }
+    return [...g.values()].map(p => ({ ...p, promedio: p.dias ? p.entregados / p.dias : 0, pct: p.entregados + p.rechazos ? p.rechazos / (p.entregados + p.rechazos) : 0, pago: p.entregados * CFG.pago_motorista }));
+  }
+  function porDia(rows) {
+    const g = new Map();
+    for (const r of rows) {
+      let d = g.get(r.fecha);
+      if (!d) { d = { fecha: r.fecha, entregados: 0, rechazos: 0, motos: 0 }; g.set(r.fecha, d); }
+      d.entregados += r.entregados; d.rechazos += r.rechazos; if (r.entregados > 0) d.motos++;
+    }
+    return [...g.values()].filter(d => d.entregados + d.rechazos > 0).sort((a, b) => a.fecha < b.fecha ? -1 : 1);
+  }
+
+  // ---------- Dibujo ----------
+  function delta(el, now, prev, fmt, betterUp = true) {
+    if (!prev) { el.textContent = 'sin datos del período anterior'; el.className = 'd'; return; }
+    const ch = (now - prev) / prev;
+    const good = betterUp ? ch >= 0 : ch <= 0;
+    el.textContent = (ch >= 0 ? '+' : '') + P(ch) + ' vs período anterior (' + fmt(prev) + ')';
+    el.className = 'd ' + (Math.abs(ch) < 0.005 ? '' : good ? 'up' : 'down');
+  }
+
+  function dibujar() {
+    const t = totales(DP), tp = totales(DP_PREV);
+    $('#k-ent').textContent = N(t.ent);
+    delta($('#d-ent'), t.ent, tp.ent, N);
+    $('#k-prom').textContent = N(t.prom);
+    $('#d-prom').textContent = P(t.prom / CFG.meta_diaria) + ' de la meta de ' + N(CFG.meta_diaria) + ' · ' + N(t.dias) + ' días';
+    $('#k-moto-dia').textContent = D1(t.porMoto);
+    $('#d-moto-dia').textContent = 'Solo días que salió · meta ' + N(CFG.meta_motorista);
+    $('#k-libre').textContent = Q(t.libre);
+    delta($('#d-libre'), t.libre, tp.libre, Q);
+    $('#k-pago').textContent = Q(t.moto);
+    $('#d-pago').textContent = Q(CFG.pago_motorista) + ' por entrega';
+    $('#k-rech').textContent = N(t.rech);
+    $('#d-rech').textContent = P(t.pctRech, 1) + ' de lo que salió';
+
+    const sinDatos = !DP.length;
+    const vacio = id => { $(id).innerHTML = '<div class="empty-in">Sin entregas en este período. Probá con otro rango o tocá “Actualizar desde CPS”.</div>'; };
+    if (sinDatos) { ['#ch-dias', '#ch-prom', '#ch-heat', '#ch-mot', '#ch-rech-pil'].forEach(vacio); }
+    else { chartDias(); chartProm(); chartHeat(); chartMotivos(); chartRechPil(); }
+    chartPend();
+    tablaPilotos();
+    ganancia(t);
+  }
+
+  // Tooltip simple dentro de cada gráfico
+  function tooltip(box) {
+    const t = document.createElement('div'); t.className = 'tip'; box.appendChild(t);
+    return {
+      show(ev, title, lines) {
+        t.innerHTML = '<b>' + esc(title) + '</b>' + lines.map(([k, v]) => '<div><span>' + esc(k) + '</span><span>' + esc(v) + '</span></div>').join('');
+        t.style.display = 'block';
+        const b = box.getBoundingClientRect();
+        let x = ev.clientX - b.left + 12, y = ev.clientY - b.top - t.offsetHeight - 8;
+        if (x + t.offsetWidth > b.width) x = ev.clientX - b.left - t.offsetWidth - 12;
+        if (x < 0) x = 0; if (y < 0) y = ev.clientY - b.top + 16;
+        t.style.left = x + 'px'; t.style.top = y + 'px';
+      },
+      hide() { t.style.display = 'none'; },
+    };
+  }
+  function medir(box, textos, cls) {
+    const s = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    s.setAttribute('style', 'position:absolute;visibility:hidden;width:0;height:0'); box.appendChild(s);
+    let m = 0;
+    for (const tx of textos) { const e = document.createElementNS('http://www.w3.org/2000/svg', 'text'); e.setAttribute('class', cls); e.textContent = tx; s.appendChild(e); m = Math.max(m, e.getComputedTextLength()); }
+    s.remove(); return Math.ceil(m);
+  }
+  function niceMax(v) { const p = Math.pow(10, Math.floor(Math.log10(v || 1))); for (const m of [1, 2, 2.5, 5, 10]) if (m * p >= v) return m * p; return 10 * p; }
+
+  function chartDias() {
+    const box = $('#ch-dias'); box.innerHTML = '';
+    const rows = porDia(DP);
+    const W = Math.max(300, box.clientWidth), H = 250;
+    const ymax = niceMax(Math.max(CFG.meta_diaria, ...rows.map(r => r.entregados)) * 1.08);
+    const ticks = [0, ymax / 4, ymax / 2, ymax * 3 / 4, ymax];
+    const m = { t: 14, r: 6, b: 42, l: medir(box, ticks.map(N), 'tick') + 10 };
+    const iw = W - m.l - m.r, ih = H - m.t - m.b;
+    const band = iw / rows.length, bw = Math.min(32, band * 0.7);
+    const y = v => m.t + ih - (v / ymax) * ih;
+    const cx = i => m.l + band * i + band / 2;
+    const step = Math.ceil(rows.length / Math.max(1, Math.floor(iw / 46)));
+    let s = `<svg viewBox="0 0 ${W} ${H}" height="${H}">`;
+    for (const v of ticks) s += `<line x1="${m.l}" x2="${W - m.r}" y1="${y(v)}" y2="${y(v)}" stroke="#eef2ef"/><text class="tick" x="${m.l - 8}" y="${y(v)}" dy="0.32em" text-anchor="end">${N(v)}</text>`;
+    rows.forEach((r, i) => {
+      s += `<rect data-i="${i}" x="${cx(i) - bw / 2}" y="${y(r.entregados)}" width="${bw}" height="${y(0) - y(r.entregados)}" rx="4" fill="${r.entregados >= CFG.meta_diaria ? '#41AC3A' : '#1F7A3D'}"/>`;
+      if (band >= 22) s += `<text class="val" x="${cx(i)}" y="${y(r.entregados) - 5}" text-anchor="middle">${N(r.entregados)}</text>`;
+      if (i % step === 0) s += `<text class="lbl" x="${cx(i)}" y="${H - m.b + 16}" text-anchor="middle">${esc(dia(r.fecha))}</text><text class="tick" x="${cx(i)}" y="${H - m.b + 31}" text-anchor="middle">${r.motos} ${r.motos === 1 ? 'moto' : 'motos'}</text>`;
+    });
+    s += `<line x1="${m.l}" x2="${W - m.r}" y1="${y(CFG.meta_diaria)}" y2="${y(CFG.meta_diaria)}" stroke="#c0392b" stroke-width="1.5" stroke-dasharray="5 4"/>`;
+    s += `<text class="tick" x="${W - m.r}" y="${y(CFG.meta_diaria) - 6}" text-anchor="end" style="fill:#c0392b">Meta ${N(CFG.meta_diaria)}</text>`;
+    s += `<line x1="${m.l}" x2="${W - m.r}" y1="${y(0)}" y2="${y(0)}" stroke="#cdd8cf"/></svg>`;
+    box.innerHTML = s;
+    const tip = tooltip(box);
+    $$('rect[data-i]', box).forEach(el => {
+      const r = rows[+el.dataset.i];
+      el.addEventListener('pointermove', ev => tip.show(ev, dia(r.fecha) + ' · ' + fechaLarga(r.fecha), [['Entregados', N(r.entregados)], ['Motoristas', N(r.motos)], ['Rechazos', N(r.rechazos)], ['De la meta', P(r.entregados / CFG.meta_diaria)]]));
+      el.addEventListener('pointerleave', tip.hide);
+    });
+  }
+
+  function barrasH(box, rows, { label, value, fmt, color, refLine, refLabel, tipFn }) {
+    box.innerHTML = '';
+    const W = Math.max(280, box.clientWidth), row = 26, top = refLine ? 18 : 4;
+    const lw = medir(box, rows.map(label), 'lbl') + 10;
+    const vw = medir(box, rows.map(r => fmt(value(r))), 'val') + 10;
+    const H = top + rows.length * row + 4;
+    const max = Math.max(refLine || 0, ...rows.map(value)) * 1.02 || 1;
+    const x = v => lw + (v / max) * (W - lw - vw);
+    let s = `<svg viewBox="0 0 ${W} ${H}" height="${H}">`;
+    rows.forEach((r, i) => {
+      const yy = top + i * row;
+      s += `<text class="lbl" x="${lw - 8}" y="${yy + row / 2}" dy="0.32em" text-anchor="end">${esc(label(r))}</text>`;
+      s += `<rect data-i="${i}" x="${lw}" y="${yy + 5}" width="${Math.max(2, x(value(r)) - lw)}" height="${row - 10}" rx="4" fill="${color(r, i)}"/>`;
+      s += `<text class="val" x="${x(value(r)) + 6}" y="${yy + row / 2}" dy="0.32em">${esc(fmt(value(r)))}</text>`;
+    });
+    if (refLine) s += `<line x1="${x(refLine)}" x2="${x(refLine)}" y1="${top - 4}" y2="${H}" stroke="#c0392b" stroke-width="1.5" stroke-dasharray="5 4"/><text class="tick" x="${x(refLine)}" y="${top - 7}" text-anchor="middle" style="fill:#c0392b">${esc(refLabel)}</text>`;
+    s += '</svg>';
+    box.innerHTML = s;
+    if (tipFn) {
+      const tip = tooltip(box);
+      $$('rect[data-i]', box).forEach(el => {
+        const r = rows[+el.dataset.i];
+        el.addEventListener('pointermove', ev => { const [t, l] = tipFn(r); tip.show(ev, t, l); });
+        el.addEventListener('pointerleave', tip.hide);
+      });
+    }
+  }
+
+  function chartProm() {
+    const rows = porPiloto(DP).filter(p => p.dias > 0).sort((a, b) => b.promedio - a.promedio);
+    barrasH($('#ch-prom'), rows, {
+      label: r => r.piloto, value: r => r.promedio, fmt: D1,
+      color: r => r.tipo === 'Apoyo' ? '#b9c6bd' : (r.promedio >= CFG.meta_motorista ? '#41AC3A' : '#1F7A3D'),
+      refLine: CFG.meta_motorista, refLabel: 'Meta ' + N(CFG.meta_motorista),
+      tipFn: r => [r.piloto + (r.tipo === 'Apoyo' ? ' (apoyo)' : ''), [['Por día trabajado', D1(r.promedio)], ['Días que salió', N(r.dias)], ['Mejor día', N(r.mejor)], ['Le falta para la meta', D1(Math.max(0, CFG.meta_motorista - r.promedio))]]],
+    });
+  }
+
+  function chartRechPil() {
+    const rows = porPiloto(DP).filter(p => p.entregados + p.rechazos > 0).sort((a, b) => b.pct - a.pct);
+    barrasH($('#ch-rech-pil'), rows, {
+      label: r => r.piloto, value: r => r.pct, fmt: v => P(v, 1),
+      color: r => r.pct >= 0.15 ? '#c0392b' : '#b9c6bd',
+      tipFn: r => [r.piloto, [['Rechazos', N(r.rechazos)], ['Entregados', N(r.entregados)], ['% rechazo', P(r.pct, 1)]]],
+    });
+  }
+
+  function chartMotivos() {
+    const g = new Map(); for (const r of MOT) g.set(r.motivo, (g.get(r.motivo) || 0) + r.cantidad);
+    const rows = [...g].map(([motivo, n]) => ({ motivo, n })).sort((a, b) => b.n - a.n);
+    const box = $('#ch-mot');
+    if (!rows.length) { box.innerHTML = '<div class="empty-in">Sin rechazos en este período.</div>'; return; }
+    const total = rows.reduce((s, r) => s + r.n, 0);
+    // Etiqueta arriba de cada barra: los motivos son largos
+    const W = Math.max(260, box.clientWidth), row = 38, vw = 74;
+    const H = rows.length * row + 2;
+    const max = rows[0].n;
+    let s = `<svg viewBox="0 0 ${W} ${H}" height="${H}">`;
+    rows.forEach((r, i) => {
+      const yy = i * row, w = Math.max(2, (r.n / max) * (W - vw));
+      s += `<text class="lbl" x="0" y="${yy + 12}">${esc(cap(r.motivo))}</text>`;
+      s += `<rect x="0" y="${yy + 18}" width="${w}" height="12" rx="4" fill="${i === 0 ? '#1F7A3D' : '#b9c6bd'}"/>`;
+      s += `<text class="val" x="${w + 6}" y="${yy + 24}" dy="0.32em">${N(r.n)} · ${P(r.n / total)}</text>`;
+    });
+    box.innerHTML = s + '</svg>';
+  }
+
+  function chartPend() {
+    const box = $('#ch-pend');
+    if (!PEND.corte) { box.innerHTML = '<div class="empty-in">Todavía no hay datos de pendientes. Se llenan con la próxima actualización.</div>'; $('#pend-note').textContent = 'Paquetes en CPS que aún no salen.'; return; }
+    const rows = PEND.rows.map(r => ({ ...r, total: r.recepcion + r.activo })).sort((a, b) => b.total - a.total);
+    const total = rows.reduce((s, r) => s + r.total, 0);
+    $('#pend-note').textContent = N(total) + ' paquetes en CPS que aún no salen · corte del ' + cuando(PEND.corte);
+    if (!rows.length) { box.innerHTML = '<div class="empty-in">No hay pendientes.</div>'; return; }
+    box.innerHTML = '';
+    const W = Math.max(280, box.clientWidth), row = 30, top = 22;
+    const lw = medir(box, rows.map(r => r.ruta), 'lbl') + 10, vw = 44;
+    const H = top + rows.length * row;
+    const max = Math.max(...rows.map(r => r.total)) || 1;
+    const x = v => lw + (v / max) * (W - lw - vw);
+    let s = `<svg viewBox="0 0 ${W} ${H}" height="${H}">`;
+    s += `<rect x="${lw}" y="4" width="9" height="9" rx="2" fill="#1F7A3D"/><text class="tick" x="${lw + 14}" y="9" dy="0.32em">En recepción</text>`;
+    s += `<rect x="${lw + 110}" y="4" width="9" height="9" rx="2" fill="#41AC3A"/><text class="tick" x="${lw + 124}" y="9" dy="0.32em">Activo en centro</text>`;
+    rows.forEach((r, i) => {
+      const yy = top + i * row;
+      s += `<text class="lbl" x="${lw - 8}" y="${yy + row / 2}" dy="0.32em" text-anchor="end">${esc(r.ruta)}</text>`;
+      s += `<rect data-i="${i}" x="${lw}" y="${yy + 7}" width="${Math.max(0, x(r.recepcion) - lw)}" height="${row - 14}" rx="3" fill="#1F7A3D"/>`;
+      s += `<rect data-i="${i}" x="${x(r.recepcion)}" y="${yy + 7}" width="${Math.max(0, x(r.total) - x(r.recepcion))}" height="${row - 14}" fill="#41AC3A"/>`;
+      s += `<text class="val" x="${x(r.total) + 6}" y="${yy + row / 2}" dy="0.32em">${N(r.total)}</text>`;
+    });
+    box.innerHTML = s + '</svg>';
+    const tip = tooltip(box);
+    $$('rect[data-i]', box).forEach(el => {
+      const r = rows[+el.dataset.i];
+      el.addEventListener('pointermove', ev => tip.show(ev, r.ruta, [['En recepción', N(r.recepcion)], ['Activo en centro', N(r.activo)], ['Total', N(r.total)]]));
+      el.addEventListener('pointerleave', tip.hide);
+    });
+  }
+
+  function chartHeat() {
+    const box = $('#ch-heat'); box.innerHTML = '';
+    const fechas = [...new Set(DP.filter(r => r.entregados + r.rechazos > 0).map(r => r.fecha))].sort();
+    const pil = porPiloto(DP).sort((a, b) => (a.tipo === b.tipo ? b.entregados - a.entregados : a.tipo === 'Apoyo' ? 1 : -1));
+    const cell = new Map(DP.map(r => [r.piloto_id + '|' + r.fecha, r]));
+    const lw = medir(box, pil.map(p => p.piloto), 'lbl') + 10;
+    const tw = medir(box, ['Total', ...pil.map(p => N(p.entregados))], 'val') + 14;
+    const minCol = 38;
+    const W = Math.max(box.clientWidth, lw + tw + fechas.length * minCol);
+    const cw = (W - lw - tw) / fechas.length, ch = 28, top = 22;
+    const H = top + pil.length * ch;
+    const vmax = Math.max(1, ...DP.map(r => r.entregados));
+    let s = `<svg viewBox="0 0 ${W} ${H}" height="${H}" style="width:${W}px;max-width:none">`;
+    fechas.forEach((f, j) => { s += `<text class="tick" x="${lw + cw * j + cw / 2}" y="12" text-anchor="middle">${esc(dia(f))}</text>`; });
+    s += `<text class="tick" x="${W - 2}" y="12" text-anchor="end">Total</text>`;
+    pil.forEach((p, i) => {
+      const yy = top + i * ch;
+      s += `<text class="lbl" x="${lw - 8}" y="${yy + ch / 2}" dy="0.32em" text-anchor="end" ${p.tipo === 'Apoyo' ? 'style="fill:#8a988e"' : ''}>${esc(p.piloto)}</text>`;
+      fechas.forEach((f, j) => {
+        const r = cell.get(p.piloto_id + '|' + f);
+        const e = r ? r.entregados : 0;
+        const x0 = lw + cw * j + 2, w = cw - 4;
+        if (e > 0) {
+          const o = 0.14 + 0.86 * (e / vmax);
+          s += `<rect data-p="${i}" data-f="${j}" x="${x0}" y="${yy + 2}" width="${w}" height="${ch - 4}" rx="4" fill="#1F7A3D" fill-opacity="${o.toFixed(2)}"/>`;
+          s += `<text class="val" x="${x0 + w / 2}" y="${yy + ch / 2}" dy="0.32em" text-anchor="middle" style="pointer-events:none;fill:${o > 0.55 ? '#fff' : 'var(--ink)'}">${N(e)}</text>`;
+        } else {
+          s += `<rect data-p="${i}" data-f="${j}" x="${x0}" y="${yy + 2}" width="${w}" height="${ch - 4}" rx="4" fill="none" stroke="#eef2ef"/>`;
+        }
+      });
+      s += `<text class="val" x="${W - 2}" y="${yy + ch / 2}" dy="0.32em" text-anchor="end">${N(p.entregados)}</text>`;
+    });
+    box.innerHTML = s + '</svg>';
+    const tip = tooltip(box);
+    $$('rect[data-p]', box).forEach(el => {
+      const p = pil[+el.dataset.p], f = fechas[+el.dataset.f], r = cell.get(p.piloto_id + '|' + f);
+      el.addEventListener('pointermove', ev => tip.show(ev, p.piloto + ' · ' + dia(f), r && (r.entregados || r.rechazos) ? [['Entregados', N(r.entregados)], ['Rechazos', N(r.rechazos)]] : [['No salió', '']]));
+      el.addEventListener('pointerleave', tip.hide);
+    });
+  }
+
+  function tablaPilotos() {
+    const tb = $('#tbl-pil tbody');
+    const rows = porPiloto(DP).sort((a, b) => {
+      const va = a[sortKey], vb = b[sortKey];
+      return (typeof va === 'number' ? va - vb : String(va).localeCompare(String(vb), 'es')) * sortDir;
+    });
+    if (!rows.length) { tb.innerHTML = '<tr><td colspan="9" class="empty-in">Sin entregas en este período.</td></tr>'; return; }
+    tb.innerHTML = rows.map(r => `<tr class="${r.tipo === 'Apoyo' ? 'apoyo' : ''}">
+      <td>${esc(r.piloto)}</td>
+      <td><select data-id="${esc(r.piloto_id)}" aria-label="Tipo de ${esc(r.piloto)}"><option ${r.tipo === 'Fijo' ? 'selected' : ''}>Fijo</option><option ${r.tipo === 'Apoyo' ? 'selected' : ''}>Apoyo</option></select></td>
+      <td class="r num">${N(r.dias)}</td>
+      <td class="r num">${N(r.entregados)}</td>
+      <td class="r num ${r.promedio >= CFG.meta_motorista ? 'good' : ''}">${D1(r.promedio)}</td>
+      <td class="r num ${r.mejor >= CFG.meta_motorista ? 'good' : ''}">${N(r.mejor)}</td>
+      <td class="r num">${N(r.rechazos)}</td>
+      <td class="r num ${r.pct >= 0.15 ? 'bad' : ''}">${P(r.pct, 1)}</td>
+      <td class="r num total">${Q(r.pago)}</td></tr>`).join('');
+    $$('select[data-id]', tb).forEach(sel => sel.addEventListener('change', async () => {
+      const id = Number(sel.dataset.id), tipo = sel.value;
+      const { error } = await sb.from('temu_pilotos').update({ tipo, updated_at: new Date().toISOString() }).eq('piloto_id', id);
+      if (error) { status('No se pudo cambiar el tipo: ' + esc(error.message), 'err'); return; }
+      DP.forEach(r => { if (r.piloto_id === id) r.tipo = tipo; });
+      dibujar();
+    }));
+  }
+  $$('#tbl-pil th').forEach(th => th.querySelector('button').addEventListener('click', () => {
+    const k = th.dataset.k;
+    sortDir = sortKey === k ? -sortDir : (k === 'piloto' || k === 'tipo' ? 1 : -1);
+    sortKey = k;
+    $$('#tbl-pil th').forEach(o => o.removeAttribute('aria-sort'));
+    th.setAttribute('aria-sort', sortDir === 1 ? 'ascending' : 'descending');
+    tablaPilotos();
+  }));
+
+  function ganancia(t) {
+    const desde = $('#f-desde').value, hasta = $('#f-hasta').value;
+    $('#gan-note').textContent = 'Del ' + fechaLarga(desde) + ' al ' + fechaLarga(hasta) + ', solo paquetes entregados.';
+    $('#l-fact').textContent = 'Facturado a CPS (' + N(t.ent) + ' × ' + Q(CFG.tarifa) + ')';
+    $('#l-iva').textContent = '(−) IVA ' + P(CFG.iva) + ' incluido';
+    $('#l-isr').textContent = '(−) ISR ' + P(CFG.isr_tasa);
+    $('#l-moto').textContent = '(−) Motoristas (' + Q(CFG.pago_motorista) + ' c/u)';
+    $('#g-fact').textContent = Q(t.fact); $('#g-iva').textContent = Q(t.iva); $('#g-base').textContent = Q(t.base);
+    $('#g-isr').textContent = Q(t.isr); $('#g-moto').textContent = Q(t.moto); $('#g-libre').textContent = Q(t.libre);
+    $('#g-por').textContent = t.ent ? 'Libre por entrega: ' + Q(t.libre / t.ent) + ' de cada ' + Q(CFG.tarifa) + '.' : '';
+    $('#proy-note').textContent = 'Mes de ' + N(CFG.dias_mes) + ' días. ISR del mes: ' + P(CFG.isr_bajo) + ' hasta ' + Q(CFG.isr_limite_mes) + ' sin IVA y ' + P(CFG.isr_alto) + ' sobre lo que pase.';
+    const esc2 = [['Ritmo actual (' + N(t.prom) + ' diarios)', mes(t.prom)], ['Meta (' + N(CFG.meta_diaria) + ' diarios)', mes(CFG.meta_diaria)]];
+    $('#tbl-proy tbody').innerHTML = esc2.map(([n, m]) => `<tr><td>${esc(n)}</td><td class="r num">${N(m.paq)}</td><td class="r num">${Q(m.fact)}</td><td class="r num">${Q(m.isr)}</td><td class="r num">${Q(m.moto)}</td><td class="r num total">${Q(m.libre)}</td></tr>`).join('');
+  }
+
+  // ---------- CSV ----------
+  $('#btn-csv').addEventListener('click', () => {
+    const rows = porPiloto(DP).sort((a, b) => b.entregados - a.entregados);
+    const head = ['Piloto', 'Tipo', 'Dias', 'Entregados', 'Por dia', 'Mejor dia', 'Rechazos', '% rechazo', 'Pago (Q)'];
+    const q = v => '"' + String(v).replace(/"/g, '""') + '"';
+    const lines = [head.map(q).join(',')].concat(rows.map(r => [r.piloto, r.tipo, r.dias, r.entregados, r.promedio.toFixed(1), r.mejor, r.rechazos, (r.pct * 100).toFixed(1), r.pago.toFixed(2)].map(q).join(',')));
+    const blob = new Blob(['﻿' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' });
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+    a.download = `temu_pilotos_${$('#f-desde').value}_${$('#f-hasta').value}.csv`; a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  });
+
+  // ---------- Sincronización con CPS ----------
+  async function infoSync() {
+    const el = $('#sync-info');
+    const { data } = await sb.from('temu_sync_runs').select('*').order('started_at', { ascending: false }).limit(10);
+    const runs = data || [];
+    const last = runs.find(r => r.finished_at) || null, live = runs.find(r => !r.finished_at && Date.now() - Date.parse(r.started_at) < 10 * 6e4);
+    if (live) el.innerHTML = '<span class="dot run"></span><span>Actualizando desde CPS… (empezó ' + esc(cuando(live.started_at)) + ')</span>';
+    else if (!last) el.innerHTML = '<span class="dot"></span><span>Todavía no se ha actualizado nunca. Tocá “Actualizar desde CPS”.</span>';
+    else el.innerHTML = '<span class="dot ' + (last.ok ? 'ok' : 'bad') + '"></span><span>Última actualización: ' + esc(cuando(last.finished_at)) +
+      ' · ' + N(last.envios) + ' envíos del ' + esc(fechaLarga(last.desde)) + ' al ' + esc(fechaLarga(last.hasta)) + (last.ok ? '' : ' · <b>' + esc(last.error || 'con errores') + '</b>') + '</span>';
+    $('#tbl-runs tbody').innerHTML = runs.length ? runs.map(r => {
+      const fallas = (r.detalle || []).filter(d => d.error).map(d => d.piloto).join(', ');
+      const res = !r.finished_at ? 'En curso…' : r.ok ? 'Bien' : (r.error || 'Con errores') + (fallas ? ' (' + fallas + ')' : '');
+      return `<tr><td>${esc(cuando(r.started_at))}</td><td>${r.origen === 'automatico' ? 'Automática' : 'Botón' + (r.pedido_por ? ' · ' + esc(r.pedido_por) : '')}</td><td>${esc(fechaLarga(r.desde))} – ${esc(fechaLarga(r.hasta))}</td><td class="r num">${N(r.envios)}</td><td class="${r.finished_at && !r.ok ? 'bad' : ''}">${esc(res)}</td></tr>`;
+    }).join('') : '<tr><td colspan="5" class="empty-in">Sin actualizaciones todavía.</td></tr>';
+    return live;
+  }
+
+  $('#btn-sync').addEventListener('click', async () => {
+    let desde = $('#f-desde').value, hasta = $('#f-hasta').value;
+    const h = hoyGT(); if (hasta > h) hasta = h;
+    if (diffDays(desde, hasta) > 30) desde = addDays(hasta, -30);
+    const btn = $('#btn-sync'); btn.disabled = true;
+    status('Pidiéndole los datos a CPS del ' + esc(fechaLarga(desde)) + ' al ' + esc(fechaLarga(hasta)) + '… puede tardar unos minutos.', 'work');
+    try {
+      const { data, error } = await sb.functions.invoke('temu-sync', { body: { desde, hasta } });
+      if (error) throw error;
+      if (!data || !data.run_id) throw new Error((data && (data.detalle || data.error)) || 'respuesta inesperada');
+      const t0 = Date.now();
+      for (;;) {
+        await new Promise(r => setTimeout(r, 4000));
+        const { data: run } = await sb.from('temu_sync_runs').select('*').eq('id', data.run_id).maybeSingle();
+        if (run && run.finished_at) {
+          await infoSync();
+          await cargar();
+          if (run.ok) { status('Listo: ' + N(run.envios) + ' envíos actualizados desde CPS.', 'ok'); setTimeout(hideStatus, 5000); }
+          else status('Terminó con problemas: ' + esc(run.error || '') + '. Lo que sí llegó ya está en el tablero; el detalle está en Ajustes.', 'err');
+          break;
+        }
+        if (Date.now() - t0 > 8 * 6e4) { status('CPS está tardando mucho. Revisá en unos minutos en Ajustes → actualizaciones.', 'err'); break; }
+      }
+    } catch (e) {
+      console.error(e);
+      status('No se pudo actualizar: ' + esc(e.message || String(e)), 'err');
+    } finally { btn.disabled = false; }
+  });
+
+  // ---------- Ajustes ----------
+  function llenarCfg() {
+    $$('#cfg-form input').forEach(i => { const v = CFG[i.name]; i.value = i.hasAttribute('data-pct') ? +(v * 100).toFixed(2) : v; });
+  }
+  $('#cfg-save').addEventListener('click', async () => {
+    const upd = {};
+    for (const i of $$('#cfg-form input')) {
+      const v = Number(i.value);
+      if (i.value === '' || !isFinite(v) || v < 0) { $('#cfg-msg').textContent = 'Revisá: ' + i.closest('label').firstChild.textContent.trim(); return; }
+      upd[i.name] = i.hasAttribute('data-pct') ? v / 100 : v;
+    }
+    const u = await window.dropperAuth.getUser();
+    const { error } = await sb.from('temu_config').update({ ...upd, updated_at: new Date().toISOString(), updated_by: u ? u.email : null }).eq('id', 1);
+    if (error) { $('#cfg-msg').textContent = 'No se pudo guardar: ' + error.message; return; }
+    Object.assign(CFG, upd);
+    $('#cfg-msg').textContent = 'Guardado.';
+    dibujar();
+  });
+
+  // ---------- Pestañas, filtros ----------
+  $$('#tabs button').forEach(b => b.addEventListener('click', () => {
+    $$('#tabs button').forEach(o => o.classList.toggle('active', o === b));
+    $$('.tm-tab').forEach(s => s.classList.toggle('show', s.dataset.t === b.dataset.t));
+    if (DP.length) dibujar();   // re-medir gráficos ocultos
+  }));
+  function aplicarPreset(p) {
+    const [d, h] = preset(p);
+    $('#f-desde').value = d; $('#f-hasta').value = h;
+    $$('#presets button').forEach(b => b.classList.toggle('active', b.dataset.p === p));
+    cargar();
+  }
+  $$('#presets button').forEach(b => b.addEventListener('click', () => aplicarPreset(b.dataset.p)));
+  ['#f-desde', '#f-hasta'].forEach(s => $(s).addEventListener('change', () => { $$('#presets button').forEach(b => b.classList.remove('active')); cargar(); }));
+  let rt; window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(() => DP.length && dibujar(), 150); });
+
+  $('#logout').addEventListener('click', e => { e.preventDefault(); window.dropperAuth.signOut(); });
+
+  (async function init() {
+    const guard = await window.dropperAuth.requireSession();
+    if (guard === null) return;
+    if (guard.previewMode) { $('#notice').classList.add('show'); $('#btn-sync').disabled = true; return; }
+    window.dropperNav.setUser(guard.user.email || '');
+    await cargarConfig();
+    llenarCfg();
+    const live = await infoSync();
+    aplicarPreset('semana');
+    if (live) {
+      const iv = setInterval(async () => { if (!(await infoSync())) { clearInterval(iv); cargar(); } }, 5000);
+    }
+  })();
+})();
+</script>
+</body>
+</html>

@@ -10,3 +10,8 @@ verify_jwt = false
 # función (así podemos responder bien el preflight CORS del navegador).
 [functions.whatsapp-send]
 verify_jwt = false
+
+# Sincronizador de Temu con CPS. Verifica DENTRO de la función el JWT del usuario
+# (botón de la página) o el secreto de la tarea automática (header x-temu-cron).
+[functions.temu-sync]
+verify_jwt = false

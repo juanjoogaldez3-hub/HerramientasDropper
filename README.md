@@ -19,6 +19,7 @@ Conserva toda la lógica de tu generador original (lectura de Excel, corrección
 | `generador.html` | **Generador de Reportes** (Excel/PDF por cliente, consolidado, filtros) |
 | `pagos.html` | **Pagos a Mensajeros** (pago = entregas × tarifa fija, con planilla y detalle) |
 | `historial.html` | **Historial** de reportes generados |
+| `temu.html` | **Tablero Temu** — entregas de Temu traídas de CPS LastMile (meta diaria, pilotos, pago y ganancia, rechazos, pendientes). Configuración en `TEMU_SETUP.md` |
 | `cobertura.html` | **Mapa de Cobertura** (zonas y municipios con / sin cobertura, áreas dibujadas, consulta por dirección) |
 | `assets/data/gt-areas.js` | Límites de los municipios del departamento y de las zonas de la capital (© OpenStreetMap) |
 | `assets/js/config.js` | 👈 **Aquí pegás tus llaves de Supabase** |
