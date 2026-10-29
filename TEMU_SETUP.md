@@ -11,63 +11,36 @@ pide los envíos de cada piloto y los pendientes, y los guarda en Supabase
 **Qué se guarda:** número de envío, piloto, fecha, estado (entregado / rechazo), motivo del
 rechazo, tamaño y costo. **No** se guardan direcciones, teléfonos ni nombres de quien recibe.
 
-Son 4 pasos, una sola vez.
+## Estado (29 oct 2026)
 
----
+Ya está hecho en Supabase: las tablas (migración `20261029120000_temu.sql`), la función
+`temu-sync` desplegada y las dos tareas automáticas (migración `20261029140000_temu_cron.sql`):
+- **Cada hora** de 6 a. m. a 11 p. m.: trae los últimos 3 días.
+- **Cada noche** a las 2:17 a. m.: repasa los últimos 8 días por si CPS cambió algún estado.
 
-## Paso 1 — Crear las tablas
+La clave de las tareas automáticas se generó sola y vive en el cofre de Supabase (`temu_cron_secret`);
+no hay que copiarla a ningún lado.
 
-1. **supabase.com** → tu proyecto → **SQL Editor** → **New query**.
-2. Copiá **todo** `supabase/migrations/20261029120000_temu.sql`, pegalo y **Run**. Debe decir *Success*.
+## Lo único que falta: el usuario de CPS
 
-Crea `temu_envios`, `temu_pilotos`, `temu_pendientes`, `temu_sync_runs`, `temu_config`
-(con las tarifas: Q9.50 por entrega, Q5 al motorista, IVA 12 %, ISR 7 %, meta 500 diarios)
-y las vistas que usa la página. Es seguro correrlo otra vez.
-
-## Paso 2 — Guardar los secretos
-
-Inventá una frase larga para `TEMU_CRON_SECRET` (por ejemplo `dropper-temu-8312-xq`); sirve para
-que la tarea automática pueda llamar a la función. Después:
-
-**Desde el panel:** **Edge Functions → Secrets → Add new secret** y agregá:
+En **supabase.com** → proyecto → **Edge Functions → Secrets** agregá:
 
 | Nombre | Valor |
 |---|---|
 | `CPS_USERNAME` | tu usuario de CPS LastMile |
 | `CPS_PASSWORD` | tu contraseña de CPS LastMile |
-| `TEMU_CRON_SECRET` | la frase que inventaste |
-
-**O por terminal** (parado en esta carpeta):
-
-```bash
-supabase secrets set CPS_USERNAME='tu_usuario' CPS_PASSWORD='tu_contraseña' TEMU_CRON_SECRET='dropper-temu-8312-xq'
-```
 
 > 🔒 La contraseña queda guardada **solo** en los secretos de Supabase. Nunca la pongas en el código ni en GitHub (este repo es público).
 > Si cambiás la contraseña en CPS, actualizá `CPS_PASSWORD` aquí también.
 
-## Paso 3 — Desplegar la función
+**Probalo:** abrí **Temu** en la página de herramientas → **Actualizar desde CPS**.
+En 1–3 minutos debe decir *"Listo: N envíos actualizados desde CPS"*. Si algo falla, **Ajustes** muestra cada actualización y qué piloto falló.
 
-```bash
-supabase functions deploy temu-sync
-```
+## Si hay que volver a montarlo en otro proyecto
 
-*(Si nunca usaste la CLI en esta compu: `supabase login` y luego `supabase link --project-ref uroqcxlwdzkjmkrpjmxf`.)*
-
-**Probala:** abrí `temu.html` en la página de herramientas → **Actualizar desde CPS**.
-En 1–3 minutos debe decir *"Listo: N envíos actualizados desde CPS"*.
-Si algo falla, **Ajustes** muestra cada actualización y qué piloto falló.
-
-## Paso 4 — Que se actualice sola
-
-1. Abrí `supabase/temu_cron.sql`, reemplazá `PEGAR_AQUI_EL_TEMU_CRON_SECRET` por tu frase (la del Paso 2).
-2. Pegalo en el **SQL Editor** → **Run**.
-
-Quedan dos tareas:
-- **Cada hora** de 6 a. m. a 11 p. m.: trae los últimos 3 días.
-- **Cada noche** a las 2:17 a. m.: repasa los últimos 8 días por si CPS cambió algún estado.
-
----
+1. Correr las dos migraciones de `supabase/migrations/` que empiezan con `20261029` (SQL Editor o `supabase db push`). En la de `temu_cron`, cambiar la URL del proyecto.
+2. `supabase functions deploy temu-sync`
+3. Cargar los secretos `CPS_USERNAME` y `CPS_PASSWORD`.
 
 ## Cómo se calcula
 
@@ -85,11 +58,11 @@ Quedan dos tareas:
 
 | Síntoma | Solución |
 |---|---|
-| "No se pudieron cargar los datos" | Falta correr el Paso 1. |
-| "CPS no aceptó el usuario o la contraseña" | Revisá `CPS_USERNAME` / `CPS_PASSWORD` (Paso 2). |
-| "Faltan los secretos CPS_USERNAME / CPS_PASSWORD" | Cargá los secretos y volvé a desplegar (Pasos 2 y 3). |
+| "No se pudieron cargar los datos" | Falta correr la migración de las tablas. |
+| "CPS no aceptó el usuario o la contraseña" | Revisá `CPS_USERNAME` / `CPS_PASSWORD`. |
+| "Faltan los secretos CPS_USERNAME / CPS_PASSWORD" | Cargá los dos secretos (ver arriba). |
 | Un piloto sale con error en Ajustes | CPS tardó o falló con ese piloto; la próxima actualización lo vuelve a intentar. |
-| No se actualiza sola | Revisá el Paso 4: `select jobname, schedule from cron.job;` debe mostrar las dos tareas. |
+| No se actualiza sola | En el SQL Editor, `select jobname, schedule from cron.job;` debe mostrar `temu-sync-cada-hora` y `temu-sync-noche`. |
 | Dejó de funcionar de un día para otro | CPS pudo cambiar su sistema; la conexión no es oficial y hay que ajustar `supabase/functions/temu-sync`. |
 
 **Pruebas:** `deno test supabase/functions/temu-sync/cps_test.ts`

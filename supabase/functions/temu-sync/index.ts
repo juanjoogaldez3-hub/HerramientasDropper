@@ -185,7 +185,17 @@ Deno.serve(async (req) => {
   let origen = "boton";
   let pedidoPor: string | null = null;
   const cron = req.headers.get("x-temu-cron") ?? "";
-  if (CRON_SECRET && cron && cron === CRON_SECRET) {
+  let esCron = false;
+  if (cron) {
+    if (CRON_SECRET && cron === CRON_SECRET) esCron = true;
+    else {
+      // La clave de la tarea automática vive en el cofre de Supabase (ver migración temu_cron).
+      const { data } = await admin.rpc("temu_cron_ok", { p: cron });
+      esCron = data === true;
+    }
+    if (!esCron) return json({ error: "no_autorizado" }, 401);
+  }
+  if (esCron) {
     origen = "automatico";
   } else {
     const authHeader = req.headers.get("Authorization") ?? "";
