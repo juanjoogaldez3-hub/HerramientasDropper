@@ -754,7 +754,7 @@
           await infoSync();
           await cargar();
           if (run.ok) { status('Listo: ' + N(run.envios) + ' envíos actualizados desde CPS.', 'ok'); setTimeout(hideStatus, 5000); }
-          else status('Terminó con problemas: ' + esc(run.error || '') + '. Lo que sí llegó ya está en el tablero; el detalle está en Ajustes.', 'err');
+          else status('Terminó con problemas: ' + esc(run.error || '') + '.' + (run.envios ? ' Lo que sí llegó ya está en el tablero; el detalle está en Ajustes.' : ''), 'err');
           break;
         }
         if (Date.now() - t0 > 8 * 6e4) { status('CPS está tardando mucho. Revisá en unos minutos en Ajustes → actualizaciones.', 'err'); break; }

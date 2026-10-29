@@ -2,7 +2,14 @@
 // Dropper · Temu — Funciones puras (fechas y conversión de envíos de CPS)
 // Separadas para poder probarlas (ver cps_test.ts).
 // ============================================================
+import { createHash } from "node:crypto";
+
 export const TZ_OFFSET_H = -6;          // Guatemala, sin horario de verano
+
+// La página de CPS manda la contraseña como MD5 en hexadecimal (paquete "md5" de npm).
+export function md5hex(texto: string): string {
+  return createHash("md5").update(texto, "utf8").digest("hex");
+}
 
 export type Piloto = { id: number; nombre: string };
 

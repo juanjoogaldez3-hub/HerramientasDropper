@@ -15,7 +15,7 @@
 // la página consulta temu_sync_runs para saber cuándo terminó.
 // ============================================================
 import { createClient } from "npm:@supabase/supabase-js@2";
-import { aFila, DAY, esFecha, finUTC, hoyLocal, inicioUTC, sumarDias, type Piloto } from "./cps.ts";
+import { aFila, DAY, md5hex, esFecha, finUTC, hoyLocal, inicioUTC, sumarDias, type Piloto } from "./cps.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_KEY  = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -67,7 +67,7 @@ async function loginCps(): Promise<{ token: string; idEmpresa: number | null }> 
   const CPS_PASS = Deno.env.get("CPS_PASSWORD") ?? "";
   const faltan = [!CPS_USER && "CPS_USERNAME", !CPS_PASS && "CPS_PASSWORD"].filter(Boolean);
   if (faltan.length) throw new Error("Falta el secreto " + faltan.join(" y ") + " en Supabase (Edge Functions → Secrets)");
-  const r = await cps("/authenticate", { body: { username: CPS_USER, password: CPS_PASS } });
+  const r = await cps("/authenticate", { body: { username: CPS_USER, password: md5hex(CPS_PASS) } });
   const token = r?.DATA?.TOKEN;
   if (r?.MSM !== "OK" || !token) throw new Error("CPS no aceptó el usuario o la contraseña");
   return { token, idEmpresa: r?.DATA?.EMPRESA?.ID_EMPRESA ?? null };
@@ -127,7 +127,7 @@ async function sincronizar(runId: string, desde: string, hasta: string) {
         try {
           const filas = await enviosPiloto(token, p, desde, hasta);
           for (let i = 0; i < filas.length; i += 500) {
-            const { error } = await admin.from("temu_envios").upsert(filas.slice(i, i + 500), { onConflict: "id_envio_detalle" });
+            const { error } = await admin.from("temu_envios").upsert(filas.slice(i, i + 500), { onConflict: "id_envio_detalle,piloto_id" });
             if (error) throw new Error(error.message);
           }
           total += filas.length;

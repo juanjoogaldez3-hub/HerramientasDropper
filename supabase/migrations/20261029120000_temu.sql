@@ -13,7 +13,7 @@
 -- Guardamos solo lo necesario para el tablero: nada de direcciones,
 -- teléfonos ni nombres de quien recibe.
 create table if not exists public.temu_envios (
-  id_envio_detalle  bigint primary key,            -- ID_ENVIO_DETALLE de CPS (un paquete)
+  id_envio_detalle  bigint not null,               -- ID_ENVIO_DETALLE de CPS (un paquete)
   id_envio          bigint,                         -- ID_ENVIO de CPS
   correlativo       text,                           -- p. ej. ENV26/0709070
   piloto_id         bigint not null,                -- ID_USUARIO del piloto en CPS

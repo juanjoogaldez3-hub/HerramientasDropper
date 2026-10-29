@@ -1,5 +1,5 @@
 // Pruebas de la conversión de envíos de CPS.  Correr con:  deno test supabase/functions/temu-sync/cps_test.ts
-import { aFila, finUTC, inicioUTC, sumarDias } from "./cps.ts";
+import { aFila, finUTC, inicioUTC, md5hex, sumarDias } from "./cps.ts";
 
 function igual(a: unknown, b: unknown, msg: string) {
   if (JSON.stringify(a) !== JSON.stringify(b)) throw new Error(`${msg}: esperaba ${JSON.stringify(b)}, salió ${JSON.stringify(a)}`);
@@ -51,4 +51,9 @@ Deno.test("rechazo de noche cae en el día de Guatemala, con su motivo", () => {
 Deno.test("sin fecha o sin id no se guarda", () => {
   igual(aFila({ ...soloRechazo, FECHA_REGISTRO: null }, piloto), null, "sin fecha");
   igual(aFila({ ...soloRechazo, ID_ENVIO_DETALLE: undefined }, piloto), null, "sin id");
+});
+
+Deno.test("contraseña en MD5 como la manda la página de CPS", () => {
+  igual(md5hex("abc"), "900150983cd24fb0d6963f7d28e17f72", "md5 abc");
+  igual(md5hex("contraseña"), "4c882dcb24bcb1bc225391a602feca7c", "md5 con ñ (utf-8)");
 });
