@@ -15,8 +15,10 @@ rechazo, tamaño y costo. **No** se guardan direcciones, teléfonos ni nombres d
 
 Ya está hecho en Supabase: las tablas (migración `20261029120000_temu.sql`), la función
 `temu-sync` desplegada y las dos tareas automáticas (migración `20261029140000_temu_cron.sql`):
-- **Cada hora** de 6 a. m. a 11 p. m.: trae los últimos 3 días.
+- **Cada 5 minutos** de 6 a. m. a 10 p. m.: trae el día de hoy (para la pestaña **Hoy**).
+- **Cada hora** (minuto 32) de 6 a. m. a 11 p. m.: repasa los últimos 3 días.
 - **Cada noche** a las 2:17 a. m.: repasa los últimos 8 días por si CPS cambió algún estado.
+- **Cada noche** a las 3:41 a. m.: borra el registro de actualizaciones y las fotos de pendientes de hace más de 14 días.
 
 La clave de las tareas automáticas se generó sola y vive en el cofre de Supabase (`temu_cron_secret`);
 no hay que copiarla a ningún lado.
@@ -62,7 +64,7 @@ En 1–3 minutos debe decir *"Listo: N envíos actualizados desde CPS"*. Si algo
 | "CPS no aceptó el usuario o la contraseña" | Revisá `CPS_USERNAME` / `CPS_PASSWORD`. |
 | "Faltan los secretos CPS_USERNAME / CPS_PASSWORD" | Cargá los dos secretos (ver arriba). |
 | Un piloto sale con error en Ajustes | CPS tardó o falló con ese piloto; la próxima actualización lo vuelve a intentar. |
-| No se actualiza sola | En el SQL Editor, `select jobname, schedule from cron.job;` debe mostrar `temu-sync-cada-hora` y `temu-sync-noche`. |
+| No se actualiza sola | En el SQL Editor, `select jobname, schedule from cron.job;` debe mostrar `temu-sync-cada-5-min`, `temu-sync-cada-hora`, `temu-sync-noche` y `temu-limpieza`. |
 | Dejó de funcionar de un día para otro | CPS pudo cambiar su sistema; la conexión no es oficial y hay que ajustar `supabase/functions/temu-sync`. |
 
 **Pruebas:** `deno test supabase/functions/temu-sync/cps_test.ts`

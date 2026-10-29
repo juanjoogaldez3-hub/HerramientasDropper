@@ -42,6 +42,17 @@
   .stat .d.up{color:var(--green)} .stat .d.down{color:#c0392b}
   .stat.hero .v{color:var(--green-dk)}
 
+  body.modo-hoy .solo-periodo{display:none!important}
+  body:not(.modo-hoy) .solo-hoy{display:none!important}
+  .hoy-head{display:flex;align-items:baseline;justify-content:space-between;gap:10px;flex-wrap:wrap;margin:0 2px 12px}
+  .hoy-head h3{font-family:'Sora',sans-serif;font-weight:700;font-size:1.05rem}
+  .hoy-head .live{font-size:.8rem;color:var(--muted);display:inline-flex;align-items:center;gap:6px}
+  .hoy-head .live .dot{width:8px;height:8px;border-radius:50%;background:var(--lime);animation:pulse 2s infinite}
+  .meta-bar{height:10px;border-radius:6px;background:var(--grey);overflow:hidden;margin-top:8px}
+  .meta-bar span{display:block;height:100%;background:linear-gradient(90deg,var(--green),var(--lime));border-radius:6px}
+  table.hist td .mini{display:inline-block;width:70px;height:7px;border-radius:5px;background:var(--grey);vertical-align:middle;margin-left:8px;overflow:hidden}
+  table.hist td .mini span{display:block;height:100%;background:var(--green)}
+  table.hist td.warn{color:#b07d00;font-weight:700}
   .tm-tabs{margin:6px 0 16px;max-width:100%;overflow-x:auto;scrollbar-width:none}
   .tm-tabs::-webkit-scrollbar{display:none}
   .tm-tabs button{white-space:nowrap;flex:none}
@@ -130,16 +141,17 @@
   </div>
 
   <div class="tm-bar">
-    <div class="presets" id="presets">
+    <div class="presets solo-periodo" id="presets">
       <button data-p="semana">Esta semana</button>
       <button data-p="pasada">Semana pasada</button>
       <button data-p="mes">Este mes</button>
       <button data-p="30">Últimos 30 días</button>
     </div>
-    <label>Desde <input type="date" id="f-desde"></label>
-    <label>Hasta <input type="date" id="f-hasta"></label>
+    <label class="solo-periodo">Desde <input type="date" id="f-desde"></label>
+    <label class="solo-periodo">Hasta <input type="date" id="f-hasta"></label>
+    <span class="solo-hoy" style="font-weight:700;color:var(--green-dk)" id="hoy-fecha">Hoy</span>
     <span class="grow"></span>
-    <button class="btn btn-ghost" id="btn-csv" title="Descargar resumen por piloto">
+    <button class="btn btn-ghost solo-periodo" id="btn-csv" title="Descargar resumen por piloto">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
       CSV
     </button>
@@ -151,7 +163,7 @@
   <div class="tm-sync" id="sync-info"><span class="dot"></span><span>Revisando última actualización…</span></div>
   <div class="status" id="status"></div>
 
-  <div class="summary" id="summary">
+  <div class="summary solo-periodo" id="summary">
     <div class="stat hero"><div class="k">Entregados</div><div class="v" id="k-ent">—</div><div class="d" id="d-ent"></div></div>
     <div class="stat"><div class="k">Promedio diario</div><div class="v" id="k-prom">—</div><div class="d" id="d-prom"></div></div>
     <div class="stat"><div class="k">Por motorista al día</div><div class="v" id="k-moto-dia">—</div><div class="d" id="d-moto-dia"></div></div>
@@ -161,15 +173,51 @@
   </div>
 
   <div class="tabs tm-tabs" id="tabs">
-    <button data-t="resumen" class="active">Resumen</button>
+    <button data-t="hoy" class="active">Hoy</button>
+    <button data-t="resumen">Resumen</button>
     <button data-t="pilotos">Pilotos</button>
     <button data-t="ganancia">Pago y ganancia</button>
     <button data-t="rechazos">Rechazos</button>
     <button data-t="ajustes">Ajustes</button>
   </div>
 
+  <!-- HOY -->
+  <section class="tm-tab show" data-t="hoy">
+    <div class="hoy-head">
+      <h3 id="hoy-titulo">Hoy</h3>
+      <span class="live"><span class="dot"></span><span id="hoy-live">Se actualiza solo cada 5 minutos</span></span>
+    </div>
+    <div class="summary" style="margin-bottom:16px">
+      <div class="stat hero" style="min-width:220px"><div class="k">Entregados hoy</div><div class="v" id="h-ent">—</div>
+        <div class="d" id="h-meta">—</div><div class="meta-bar"><span id="h-bar" style="width:0"></span></div></div>
+      <div class="stat"><div class="k">Motoristas en la calle</div><div class="v" id="h-motos">—</div><div class="d" id="h-motos-d">con al menos una entrega hoy</div></div>
+      <div class="stat"><div class="k">Última hora</div><div class="v" id="h-hora">—</div><div class="d" id="h-hora-d">entregas en los últimos 60 min</div></div>
+      <div class="stat"><div class="k">Rechazos hoy</div><div class="v" id="h-rech">—</div><div class="d" id="h-rech-d"></div></div>
+      <div class="stat"><div class="k">Pendientes en bodega</div><div class="v" id="h-pend">—</div><div class="d" id="h-pend-d"></div></div>
+    </div>
+    <div class="grid2">
+      <div class="card">
+        <h3>Entregas por hora</h3>
+        <div class="note">Cuántas se entregaron en cada hora de hoy.</div>
+        <div class="chart" id="ch-hora"></div>
+      </div>
+      <div class="card">
+        <h3>Pendientes por ruta</h3>
+        <div class="note" id="pend-note-hoy">Paquetes en CPS que aún no salen.</div>
+        <div class="chart" id="ch-pend-hoy"></div>
+      </div>
+    </div>
+    <div class="panel tablebox" style="margin-top:16px">
+      <table class="hist" id="tbl-hoy">
+        <thead><tr><th>Piloto</th><th class="r">Entregados</th><th class="r">Rechazos</th><th class="r">Primera</th><th class="r">Última</th><th class="r">Por hora</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <div class="note" style="margin-top:8px;color:var(--muted);font-size:.8rem">En amarillo: lleva más de 45 minutos sin registrar nada en CPS. La barra compara con la meta de cada motorista.</div>
+  </section>
+
   <!-- RESUMEN -->
-  <section class="tm-tab show" data-t="resumen">
+  <section class="tm-tab" data-t="resumen">
     <div class="grid2">
       <div class="card">
         <h3>Entregas por día</h3>
@@ -334,7 +382,7 @@
 
   // ---------- Estado ----------
   let CFG = { tarifa: 9.5, pago_motorista: 5, iva: 0.12, isr_tasa: 0.07, isr_limite_mes: 30000, isr_bajo: 0.05, isr_alto: 0.07, meta_diaria: 500, meta_motorista: 50, dias_mes: 26 };
-  let DP = [], DP_PREV = [], MOT = [], PEND = { corte: null, rows: [] };
+  let DP = [], DP_PREV = [], MOT = [], PEND = { corte: null, rows: [] }, HOY = [], LAST_RUN = null;
   let sortKey = 'entregados', sortDir = -1;
 
   function status(msg, type) { const s = $('#status'); s.className = 'status show ' + (type || ''); s.innerHTML = (type === 'work' ? '<span class="spin"></span>' : '') + msg; }
@@ -362,27 +410,134 @@
     const pDesde = addDays(desde, -largo), pHasta = addDays(desde, -1);
     status('Cargando datos…', 'work');
     try {
-      const [dp, prev, mot, corte] = await Promise.all([
+      const [dp, prev, mot] = await Promise.all([
         todas(() => sb.from('temu_dia_piloto').select('*').gte('fecha', desde).lte('fecha', hasta).order('fecha')),
         todas(() => sb.from('temu_dia_piloto').select('fecha,piloto_id,entregados,rechazos').gte('fecha', pDesde).lte('fecha', pHasta)),
         todas(() => sb.from('temu_motivos_dia').select('*').gte('fecha', desde).lte('fecha', hasta)),
-        sb.from('temu_pendientes').select('corte_at').order('corte_at', { ascending: false }).limit(1),
       ]);
       DP = dp.map(r => ({ ...r, entregados: Number(r.entregados), rechazos: Number(r.rechazos) }));
       DP_PREV = prev.map(r => ({ ...r, entregados: Number(r.entregados), rechazos: Number(r.rechazos) }));
       MOT = mot.map(r => ({ ...r, cantidad: Number(r.cantidad) }));
-      const c = corte.data && corte.data[0] ? corte.data[0].corte_at : null;
-      PEND = { corte: c, rows: [] };
-      if (c) {
-        const { data } = await sb.from('temu_pendientes').select('ruta,recepcion,activo').eq('corte_at', c);
-        PEND.rows = (data || []).map(r => ({ ruta: r.ruta, recepcion: Number(r.recepcion), activo: Number(r.activo) }));
-      }
+      await cargarPend();
       hideStatus();
       dibujar();
     } catch (e) {
       console.error(e);
       status('No se pudieron cargar los datos. ' + esc(e.message || ''), 'err');
     }
+  }
+
+  async function cargarPend() {
+    const corte = await sb.from('temu_pendientes').select('corte_at').order('corte_at', { ascending: false }).limit(1);
+    const c = corte.data && corte.data[0] ? corte.data[0].corte_at : null;
+    const p = { corte: c, rows: [] };
+    if (c) {
+      const { data } = await sb.from('temu_pendientes').select('ruta,recepcion,activo').eq('corte_at', c);
+      p.rows = (data || []).map(r => ({ ruta: r.ruta, recepcion: Number(r.recepcion), activo: Number(r.activo) }));
+    }
+    PEND = p;
+  }
+
+  // ---------- Hoy ----------
+  const horaGT = iso => Number(new Intl.DateTimeFormat('en-US', { timeZone: 'America/Guatemala', hour: 'numeric', hourCycle: 'h23' }).format(new Date(iso)));
+  const relojGT = iso => new Date(iso).toLocaleTimeString('es-GT', { timeZone: 'America/Guatemala', hour: 'numeric', minute: '2-digit' });
+  const haceMin = iso => Math.max(0, Math.round((Date.now() - Date.parse(iso)) / 6e4));
+  const haceTxt = m => m < 1 ? 'recién' : m < 60 ? 'hace ' + m + ' min' : 'hace ' + Math.floor(m / 60) + ' h ' + (m % 60) + ' min';
+
+  async function cargarHoy() {
+    try {
+      const h = hoyGT();
+      const [rows, pil] = await Promise.all([
+        todas(() => sb.from('temu_envios').select('piloto_id,piloto,estado,registrado_at').eq('fecha', h).order('registrado_at')),
+        sb.from('temu_pilotos').select('piloto_id,nombre,tipo'),
+      ]);
+      const tipos = new Map((pil.data || []).map(p => [p.piloto_id, p]));
+      HOY = rows.map(r => ({ ...r, nombre: (tipos.get(r.piloto_id) || {}).nombre || r.piloto, tipo: (tipos.get(r.piloto_id) || {}).tipo || 'Fijo' }));
+      await cargarPend();
+      dibujarHoy();
+    } catch (e) {
+      console.error(e);
+      status('No se pudieron cargar los datos de hoy. ' + esc(e.message || ''), 'err');
+    }
+  }
+
+  function dibujarHoy() {
+    const h = hoyGT();
+    $('#hoy-titulo').textContent = 'Hoy, ' + dia(h) + ' de ' + MESES[Number(h.slice(5, 7)) - 1];
+    $('#hoy-fecha').textContent = 'Hoy · ' + fechaLarga(h);
+    if (LAST_RUN && LAST_RUN.finished_at) $('#hoy-live').textContent = 'Datos de CPS de las ' + relojGT(LAST_RUN.finished_at) + ' (' + haceTxt(haceMin(LAST_RUN.finished_at)) + ') · se actualiza solo cada 5 min';
+    const ent = HOY.filter(r => r.estado === 'entregado');
+    const rech = HOY.filter(r => r.estado === 'rechazo');
+    const g = new Map();
+    for (const r of HOY) {
+      let p = g.get(r.piloto_id);
+      if (!p) { p = { id: r.piloto_id, nombre: r.nombre, tipo: r.tipo, ent: 0, rech: 0, primera: r.registrado_at, ultima: r.registrado_at }; g.set(r.piloto_id, p); }
+      if (r.estado === 'entregado') p.ent++; else if (r.estado === 'rechazo') p.rech++;
+      if (r.registrado_at < p.primera) p.primera = r.registrado_at;
+      if (r.registrado_at > p.ultima) p.ultima = r.registrado_at;
+    }
+    const pil = [...g.values()].map(p => {
+      const horas = Math.max(0.5, (Date.parse(p.ultima) - Date.parse(p.primera)) / 36e5);
+      return { ...p, ritmo: p.ent / horas };
+    }).sort((a, b) => b.ent - a.ent);
+    const ultHora = ent.filter(r => Date.now() - Date.parse(r.registrado_at) <= 36e5).length;
+    $('#h-ent').textContent = N(ent.length);
+    $('#h-meta').textContent = P(ent.length / CFG.meta_diaria) + ' de la meta de ' + N(CFG.meta_diaria) + ' · faltan ' + N(Math.max(0, CFG.meta_diaria - ent.length));
+    $('#h-bar').style.width = Math.min(100, ent.length / CFG.meta_diaria * 100) + '%';
+    const motos = pil.filter(p => p.ent > 0).length;
+    $('#h-motos').textContent = N(motos);
+    $('#h-motos-d').textContent = motos ? 'promedio ' + D1(ent.length / motos) + ' entregas c/u' : 'nadie ha entregado todavía';
+    $('#h-hora').textContent = N(ultHora);
+    $('#h-rech').textContent = N(rech.length);
+    $('#h-rech-d').textContent = ent.length + rech.length ? P(rech.length / (ent.length + rech.length), 1) + ' de lo que salió' : '';
+    const totPend = PEND.rows.reduce((s, r) => s + r.recepcion + r.activo, 0);
+    $('#h-pend').textContent = PEND.corte ? N(totPend) : '—';
+    $('#h-pend-d').textContent = PEND.corte ? 'corte de las ' + relojGT(PEND.corte) : 'sin datos todavía';
+    chartHora(ent);
+    chartPend('#ch-pend-hoy', '#pend-note-hoy');
+    const tb = $('#tbl-hoy tbody');
+    tb.innerHTML = pil.length ? pil.map(p => {
+      const m = haceMin(p.ultima), quieto = m > 45 && horaGT(new Date().toISOString()) < 20;
+      const w = Math.min(100, p.ent / CFG.meta_motorista * 100);
+      return `<tr class="${p.tipo === 'Apoyo' ? 'apoyo' : ''}"><td>${esc(p.nombre)}</td>
+        <td class="r num">${N(p.ent)}<span class="mini"><span style="width:${w}%"></span></span></td>
+        <td class="r num">${N(p.rech)}</td>
+        <td class="r num">${esc(relojGT(p.primera))}</td>
+        <td class="r num ${quieto ? 'warn' : ''}">${esc(relojGT(p.ultima))} · ${esc(haceTxt(m))}</td>
+        <td class="r num">${D1(p.ritmo)}</td></tr>`;
+    }).join('') : '<tr><td colspan="6" class="empty-in">Todavía no hay entregas registradas hoy.</td></tr>';
+  }
+
+  function chartHora(ent) {
+    const box = $('#ch-hora'); box.innerHTML = '';
+    if (!ent.length) { box.innerHTML = '<div class="empty-in">Todavía no hay entregas hoy.</div>'; return; }
+    const cnt = new Map(); for (const r of ent) { const h = horaGT(r.registrado_at); cnt.set(h, (cnt.get(h) || 0) + 1); }
+    const ahora = horaGT(new Date().toISOString());
+    const h0 = Math.min(7, ...cnt.keys()), h1 = Math.max(ahora, ...cnt.keys());
+    const rows = []; for (let h = h0; h <= h1; h++) rows.push({ h, n: cnt.get(h) || 0 });
+    const W = Math.max(300, box.clientWidth), H = 210;
+    const ymax = niceMax(Math.max(...rows.map(r => r.n)) * 1.15 || 1);
+    const ticks = [0, ymax / 2, ymax];
+    const m = { t: 14, r: 6, b: 26, l: medir(box, ticks.map(N), 'tick') + 10 };
+    const iw = W - m.l - m.r, ih = H - m.t - m.b, band = iw / rows.length, bw = Math.min(28, band * 0.7);
+    const y = v => m.t + ih - (v / ymax) * ih, cx = i => m.l + band * i + band / 2;
+    const etq = h => (h % 12 || 12) + (h < 12 ? 'a' : 'p');
+    const step = Math.ceil(rows.length / Math.max(1, Math.floor(iw / 34)));
+    let s = `<svg viewBox="0 0 ${W} ${H}" height="${H}">`;
+    for (const v of ticks) s += `<line x1="${m.l}" x2="${W - m.r}" y1="${y(v)}" y2="${y(v)}" stroke="#eef2ef"/><text class="tick" x="${m.l - 8}" y="${y(v)}" dy="0.32em" text-anchor="end">${N(v)}</text>`;
+    rows.forEach((r, i) => {
+      if (r.n) s += `<rect data-i="${i}" x="${cx(i) - bw / 2}" y="${y(r.n)}" width="${bw}" height="${y(0) - y(r.n)}" rx="4" fill="${r.h === ahora ? '#41AC3A' : '#1F7A3D'}"/>`;
+      if (r.n && band >= 20) s += `<text class="val" x="${cx(i)}" y="${y(r.n) - 5}" text-anchor="middle">${N(r.n)}</text>`;
+      if (i % step === 0) s += `<text class="tick" x="${cx(i)}" y="${H - 8}" text-anchor="middle">${etq(r.h)}</text>`;
+    });
+    s += `<line x1="${m.l}" x2="${W - m.r}" y1="${y(0)}" y2="${y(0)}" stroke="#cdd8cf"/></svg>`;
+    box.innerHTML = s;
+    const tip = tooltip(box);
+    $$('rect[data-i]', box).forEach(el => {
+      const r = rows[+el.dataset.i];
+      el.addEventListener('pointermove', ev => tip.show(ev, etq(r.h) + ' – ' + etq(r.h + 1) + (r.h === ahora ? ' (en curso)' : ''), [['Entregas', N(r.n)]]));
+      el.addEventListener('pointerleave', tip.hide);
+    });
   }
 
   // ---------- Cálculos ----------
@@ -584,12 +739,12 @@
     box.innerHTML = s + '</svg>';
   }
 
-  function chartPend() {
-    const box = $('#ch-pend');
-    if (!PEND.corte) { box.innerHTML = '<div class="empty-in">Todavía no hay datos de pendientes. Se llenan con la próxima actualización.</div>'; $('#pend-note').textContent = 'Paquetes en CPS que aún no salen.'; return; }
+  function chartPend(boxSel = '#ch-pend', noteSel = '#pend-note') {
+    const box = $(boxSel);
+    if (!PEND.corte) { box.innerHTML = '<div class="empty-in">Todavía no hay datos de pendientes. Se llenan con la próxima actualización.</div>'; $(noteSel).textContent = 'Paquetes en CPS que aún no salen.'; return; }
     const rows = PEND.rows.map(r => ({ ...r, total: r.recepcion + r.activo })).sort((a, b) => b.total - a.total);
     const total = rows.reduce((s, r) => s + r.total, 0);
-    $('#pend-note').textContent = N(total) + ' paquetes en CPS que aún no salen · corte del ' + cuando(PEND.corte);
+    $(noteSel).textContent = N(total) + ' paquetes en CPS que aún no salen · corte del ' + cuando(PEND.corte);
     if (!rows.length) { box.innerHTML = '<div class="empty-in">No hay pendientes.</div>'; return; }
     box.innerHTML = '';
     const W = Math.max(280, box.clientWidth), row = 30, top = 22;
@@ -724,6 +879,7 @@
     const { data } = await sb.from('temu_sync_runs').select('*').order('started_at', { ascending: false }).limit(10);
     const runs = data || [];
     const last = runs.find(r => r.finished_at) || null, live = runs.find(r => !r.finished_at && Date.now() - Date.parse(r.started_at) < 10 * 6e4);
+    LAST_RUN = last;
     if (live) el.innerHTML = '<span class="dot run"></span><span>Actualizando desde CPS… (empezó ' + esc(cuando(live.started_at)) + ')</span>';
     else if (!last) el.innerHTML = '<span class="dot"></span><span>Todavía no se ha actualizado nunca. Tocá “Actualizar desde CPS”.</span>';
     else el.innerHTML = '<span class="dot ' + (last.ok ? 'ok' : 'bad') + '"></span><span>Última actualización: ' + esc(cuando(last.finished_at)) +
@@ -739,6 +895,7 @@
   $('#btn-sync').addEventListener('click', async () => {
     let desde = $('#f-desde').value, hasta = $('#f-hasta').value;
     const h = hoyGT(); if (hasta > h) hasta = h;
+    if (document.body.classList.contains('modo-hoy')) { desde = h; hasta = h; }
     if (diffDays(desde, hasta) > 30) desde = addDays(hasta, -30);
     const btn = $('#btn-sync'); btn.disabled = true;
     status('Pidiéndole los datos a CPS del ' + esc(fechaLarga(desde)) + ' al ' + esc(fechaLarga(hasta)) + '… puede tardar unos minutos.', 'work');
@@ -753,6 +910,7 @@
         if (run && run.finished_at) {
           await infoSync();
           await cargar();
+          await cargarHoy();
           if (run.ok) { status('Listo: ' + N(run.envios) + ' envíos actualizados desde CPS.', 'ok'); setTimeout(hideStatus, 5000); }
           else status('Terminó con problemas: ' + esc(run.error || '') + '.' + (run.envios ? ' Lo que sí llegó ya está en el tablero; el detalle está en Ajustes.' : ''), 'err');
           break;
@@ -788,7 +946,9 @@
   $$('#tabs button').forEach(b => b.addEventListener('click', () => {
     $$('#tabs button').forEach(o => o.classList.toggle('active', o === b));
     $$('.tm-tab').forEach(s => s.classList.toggle('show', s.dataset.t === b.dataset.t));
-    if (DP.length) dibujar();   // re-medir gráficos ocultos
+    document.body.classList.toggle('modo-hoy', b.dataset.t === 'hoy');
+    if (b.dataset.t === 'hoy') dibujarHoy();
+    else if (DP.length) dibujar();   // re-medir gráficos ocultos
   }));
   function aplicarPreset(p) {
     const [d, h] = preset(p);
@@ -798,7 +958,7 @@
   }
   $$('#presets button').forEach(b => b.addEventListener('click', () => aplicarPreset(b.dataset.p)));
   ['#f-desde', '#f-hasta'].forEach(s => $(s).addEventListener('change', () => { $$('#presets button').forEach(b => b.classList.remove('active')); cargar(); }));
-  let rt; window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(() => DP.length && dibujar(), 150); });
+  let rt; window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(() => { if (document.body.classList.contains('modo-hoy')) dibujarHoy(); else if (DP.length) dibujar(); }, 150); });
 
   $('#logout').addEventListener('click', e => { e.preventDefault(); window.dropperAuth.signOut(); });
 
@@ -809,8 +969,17 @@
     window.dropperNav.setUser(guard.user.email || '');
     await cargarConfig();
     llenarCfg();
+    document.body.classList.add('modo-hoy');
     const live = await infoSync();
     aplicarPreset('semana');
+    cargarHoy();
+    // Refrescar la vista de hoy cada minuto (CPS se consulta solo cada 5 min)
+    setInterval(async () => {
+      if (document.hidden) return;
+      await infoSync();
+      if (document.body.classList.contains('modo-hoy')) cargarHoy();
+    }, 60000);
+    document.addEventListener('visibilitychange', () => { if (!document.hidden && document.body.classList.contains('modo-hoy')) { infoSync(); cargarHoy(); } });
     if (live) {
       const iv = setInterval(async () => { if (!(await infoSync())) { clearInterval(iv); cargar(); } }, 5000);
     }
