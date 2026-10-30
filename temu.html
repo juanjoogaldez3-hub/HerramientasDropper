@@ -53,6 +53,8 @@
   table.hist td .mini{display:inline-block;width:70px;height:7px;border-radius:5px;background:var(--grey);vertical-align:middle;margin-left:8px;overflow:hidden}
   table.hist td .mini span{display:block;height:100%;background:var(--green)}
   table.hist td.warn{color:#b07d00;font-weight:700}
+  #tbl-hoy td:not(:first-child){white-space:nowrap}
+  #tbl-hoy td.pend{color:#b07d00;font-weight:700}
   .tm-tabs{margin:6px 0 16px;max-width:100%;overflow-x:auto;scrollbar-width:none}
   .tm-tabs::-webkit-scrollbar{display:none}
   .tm-tabs button{white-space:nowrap;flex:none}
@@ -188,11 +190,12 @@
       <span class="live"><span class="dot"></span><span id="hoy-live">Se actualiza solo cada 5 minutos</span></span>
     </div>
     <div class="summary" style="margin-bottom:16px">
-      <div class="stat hero" style="min-width:220px"><div class="k">Entregados hoy</div><div class="v" id="h-ent">—</div>
+      <div class="stat hero"><div class="k">Entregados hoy</div><div class="v" id="h-ent">—</div>
         <div class="d" id="h-meta">—</div><div class="meta-bar"><span id="h-bar" style="width:0"></span></div></div>
       <div class="stat"><div class="k">Motoristas en la calle</div><div class="v" id="h-motos">—</div><div class="d" id="h-motos-d">con al menos una entrega hoy</div></div>
       <div class="stat"><div class="k">Última hora</div><div class="v" id="h-hora">—</div><div class="d" id="h-hora-d">entregas en los últimos 60 min</div></div>
       <div class="stat"><div class="k">Rechazos hoy</div><div class="v" id="h-rech">—</div><div class="d" id="h-rech-d"></div></div>
+      <div class="stat"><div class="k">Pendientes con motoristas</div><div class="v" id="h-penmoto">—</div><div class="d" id="h-penmoto-d">asignados hoy y sin entregar</div></div>
       <div class="stat"><div class="k">Pendientes en bodega</div><div class="v" id="h-pend">—</div><div class="d" id="h-pend-d"></div></div>
     </div>
     <div class="grid2">
@@ -209,11 +212,11 @@
     </div>
     <div class="panel tablebox" style="margin-top:16px">
       <table class="hist" id="tbl-hoy">
-        <thead><tr><th>Piloto</th><th class="r">Entregados</th><th class="r">Rechazos</th><th class="r">Primera</th><th class="r">Última</th><th class="r">Por hora</th></tr></thead>
+        <thead><tr><th>Piloto</th><th class="r">Asignados</th><th class="r">Pendientes</th><th class="r">Entregados</th><th class="r">Rechazos</th><th class="r">Primera</th><th class="r">Última</th><th class="r">Por hora</th></tr></thead>
         <tbody></tbody>
       </table>
     </div>
-    <div class="note" style="margin-top:8px;color:var(--muted);font-size:.8rem">En amarillo: lleva más de 45 minutos sin registrar nada en CPS. La barra compara con la meta de cada motorista.</div>
+    <div class="note" style="margin-top:8px;color:var(--muted);font-size:.8rem">Asignados y pendientes vienen del reporte de rutas de CPS (debajo del nombre, sus rutas). En amarillo: lleva más de 45 minutos sin registrar nada y todavía tiene pendientes. La barra compara con la meta de cada motorista.</div>
   </section>
 
   <!-- RESUMEN -->
@@ -382,7 +385,7 @@
 
   // ---------- Estado ----------
   let CFG = { tarifa: 9.5, pago_motorista: 5, iva: 0.12, isr_tasa: 0.07, isr_limite_mes: 30000, isr_bajo: 0.05, isr_alto: 0.07, meta_diaria: 500, meta_motorista: 50, dias_mes: 26 };
-  let DP = [], DP_PREV = [], MOT = [], PEND = { corte: null, rows: [] }, HOY = [], LAST_RUN = null;
+  let DP = [], DP_PREV = [], MOT = [], PEND = { corte: null, rows: [] }, HOY = [], RUTAS = [], LAST_RUN = null;
   let sortKey = 'entregados', sortDir = -1;
 
   function status(msg, type) { const s = $('#status'); s.className = 'status show ' + (type || ''); s.innerHTML = (type === 'work' ? '<span class="spin"></span>' : '') + msg; }
@@ -447,10 +450,13 @@
   async function cargarHoy() {
     try {
       const h = hoyGT();
-      const [rows, pil] = await Promise.all([
+      const [rows, pil, rut] = await Promise.all([
         todas(() => sb.from('temu_envios').select('piloto_id,piloto,estado,registrado_at').eq('fecha', h).order('registrado_at')),
         sb.from('temu_pilotos').select('piloto_id,nombre,tipo'),
+        sb.from('temu_rutas_piloto').select('piloto_id,ruta,total,pendientes,entregados,rechazados').eq('fecha', h),
       ]);
+      window.__tiposHoy = new Map((pil.data || []).map(p => [p.piloto_id, p]));
+      RUTAS = (rut.data || []).map(r => ({ ...r, total: Number(r.total), pendientes: Number(r.pendientes) }));
       const tipos = new Map((pil.data || []).map(p => [p.piloto_id, p]));
       HOY = rows.map(r => ({ ...r, nombre: (tipos.get(r.piloto_id) || {}).nombre || r.piloto, tipo: (tipos.get(r.piloto_id) || {}).tipo || 'Fijo' }));
       await cargarPend();
@@ -476,10 +482,26 @@
       if (r.registrado_at < p.primera) p.primera = r.registrado_at;
       if (r.registrado_at > p.ultima) p.ultima = r.registrado_at;
     }
+    // Pilotos con paquetes asignados aunque todavía no hayan registrado nada
+    const tiposHoy = window.__tiposHoy || new Map();
+    for (const r of RUTAS) if (!g.has(r.piloto_id)) {
+      const t = tiposHoy.get(r.piloto_id) || {};
+      g.set(r.piloto_id, { id: r.piloto_id, nombre: t.nombre || ('Piloto ' + r.piloto_id), tipo: t.tipo || 'Fijo', ent: 0, rech: 0, primera: null, ultima: null });
+    }
+    for (const p of g.values()) {
+      const rs = RUTAS.filter(r => r.piloto_id === p.id);
+      p.asig = rs.length ? rs.reduce((s, r) => s + r.total, 0) : null;
+      p.pend = rs.length ? rs.reduce((s, r) => s + r.pendientes, 0) : null;
+      p.rutas = rs.sort((a, b) => b.total - a.total).map(r => r.ruta + ' (' + r.total + ')').join(', ');
+    }
     const pil = [...g.values()].map(p => {
+      if (!p.primera) return { ...p, ritmo: 0 };
       const horas = Math.max(0.5, (Date.parse(p.ultima) - Date.parse(p.primera)) / 36e5);
       return { ...p, ritmo: p.ent / horas };
-    }).sort((a, b) => b.ent - a.ent);
+    }).sort((a, b) => (b.pend || 0) - (a.pend || 0) || b.ent - a.ent);
+    const penMoto = RUTAS.reduce((s, r) => s + r.pendientes, 0);
+    $('#h-penmoto').textContent = RUTAS.length ? N(penMoto) : '—';
+    $('#h-penmoto-d').textContent = RUTAS.length ? (penMoto ? 'en manos de ' + N(pil.filter(p => p.pend > 0).length) + ' motorista(s), sin entregar' : 'todo lo asignado hoy ya se entregó o rechazó') : 'sin datos de rutas todavía';
     const ultHora = ent.filter(r => Date.now() - Date.parse(r.registrado_at) <= 36e5).length;
     $('#h-ent').textContent = N(ent.length);
     $('#h-meta').textContent = P(ent.length / CFG.meta_diaria) + ' de la meta de ' + N(CFG.meta_diaria) + ' · faltan ' + N(Math.max(0, CFG.meta_diaria - ent.length));
@@ -497,15 +519,18 @@
     chartPend('#ch-pend-hoy', '#pend-note-hoy');
     const tb = $('#tbl-hoy tbody');
     tb.innerHTML = pil.length ? pil.map(p => {
-      const m = haceMin(p.ultima), quieto = m > 45 && horaGT(new Date().toISOString()) < 20;
+      const m = p.ultima ? haceMin(p.ultima) : null;
+      const quieto = m !== null && m > 45 && (p.pend === null || p.pend > 0) && horaGT(new Date().toISOString()) < 20;
       const w = Math.min(100, p.ent / CFG.meta_motorista * 100);
-      return `<tr class="${p.tipo === 'Apoyo' ? 'apoyo' : ''}"><td>${esc(p.nombre)}</td>
+      return `<tr class="${p.tipo === 'Apoyo' ? 'apoyo' : ''}"><td>${esc(p.nombre)}${p.rutas ? `<div style="font-size:.74rem;color:var(--muted);font-weight:500">${esc(p.rutas)}</div>` : ''}</td>
+        <td class="r num">${p.asig === null ? '—' : N(p.asig)}</td>
+        <td class="r num ${p.pend > 0 ? 'pend' : ''}">${p.pend === null ? '—' : N(p.pend)}</td>
         <td class="r num">${N(p.ent)}<span class="mini"><span style="width:${w}%"></span></span></td>
         <td class="r num">${N(p.rech)}</td>
-        <td class="r num">${esc(relojGT(p.primera))}</td>
-        <td class="r num ${quieto ? 'warn' : ''}">${esc(relojGT(p.ultima))} · ${esc(haceTxt(m))}</td>
-        <td class="r num">${D1(p.ritmo)}</td></tr>`;
-    }).join('') : '<tr><td colspan="6" class="empty-in">Todavía no hay entregas registradas hoy.</td></tr>';
+        <td class="r num">${p.primera ? esc(relojGT(p.primera)) : '—'}</td>
+        <td class="r num ${quieto ? 'warn' : ''}">${p.ultima ? esc(relojGT(p.ultima)) + ' · ' + esc(haceTxt(m)) : 'sin registros'}</td>
+        <td class="r num">${p.primera ? D1(p.ritmo) : '—'}</td></tr>`;
+    }).join('') : '<tr><td colspan="8" class="empty-in">Todavía no hay entregas ni paquetes asignados hoy.</td></tr>';
   }
 
   function chartHora(ent) {

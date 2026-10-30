@@ -104,6 +104,29 @@ async function pendientesCps(token: string, idEmpresa: number) {
   }));
 }
 
+// Paquetes de un día por motorista y ruta: asignados, pendientes, entregados y rechazados
+async function rutasPiloto(token: string, idEmpresa: number, fecha: string) {
+  const r = await cps("/Graphics/RutasGraficaBarrasTemuEmpresa", {
+    token,
+    body: { ID_EMPRESA: idEmpresa, FECHA_INICIO: Date.parse(inicioUTC(fecha)), FECHA_FIN: Date.parse(finUTC(fecha)) },
+  });
+  const list: any[] = Array.isArray(r) ? r : Array.isArray(r?.DATA) ? r.DATA : [];
+  const corte = new Date().toISOString();
+  const g = new Map<string, any>();
+  for (const x of list) {
+    if (typeof x?.ID_USUARIO_PILOTO !== "number") continue;
+    const ruta = String(x?.CODIGO ?? x?.DESCRIPCION ?? "Sin ruta");
+    const k = x.ID_USUARIO_PILOTO + "|" + ruta;
+    const f = g.get(k) ?? { fecha, piloto_id: x.ID_USUARIO_PILOTO, ruta, piloto_cps: x?.PILOTO ?? null, total: 0, pendientes: 0, entregados: 0, rechazados: 0, corte_at: corte };
+    f.total += Number(x?.TOTAL_PAQUETES) || 0;
+    f.pendientes += Number(x?.PENDIENTES) || 0;
+    f.entregados += Number(x?.ENTREGADOS) || 0;
+    f.rechazados += Number(x?.RECHAZADOS) || 0;
+    g.set(k, f);
+  }
+  return [...g.values()];
+}
+
 // ---------- Corrida completa ----------
 async function sincronizar(runId: string, desde: string, hasta: string) {
   const detalle: { piloto: string; envios: number; error?: string }[] = [];
@@ -155,6 +178,22 @@ async function sincronizar(runId: string, desde: string, hasta: string) {
         }
       } catch (e) {
         errorPend = "Pendientes: " + (e instanceof Error ? e.message : String(e));
+      }
+    }
+
+    // Pendientes de hoy por motorista (lo que cada uno lleva y no ha entregado)
+    if (idEmpresa !== null) {
+      try {
+        const hoy = hoyLocal();
+        const filas = await rutasPiloto(token, idEmpresa, hoy);
+        const { error: delErr } = await admin.from("temu_rutas_piloto").delete().eq("fecha", hoy);
+        if (delErr) throw new Error(delErr.message);
+        if (filas.length) {
+          const { error } = await admin.from("temu_rutas_piloto").insert(filas);
+          if (error) throw new Error(error.message);
+        }
+      } catch (e) {
+        errorPend = [errorPend, "Pendientes por motorista: " + (e instanceof Error ? e.message : String(e))].filter(Boolean).join(" · ");
       }
     }
 
