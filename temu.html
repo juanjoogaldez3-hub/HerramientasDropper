@@ -8,6 +8,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="assets/css/app.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="assets/js/config.js"></script>
 <script src="assets/js/supabaseClient.js"></script>
@@ -152,6 +153,13 @@
   table.hist th[aria-sort=descending] button::after{content:" ↓"} table.hist th[aria-sort=ascending] button::after{content:" ↑"}
   table.hist td.r, table.hist th.r{text-align:right}
   table.hist tr.apoyo td{color:var(--muted)}
+  .recibo-bar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin:0 0 12px;
+    background:var(--white);border:1px solid var(--line);border-radius:14px;padding:12px 16px;box-shadow:var(--shadow)}
+  .recibo-bar b{font-family:'Sora',sans-serif;font-size:.98rem}
+  .btn-rec{all:unset;cursor:pointer;display:inline-grid;place-items:center;width:26px;height:26px;border-radius:7px;margin-left:8px;
+    color:var(--green-dk);border:1px solid #cdd8cf;vertical-align:middle;background:#fff}
+  .btn-rec:hover{border-color:var(--green);background:var(--lime-soft)}
+  .btn-rec svg{width:14px;height:14px}
   table.hist tfoot tr.tot td{font-weight:800;border-top:2px solid var(--line);background:var(--grey);border-bottom:none}
   table.hist td.good{color:var(--green);font-weight:700} table.hist td.bad{color:#c0392b;font-weight:700}
   table.hist select{font-family:inherit;font-size:.82rem;border:1px solid #cdd8cf;border-radius:8px;padding:4px 6px;background:#fcfdfc;color:var(--ink)}
@@ -334,6 +342,16 @@
       <h3>Entregas de cada piloto por día</h3>
       <div class="note">Más oscuro, más entregas. Vacío: no salió ese día.</div>
       <div class="chart heatwrap" id="ch-heat"></div>
+    </div>
+    <div class="recibo-bar">
+      <div>
+        <b>Recibos de pago</b>
+        <div class="note" id="rec-note" style="margin:2px 0 0">Del período seleccionado arriba.</div>
+      </div>
+      <button class="btn btn-primary" id="btn-recibos" style="width:auto">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="13" y2="17"/></svg>
+        Recibos de todos (PDF)
+      </button>
     </div>
     <div class="panel tablebox">
       <table class="hist" id="tbl-pil">
@@ -974,6 +992,8 @@
       return (typeof va === 'number' ? va - vb : String(va).localeCompare(String(vb), 'es')) * sortDir;
     });
     const tf = $('#tbl-pil tfoot');
+    const conEnt = rows.filter(r => r.entregados > 0);
+    $('#rec-note').textContent = conEnt.length ? `Del ${fechaLarga($('#f-desde').value)} al ${fechaLarga($('#f-hasta').value)} · ${conEnt.length} recibos · ${Q(conEnt.reduce((s, r) => s + r.pago, 0))} en total` : 'No hay envíos entregados en este período.';
     if (!rows.length) { tb.innerHTML = '<tr><td colspan="9" class="empty-in">Sin entregas en este período.</td></tr>'; tf.innerHTML = ''; return; }
     const sum = k => rows.reduce((s, r) => s + r[k], 0);
     const tEnt = sum('entregados'), tRech = sum('rechazos'), tDias = new Set(DP.filter(r => r.entregados > 0).map(r => r.fecha)).size;
@@ -995,7 +1015,11 @@
       <td class="r num ${r.mejor >= CFG.meta_motorista ? 'good' : ''}">${N(r.mejor)}</td>
       <td class="r num">${N(r.rechazos)}</td>
       <td class="r num ${r.pct >= 0.15 ? 'bad' : ''}">${P(r.pct, 1)}</td>
-      <td class="r num total">${Q(r.pago)}</td></tr>`).join('');
+      <td class="r num total" style="white-space:nowrap">${Q(r.pago)}${r.entregados ? `<button class="btn-rec" data-rec="${esc(r.piloto_id)}" title="Recibo de ${esc(r.piloto)}" aria-label="Recibo de ${esc(r.piloto)}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/></svg></button>` : ''}</td></tr>`).join('');
+    $$('button[data-rec]', tb).forEach(b => b.addEventListener('click', () => {
+      const r = rows.find(x => String(x.piloto_id) === b.dataset.rec);
+      if (r) generarRecibos([r]);
+    }));
     $$('select[data-id]', tb).forEach(sel => sel.addEventListener('change', async () => {
       const id = Number(sel.dataset.id), tipo = sel.value;
       const { error } = await sb.from('temu_pilotos').update({ tipo, updated_at: new Date().toISOString() }).eq('piloto_id', id);
@@ -1027,6 +1051,134 @@
     const esc2 = [['Ritmo actual (' + N(t.prom) + ' diarios)', mes(t.prom)], ['Meta (' + N(CFG.meta_diaria) + ' diarios)', mes(CFG.meta_diaria)]];
     $('#tbl-proy tbody').innerHTML = esc2.map(([n, m]) => `<tr><td>${esc(n)}</td><td class="r num">${N(m.paq)}</td><td class="r num">${Q(m.fact)}</td><td class="r num">${Q(m.isr)}</td><td class="r num">${Q(m.moto)}</td><td class="r num total">${Q(m.libre)}</td></tr>`).join('');
   }
+
+  // ---------- Recibos de pago (PDF) ----------
+  const _UNI = ['', 'uno', 'dos', 'tres', 'cuatro', 'cinco', 'seis', 'siete', 'ocho', 'nueve', 'diez', 'once', 'doce', 'trece', 'catorce', 'quince', 'dieciséis', 'diecisiete', 'dieciocho', 'diecinueve', 'veinte', 'veintiuno', 'veintidós', 'veintitrés', 'veinticuatro', 'veinticinco', 'veintiséis', 'veintisiete', 'veintiocho', 'veintinueve'];
+  const _DEC = ['', '', '', 'treinta', 'cuarenta', 'cincuenta', 'sesenta', 'setenta', 'ochenta', 'noventa'];
+  const _CEN = ['', 'ciento', 'doscientos', 'trescientos', 'cuatrocientos', 'quinientos', 'seiscientos', 'setecientos', 'ochocientos', 'novecientos'];
+  function _tres(n) {
+    if (n === 0) return ''; if (n === 100) return 'cien';
+    const c = Math.floor(n / 100), r = n % 100; let t = '';
+    if (c) t += _CEN[c] + (r ? ' ' : '');
+    if (r) { if (r < 30) t += _UNI[r]; else { const d = Math.floor(r / 10), u = r % 10; t += _DEC[d] + (u ? ' y ' + _UNI[u] : ''); } }
+    return t.trim();
+  }
+  function _entero(n) {
+    if (n === 0) return 'cero';
+    const mi = Math.floor(n / 1e6), ml = Math.floor((n % 1e6) / 1000), ce = n % 1000; let t = '';
+    if (mi) t += (mi === 1 ? 'un millón' : _tres(mi).replace(/uno$/, 'ún') + ' millones') + ' ';
+    if (ml) t += (ml === 1 ? 'mil' : _tres(ml).replace(/uno$/, 'ún') + ' mil') + ' ';
+    if (ce) t += _tres(ce);
+    return t.trim();
+  }
+  function enLetras(num) {
+    const ent = Math.floor(num + 1e-9), cent = Math.round((num - ent) * 100);
+    const l = _entero(ent).replace(/veintiuno$/, 'veintiún').replace(/uno$/, 'un');
+    const t = `${l} ${ent === 1 ? 'quetzal' : 'quetzales'} con ${String(cent).padStart(2, '0')}/100`;
+    return t.charAt(0).toUpperCase() + t.slice(1);
+  }
+  const fechaRec = f => { const [y, m, d] = f.split('-'); return `${Number(d)} de ${['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'][Number(m) - 1]} de ${y}`; };
+
+  function dibujarRecibo(doc, r, desde, hasta, y0, h, folio, hoyTxt) {
+    const PW = doc.internal.pageSize.getWidth(), M = 40, x = M, w = PW - M * 2;
+    const ink = [16, 38, 26], greenDk = [20, 87, 42], green = [31, 122, 61], lime = [65, 172, 58], limeSoft = [223, 240, 226], muted = [110, 124, 112], line = [225, 231, 226];
+    const L = x + 26, R = x + w - 24;
+    doc.setFillColor(255, 255, 255); doc.setDrawColor(...line); doc.setLineWidth(1);
+    doc.roundedRect(x, y0, w, h, 10, 10, 'FD');
+    doc.setFillColor(...green); doc.rect(x + 1, y0 + 1, 7, h - 2, 'F');
+    doc.setFillColor(...lime); doc.rect(x + 1, y0 + 1, 7, Math.min(72, h - 2), 'F');
+    // marca
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(21); doc.setTextColor(...ink);
+    doc.text('Dropper', L, y0 + 34);
+    const wm = doc.getTextWidth('Dropper');
+    doc.setFillColor(...lime); doc.circle(L + wm + 6, y0 + 32, 2.6, 'F');
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(7); doc.setTextColor(...muted);
+    doc.text('SMART DELIVERY', L + 1, y0 + 46, { charSpace: 2 });
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(...greenDk);
+    doc.text('RECIBO DE PAGO · TEMU', R, y0 + 28, { align: 'right' });
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor(...muted);
+    doc.text(`No. ${folio}`, R, y0 + 42, { align: 'right' });
+    doc.text(`Fecha: ${hoyTxt}`, R, y0 + 54, { align: 'right' });
+    doc.setDrawColor(...line); doc.setLineWidth(0.8); doc.line(L, y0 + 64, R, y0 + 64);
+    // quién y período
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(...muted);
+    doc.text('RECIBIDO POR', L, y0 + 80, { charSpace: 1 });
+    doc.text('PERÍODO', R, y0 + 80, { align: 'right' });
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(13); doc.setTextColor(...ink);
+    doc.text(String(r.piloto), L, y0 + 96);
+    doc.setFontSize(10.5);
+    doc.text(desde === hasta ? fechaRec(desde) : `Del ${fechaRec(desde)} al ${fechaRec(hasta)}`, R, y0 + 96, { align: 'right' });
+    // panel de monto
+    const py = y0 + 108, ph = 58;
+    doc.setFillColor(...limeSoft); doc.roundedRect(L, py, R - L, ph, 8, 8, 'F');
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(...greenDk);
+    doc.text('TOTAL A PAGAR', L + 16, py + 19, { charSpace: 1 });
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(23);
+    doc.text(Q(r.pago), L + 16, py + 45);
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(15); doc.setTextColor(...greenDk);
+    doc.text(`${N(r.entregados)} ${r.entregados === 1 ? 'envío entregado' : 'envíos entregados'}`, R - 16, py + 29, { align: 'right' });
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(...green);
+    doc.text(`× ${Q(CFG.pago_motorista)} por envío`, R - 16, py + 44, { align: 'right' });
+    // en letras
+    let yy = py + ph + 18;
+    doc.setFont('helvetica', 'italic'); doc.setFontSize(9.5); doc.setTextColor(...ink);
+    const le = doc.splitTextToSize(enLetras(r.pago) + '.', R - L);
+    doc.text(le, L, yy); yy += le.length * 13 + 6;
+    // concepto
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5); doc.setTextColor(...muted);
+    const per = desde === hasta ? `el ${fechaRec(desde)}` : `del ${fechaRec(desde)} al ${fechaRec(hasta)}`;
+    const con = doc.splitTextToSize(`En concepto de pago por ${N(r.entregados)} ${r.entregados === 1 ? 'envío entregado' : 'envíos entregados'} de Temu ${per}, a ${Q(CFG.pago_motorista)} por envío.`, R - L);
+    doc.text(con, L, yy); yy += con.length * 13 + 6;
+    // detalle por día
+    const dias = DP.filter(d => d.piloto_id === r.piloto_id && d.entregados > 0).sort((a, b) => a.fecha < b.fecha ? -1 : 1);
+    if (dias.length) {
+      doc.setFontSize(8); doc.setTextColor(...muted);
+      const det = doc.splitTextToSize('Detalle: ' + dias.map(d => `${dia(d.fecha)}: ${d.entregados}`).join('  ·  ') + (r.rechazos ? `   (${r.rechazos} rechazados, no se pagan)` : ''), R - L);
+      doc.text(det.slice(0, 2), L, yy);
+    }
+    // firma
+    const fy = y0 + h - 32;
+    doc.setDrawColor(150, 162, 152); doc.setLineWidth(0.8); doc.line(R - 210, fy, R, fy);
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(...muted);
+    doc.text('Firma de quien recibe', R - 105, fy + 13, { align: 'center' });
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(9.5); doc.setTextColor(...greenDk);
+    doc.text('Recibí conforme', L, fy + 2);
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); doc.setTextColor(...muted);
+    doc.text('Dropper · Smart Delivery', L, fy + 14);
+  }
+
+  function generarRecibos(lista) {
+    const desde = $('#f-desde').value, hasta = $('#f-hasta').value;
+    const sel = lista.filter(r => r.entregados > 0);
+    if (!sel.length) { status('No hay envíos entregados para hacer recibos en este período.', 'err'); return; }
+    if (!window.jspdf) { status('No se pudo cargar el generador de PDF. Revisá tu internet y recargá la página.', 'err'); return; }
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ unit: 'pt', format: 'letter' });
+    const PW = doc.internal.pageSize.getWidth(), PH = doc.internal.pageSize.getHeight(), M = 40, gap = 24;
+    const blockH = (PH - M * 2 - gap) / 2;
+    const h = hoyGT(), p2 = x => String(x).padStart(2, '0');
+    const hoyTxt = h.split('-').reverse().join('/');
+    const base = 'T' + desde.replace(/-/g, '').slice(2) + '-' + hasta.replace(/-/g, '').slice(4);
+    sel.forEach((r, i) => {
+      const slot = i % 2;
+      if (i > 0 && slot === 0) doc.addPage();
+      const y0 = M + slot * (blockH + gap);
+      dibujarRecibo(doc, r, desde, hasta, y0, blockH, `${base}-${String(r.piloto_id)}`, hoyTxt);
+      if (slot === 0 && i !== sel.length - 1) {
+        const ly = M + blockH + gap / 2;
+        doc.setDrawColor(190, 200, 192); doc.setLineWidth(0.6); doc.setLineDashPattern([3, 3], 0);
+        doc.line(M + 18, ly, PW - M - 18, ly); doc.setLineDashPattern([], 0);
+      }
+    });
+    const nombre = sel.length === 1 ? `Recibo_Temu_${sel[0].piloto.replace(/[^A-Za-zÁÉÍÓÚáéíóúÑñ0-9]+/g, '_')}_${desde}_${hasta}.pdf` : `Recibos_Temu_${desde}_${hasta}.pdf`;
+    doc.save(nombre);
+    status(`Listo: ${sel.length} ${sel.length === 1 ? 'recibo' : 'recibos'} (${Q(sel.reduce((s, r) => s + r.pago, 0))} en total).`, 'ok');
+    setTimeout(hideStatus, 5000);
+  }
+  $('#btn-recibos').addEventListener('click', () => {
+    const rows = porPiloto(DP).sort((a, b) => b.entregados - a.entregados);
+    generarRecibos(rows);
+  });
 
   // ---------- CSV ----------
   $('#btn-csv').addEventListener('click', () => {
