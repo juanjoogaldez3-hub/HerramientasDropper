@@ -48,6 +48,21 @@
   .hoy-head h3{font-family:'Sora',sans-serif;font-weight:700;font-size:1.05rem}
   .hoy-head .live{font-size:.8rem;color:var(--muted);display:inline-flex;align-items:center;gap:6px}
   .hoy-head .live .dot{width:8px;height:8px;border-radius:50%;background:var(--lime);animation:pulse 2s infinite}
+  .flow5{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:14px;margin-bottom:14px}
+  .fstep{position:relative;background:var(--white);border:1px solid var(--line);border-radius:14px;padding:14px 16px 14px;box-shadow:var(--shadow);min-width:0}
+  .fstep:not(:last-child)::after{content:"›";position:absolute;right:-12px;top:50%;transform:translateY(-50%);font-family:'Sora',sans-serif;font-weight:800;font-size:1.3rem;color:#b9c6bd;z-index:1}
+  .fstep .k{font-size:.72rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:700;display:flex;align-items:center;gap:6px}
+  .fstep .k i{width:9px;height:9px;border-radius:3px;display:inline-block;flex:none}
+  .fstep .v{font-family:'Sora',sans-serif;font-weight:800;font-size:1.7rem;letter-spacing:-.02em;margin-top:4px;color:var(--ink)}
+  .fstep .d{font-size:.78rem;color:var(--muted);margin-top:2px;line-height:1.35}
+  .fstep.hero{border-color:#c4e3cd;background:linear-gradient(180deg,#fff, #f6fbf7)}
+  .fstep.hero .v{color:var(--green-dk)}
+  .fstep.bad .v{color:#c0392b}
+  @media (max-width:760px){.flow5{grid-template-columns:repeat(2,minmax(0,1fr))}.fstep:not(:last-child)::after{display:none}.fstep.hero{grid-column:1/-1;order:-1}}
+  .stack{display:flex;height:9px;border-radius:5px;overflow:hidden;background:var(--grey);min-width:90px}
+  .stack span{display:block;height:100%}
+  .leg{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:.76rem;color:var(--muted);margin:0 0 10px}
+  .leg span{display:inline-flex;align-items:center;gap:5px}.leg i{width:9px;height:9px;border-radius:3px;display:inline-block}
   .meta-bar{height:10px;border-radius:6px;background:var(--grey);overflow:hidden;margin-top:8px}
   .meta-bar span{display:block;height:100%;background:linear-gradient(90deg,var(--green),var(--lime));border-radius:6px}
   table.hist td .mini{display:inline-block;width:70px;height:7px;border-radius:5px;background:var(--grey);vertical-align:middle;margin-left:8px;overflow:hidden}
@@ -189,34 +204,43 @@
       <h3 id="hoy-titulo">Hoy</h3>
       <span class="live"><span class="dot"></span><span id="hoy-live">Se actualiza solo cada 5 minutos</span></span>
     </div>
+    <div class="flow5">
+      <div class="fstep"><div class="k"><i style="background:#b9c6bd"></i>Por llegar</div><div class="v" id="f-llegar">—</div><div class="d">en centro de recepción de CPS · nos llegan mañana</div></div>
+      <div class="fstep"><div class="k"><i style="background:#e0a800"></i>En bodega</div><div class="v" id="f-bodega">—</div><div class="d">ya en nuestra bodega, sin asignar</div></div>
+      <div class="fstep"><div class="k"><i style="background:#41AC3A"></i>En camino</div><div class="v" id="f-camino">—</div><div class="d" id="f-camino-d">asignados a motoristas, sin entregar</div></div>
+      <div class="fstep hero"><div class="k"><i style="background:#1F7A3D"></i>Entregados hoy</div><div class="v" id="f-ent">—</div><div class="d" id="f-meta">—</div><div class="meta-bar"><span id="f-bar" style="width:0"></span></div></div>
+      <div class="fstep bad"><div class="k"><i style="background:#c0392b"></i>Rechazados hoy</div><div class="v" id="f-rech">—</div><div class="d" id="f-rech-d"></div></div>
+    </div>
     <div class="summary" style="margin-bottom:16px">
-      <div class="stat hero"><div class="k">Entregados hoy</div><div class="v" id="h-ent">—</div>
-        <div class="d" id="h-meta">—</div><div class="meta-bar"><span id="h-bar" style="width:0"></span></div></div>
-      <div class="stat"><div class="k">Motoristas en la calle</div><div class="v" id="h-motos">—</div><div class="d" id="h-motos-d">con al menos una entrega hoy</div></div>
-      <div class="stat"><div class="k">Última hora</div><div class="v" id="h-hora">—</div><div class="d" id="h-hora-d">entregas en los últimos 60 min</div></div>
-      <div class="stat"><div class="k">Rechazos hoy</div><div class="v" id="h-rech">—</div><div class="d" id="h-rech-d"></div></div>
-      <div class="stat"><div class="k">Pendientes con motoristas</div><div class="v" id="h-penmoto">—</div><div class="d" id="h-penmoto-d">asignados hoy y sin entregar</div></div>
-      <div class="stat"><div class="k">Pendientes en bodega</div><div class="v" id="h-pend">—</div><div class="d" id="h-pend-d"></div></div>
+      <div class="stat"><div class="k">Motoristas en la calle</div><div class="v" id="h-motos">—</div><div class="d" id="h-motos-d">con paquetes o entregas hoy</div></div>
+      <div class="stat"><div class="k">Última hora</div><div class="v" id="h-hora">—</div><div class="d">entregas en los últimos 60 min</div></div>
+      <div class="stat"><div class="k">Para repartir mañana</div><div class="v" id="h-manana">—</div><div class="d" id="h-manana-d">por llegar + en bodega</div></div>
     </div>
     <div class="grid2">
-      <div class="card">
+      <div class="card" style="grid-column:1/-1">
+        <h3>Por ruta</h3>
+        <div class="note" id="rutas-note">Dónde está cada paquete, ruta por ruta.</div>
+        <div class="leg"><span><i style="background:#b9c6bd"></i>Por llegar</span><span><i style="background:#e0a800"></i>En bodega</span><span><i style="background:#41AC3A"></i>En camino</span><span><i style="background:#1F7A3D"></i>Entregados</span><span><i style="background:#c0392b"></i>Rechazados</span></div>
+        <div class="tablebox">
+          <table class="hist" id="tbl-rutas-hoy">
+            <thead><tr><th>Ruta</th><th class="r">Por llegar</th><th class="r">En bodega</th><th class="r">En camino</th><th class="r">Entreg.</th><th class="r">Rech.</th><th></th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="card" style="grid-column:1/-1">
         <h3>Entregas por hora</h3>
         <div class="note">Cuántas se entregaron en cada hora de hoy.</div>
         <div class="chart" id="ch-hora"></div>
       </div>
-      <div class="card">
-        <h3>Pendientes por ruta</h3>
-        <div class="note" id="pend-note-hoy">Paquetes en CPS que aún no salen.</div>
-        <div class="chart" id="ch-pend-hoy"></div>
-      </div>
     </div>
     <div class="panel tablebox" style="margin-top:16px">
       <table class="hist" id="tbl-hoy">
-        <thead><tr><th>Piloto</th><th class="r">Asignados</th><th class="r">Pendientes</th><th class="r">Entregados</th><th class="r">Rechazos</th><th class="r">Primera</th><th class="r">Última</th><th class="r">Por hora</th></tr></thead>
+        <thead><tr><th>Motorista</th><th class="r">Asignados</th><th class="r">En camino</th><th class="r">Entregados</th><th class="r">Rechazados</th><th class="r">Primera</th><th class="r">Última</th><th class="r">Por hora</th></tr></thead>
         <tbody></tbody>
       </table>
     </div>
-    <div class="note" style="margin-top:8px;color:var(--muted);font-size:.8rem">Asignados y pendientes vienen del reporte de rutas de CPS (debajo del nombre, sus rutas). En amarillo: lleva más de 45 minutos sin registrar nada y todavía tiene pendientes. La barra compara con la meta de cada motorista.</div>
+    <div class="note" style="margin-top:8px;color:var(--muted);font-size:.8rem">Asignados y en camino vienen del "Rendimiento por ruta" de CPS; debajo del nombre, sus rutas. En amarillo: lleva más de 45 minutos sin registrar nada y todavía tiene paquetes en camino. La barra compara con la meta de cada motorista.</div>
   </section>
 
   <!-- RESUMEN -->
@@ -233,8 +257,8 @@
         <div class="chart" id="ch-prom"></div>
       </div>
       <div class="card">
-        <h3>Pendientes por ruta</h3>
-        <div class="note" id="pend-note">Paquetes en CPS que aún no salen.</div>
+        <h3>Por llegar y en bodega</h3>
+        <div class="note" id="pend-note">Por llegar (centro de recepción de CPS) y en bodega sin asignar.</div>
         <div class="chart" id="ch-pend"></div>
       </div>
     </div>
@@ -499,24 +523,28 @@
       const horas = Math.max(0.5, (Date.parse(p.ultima) - Date.parse(p.primera)) / 36e5);
       return { ...p, ritmo: p.ent / horas };
     }).sort((a, b) => (b.pend || 0) - (a.pend || 0) || b.ent - a.ent);
-    const penMoto = RUTAS.reduce((s, r) => s + r.pendientes, 0);
-    $('#h-penmoto').textContent = RUTAS.length ? N(penMoto) : '—';
-    $('#h-penmoto-d').textContent = RUTAS.length ? (penMoto ? 'en manos de ' + N(pil.filter(p => p.pend > 0).length) + ' motorista(s), sin entregar' : 'todo lo asignado hoy ya se entregó o rechazó') : 'sin datos de rutas todavía';
+    const llegar = PEND.rows.reduce((s, r) => s + r.recepcion, 0);
+    const bodega = PEND.rows.reduce((s, r) => s + r.activo, 0);
+    const camino = RUTAS.reduce((s, r) => s + r.pendientes, 0);
     const ultHora = ent.filter(r => Date.now() - Date.parse(r.registrado_at) <= 36e5).length;
-    $('#h-ent').textContent = N(ent.length);
-    $('#h-meta').textContent = P(ent.length / CFG.meta_diaria) + ' de la meta de ' + N(CFG.meta_diaria) + ' · faltan ' + N(Math.max(0, CFG.meta_diaria - ent.length));
-    $('#h-bar').style.width = Math.min(100, ent.length / CFG.meta_diaria * 100) + '%';
-    const motos = pil.filter(p => p.ent > 0).length;
+    $('#f-llegar').textContent = PEND.corte ? N(llegar) : '—';
+    $('#f-bodega').textContent = PEND.corte ? N(bodega) : '—';
+    $('#f-camino').textContent = RUTAS.length ? N(camino) : '—';
+    $('#f-camino-d').textContent = !RUTAS.length ? 'sin datos de rutas todavía' : camino ? 'con ' + N(pil.filter(p => p.pend > 0).length) + ' motorista(s), sin entregar' : 'nada en camino ahorita';
+    $('#f-ent').textContent = N(ent.length);
+    $('#f-meta').textContent = P(ent.length / CFG.meta_diaria) + ' de la meta de ' + N(CFG.meta_diaria) + ' · faltan ' + N(Math.max(0, CFG.meta_diaria - ent.length));
+    $('#f-bar').style.width = Math.min(100, ent.length / CFG.meta_diaria * 100) + '%';
+    $('#f-rech').textContent = N(rech.length);
+    $('#f-rech-d').textContent = ent.length + rech.length ? P(rech.length / (ent.length + rech.length), 1) + ' de lo que salió' : 'ninguno';
+    const motos = pil.filter(p => p.ent > 0 || p.pend > 0).length;
     $('#h-motos').textContent = N(motos);
-    $('#h-motos-d').textContent = motos ? 'promedio ' + D1(ent.length / motos) + ' entregas c/u' : 'nadie ha entregado todavía';
+    $('#h-motos-d').textContent = motos ? 'promedio ' + D1(ent.length / Math.max(1, pil.filter(p => p.ent > 0).length)) + ' entregas c/u' : 'nadie ha salido todavía';
     $('#h-hora').textContent = N(ultHora);
-    $('#h-rech').textContent = N(rech.length);
-    $('#h-rech-d').textContent = ent.length + rech.length ? P(rech.length / (ent.length + rech.length), 1) + ' de lo que salió' : '';
-    const totPend = PEND.rows.reduce((s, r) => s + r.recepcion + r.activo, 0);
-    $('#h-pend').textContent = PEND.corte ? N(totPend) : '—';
-    $('#h-pend-d').textContent = PEND.corte ? 'corte de las ' + relojGT(PEND.corte) : 'sin datos todavía';
+    const manana = llegar + bodega;
+    $('#h-manana').textContent = PEND.corte ? N(manana) : '—';
+    $('#h-manana-d').textContent = PEND.corte ? 'necesitás ~' + N(Math.ceil(manana / CFG.meta_motorista)) + ' motoristas a ' + N(CFG.meta_motorista) + ' c/u · corte ' + relojGT(PEND.corte) : 'sin datos todavía';
+    tablaRutasHoy();
     chartHora(ent);
-    chartPend('#ch-pend-hoy', '#pend-note-hoy');
     const tb = $('#tbl-hoy tbody');
     tb.innerHTML = pil.length ? pil.map(p => {
       const m = p.ultima ? haceMin(p.ultima) : null;
@@ -531,6 +559,24 @@
         <td class="r num ${quieto ? 'warn' : ''}">${p.ultima ? esc(relojGT(p.ultima)) + ' · ' + esc(haceTxt(m)) : 'sin registros'}</td>
         <td class="r num">${p.primera ? D1(p.ritmo) : '—'}</td></tr>`;
     }).join('') : '<tr><td colspan="8" class="empty-in">Todavía no hay entregas ni paquetes asignados hoy.</td></tr>';
+  }
+
+  function tablaRutasHoy() {
+    const g = new Map();
+    const get = r => { if (!g.has(r)) g.set(r, { ruta: r, llegar: 0, bodega: 0, camino: 0, ent: 0, rech: 0 }); return g.get(r); };
+    for (const p of PEND.rows) { const x = get(p.ruta); x.llegar += p.recepcion; x.bodega += p.activo; }
+    for (const r of RUTAS) { const x = get(r.ruta); x.camino += r.pendientes; x.ent += Number(r.entregados) || 0; x.rech += Number(r.rechazados) || 0; }
+    const rows = [...g.values()].map(x => ({ ...x, tot: x.llegar + x.bodega + x.camino + x.ent + x.rech })).filter(x => x.tot > 0).sort((a, b) => b.tot - a.tot);
+    const tb = $('#tbl-rutas-hoy tbody');
+    if (!rows.length) { tb.innerHTML = '<tr><td colspan="7" class="empty-in">Todavía no hay datos de rutas.</td></tr>'; return; }
+    const max = Math.max(...rows.map(r => r.tot));
+    const col = [['llegar', '#b9c6bd'], ['bodega', '#e0a800'], ['camino', '#41AC3A'], ['ent', '#1F7A3D'], ['rech', '#c0392b']];
+    const tot = k => rows.reduce((s, r) => s + r[k], 0);
+    const celda = v => `<td class="r num">${v ? N(v) : '<span style="color:#b9c6bd">0</span>'}</td>`;
+    tb.innerHTML = rows.map(r => `<tr><td style="white-space:nowrap">${esc(r.ruta)}</td>${celda(r.llegar)}${celda(r.bodega)}${celda(r.camino)}${celda(r.ent)}${celda(r.rech)}
+      <td style="width:30%;min-width:120px"><div class="stack" style="width:${Math.max(8, r.tot / max * 100)}%" title="${esc(r.ruta)}: ${r.tot} paquetes">${col.map(([k, c]) => r[k] ? `<span style="width:${r[k] / r.tot * 100}%;background:${c}"></span>` : '').join('')}</div></td></tr>`).join('')
+      + `<tr><td><b>Total</b></td>${['llegar', 'bodega', 'camino', 'ent', 'rech'].map(k => `<td class="r num"><b>${N(tot(k))}</b></td>`).join('')}<td></td></tr>`;
+    $('#rutas-note').textContent = 'Dónde está cada paquete, ruta por ruta' + (PEND.corte ? ' · bodega al corte de las ' + relojGT(PEND.corte) : '');
   }
 
   function chartHora(ent) {
@@ -766,10 +812,10 @@
 
   function chartPend(boxSel = '#ch-pend', noteSel = '#pend-note') {
     const box = $(boxSel);
-    if (!PEND.corte) { box.innerHTML = '<div class="empty-in">Todavía no hay datos de pendientes. Se llenan con la próxima actualización.</div>'; $(noteSel).textContent = 'Paquetes en CPS que aún no salen.'; return; }
+    if (!PEND.corte) { box.innerHTML = '<div class="empty-in">Todavía no hay datos de pendientes. Se llenan con la próxima actualización.</div>'; $(noteSel).textContent = 'Por llegar y en bodega sin asignar.'; return; }
     const rows = PEND.rows.map(r => ({ ...r, total: r.recepcion + r.activo })).sort((a, b) => b.total - a.total);
     const total = rows.reduce((s, r) => s + r.total, 0);
-    $(noteSel).textContent = N(total) + ' paquetes en CPS que aún no salen · corte del ' + cuando(PEND.corte);
+    $(noteSel).textContent = N(total) + ' paquetes por llegar o en bodega sin asignar · corte del ' + cuando(PEND.corte);
     if (!rows.length) { box.innerHTML = '<div class="empty-in">No hay pendientes.</div>'; return; }
     box.innerHTML = '';
     const W = Math.max(280, box.clientWidth), row = 30, top = 22;
@@ -778,8 +824,8 @@
     const max = Math.max(...rows.map(r => r.total)) || 1;
     const x = v => lw + (v / max) * (W - lw - vw);
     let s = `<svg viewBox="0 0 ${W} ${H}" height="${H}">`;
-    s += `<rect x="${lw}" y="4" width="9" height="9" rx="2" fill="#1F7A3D"/><text class="tick" x="${lw + 14}" y="9" dy="0.32em">En recepción</text>`;
-    s += `<rect x="${lw + 110}" y="4" width="9" height="9" rx="2" fill="#41AC3A"/><text class="tick" x="${lw + 124}" y="9" dy="0.32em">Activo en centro</text>`;
+    s += `<rect x="${lw}" y="4" width="9" height="9" rx="2" fill="#1F7A3D"/><text class="tick" x="${lw + 14}" y="9" dy="0.32em">Por llegar</text>`;
+    s += `<rect x="${lw + 110}" y="4" width="9" height="9" rx="2" fill="#41AC3A"/><text class="tick" x="${lw + 124}" y="9" dy="0.32em">En bodega sin asignar</text>`;
     rows.forEach((r, i) => {
       const yy = top + i * row;
       s += `<text class="lbl" x="${lw - 8}" y="${yy + row / 2}" dy="0.32em" text-anchor="end">${esc(r.ruta)}</text>`;
@@ -791,7 +837,7 @@
     const tip = tooltip(box);
     $$('rect[data-i]', box).forEach(el => {
       const r = rows[+el.dataset.i];
-      el.addEventListener('pointermove', ev => tip.show(ev, r.ruta, [['En recepción', N(r.recepcion)], ['Activo en centro', N(r.activo)], ['Total', N(r.total)]]));
+      el.addEventListener('pointermove', ev => tip.show(ev, r.ruta, [['Por llegar (recepción CPS)', N(r.recepcion)], ['En bodega sin asignar', N(r.activo)], ['Total', N(r.total)]]));
       el.addEventListener('pointerleave', tip.hide);
     });
   }
