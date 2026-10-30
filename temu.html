@@ -63,6 +63,63 @@
   .stack span{display:block;height:100%}
   .leg{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:.76rem;color:var(--muted);margin:0 0 10px}
   .leg span{display:inline-flex;align-items:center;gap:5px}.leg i{width:9px;height:9px;border-radius:3px;display:inline-block}
+  .solo-movil{display:none}
+  .mv-inline{display:none}
+  .mlist{display:grid;gap:10px}
+  .mitem{border:1px solid var(--line);border-radius:12px;padding:11px 12px;background:#fff}
+  .mitem .mtop{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+  .mitem .mtop b{font-weight:700;font-size:.95rem}
+  .mitem .mtop span{font-size:.8rem;color:var(--muted);white-space:nowrap}
+  .mitem .msub{font-size:.74rem;color:var(--muted);margin-top:1px}
+  .mitem .stack{margin:8px 0 7px}
+  .chips{display:flex;flex-wrap:wrap;gap:5px 6px}
+  .chips span{display:inline-flex;align-items:center;gap:5px;font-size:.76rem;background:var(--grey);border-radius:8px;padding:3px 8px;font-variant-numeric:tabular-nums;white-space:nowrap}
+  .chips span i{width:8px;height:8px;border-radius:2px;display:inline-block}
+  .chips span.amb{background:#fff7df;color:#8a6200;font-weight:700}
+  .chips span.warn{background:#fdecea;color:#a3261a;font-weight:700}
+  .mitem.apoyo{opacity:.7}
+  @media (max-width:640px){
+    .wrap{padding:12px 12px 60px}
+    .topbar{padding:9px 12px;margin-bottom:14px;border-radius:14px;flex-wrap:nowrap;gap:10px}
+    .topbar .brand img{height:24px}
+    .topbar .nav{flex:1;min-width:0;flex-wrap:nowrap;gap:8px}
+    .topbar .nav-links{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;flex:1;min-width:0;-webkit-overflow-scrolling:touch}
+    .topbar .nav-links::-webkit-scrollbar{display:none}
+    .topbar .nav-links a{padding:6px 10px;font-size:.8rem}
+    .topbar .nav-sep,.topbar .nav-av{display:none!important}
+    .topbar .nav-logout{padding:5px 9px;font-size:.75rem}
+    .page-head{margin-bottom:10px}.page-head h2{font-size:1.15rem}.page-head .sub{display:none}
+    .tm-bar{padding:9px 10px;gap:8px;margin-bottom:10px}
+    .tm-bar .btn{padding:8px 12px;font-size:.82rem}
+    .tm-sync{font-size:.74rem;margin:-2px 2px 12px}
+    .hoy-head{margin-bottom:10px}.hoy-head .live{font-size:.74rem}
+    .flow5{gap:8px;margin-bottom:8px}
+    .fstep{padding:10px 12px;border-radius:12px}
+    .fstep .k{font-size:.66rem;letter-spacing:.06em}
+    .fstep .v{font-size:1.45rem}
+    .fstep .d{font-size:.72rem}
+    .summary{gap:8px;margin-bottom:12px!important}
+    .stat{min-width:calc(50% - 4px);padding:10px 12px;border-radius:12px}
+    .stat .k{font-size:.66rem;letter-spacing:.06em}
+    .stat .v{font-size:1.3rem}
+    .stat .d{font-size:.72rem}
+    .card{padding:14px 14px}
+    .grid2{gap:12px}
+    .solo-desk{display:none!important}
+    .solo-movil{display:block}
+    .mv-inline{display:inline}
+    .mlist.solo-movil,.solo-movil .mlist{display:grid}
+    .leg{display:none}
+    #hoy-titulo{display:none}
+    .hoy-head{justify-content:flex-start}
+    #tbl-pil th:nth-child(2),#tbl-pil td:nth-child(2),#tbl-pil th:nth-child(3),#tbl-pil td:nth-child(3),#tbl-pil th:nth-child(6),#tbl-pil td:nth-child(6),#tbl-pil th:nth-child(7),#tbl-pil td:nth-child(7),#tbl-pil th:nth-child(8),#tbl-pil td:nth-child(8){display:none}
+    #tbl-pil td:first-child{white-space:nowrap}
+    table.hist{font-size:.84rem}
+    #tbl-proy th:nth-child(4),#tbl-proy td:nth-child(4),#tbl-proy th:nth-child(5),#tbl-proy td:nth-child(5){display:none}
+    #tbl-runs th:nth-child(2),#tbl-runs td:nth-child(2){display:none}
+    table.hist th,table.hist td{padding:9px 10px}
+    footer{margin-top:28px}
+  }
   .meta-bar{height:10px;border-radius:6px;background:var(--grey);overflow:hidden;margin-top:8px}
   .meta-bar span{display:block;height:100%;background:linear-gradient(90deg,var(--green),var(--lime));border-radius:6px}
   table.hist td .mini{display:inline-block;width:70px;height:7px;border-radius:5px;background:var(--grey);vertical-align:middle;margin-left:8px;overflow:hidden}
@@ -221,7 +278,8 @@
         <h3>Por ruta</h3>
         <div class="note" id="rutas-note">Dónde está cada paquete, ruta por ruta.</div>
         <div class="leg"><span><i style="background:#b9c6bd"></i>Por llegar</span><span><i style="background:#e0a800"></i>En bodega</span><span><i style="background:#41AC3A"></i>En camino</span><span><i style="background:#1F7A3D"></i>Entregados</span><span><i style="background:#c0392b"></i>Rechazados</span></div>
-        <div class="tablebox">
+        <div class="mlist solo-movil" id="rutas-movil"></div>
+        <div class="tablebox solo-desk">
           <table class="hist" id="tbl-rutas-hoy">
             <thead><tr><th>Ruta</th><th class="r">Por llegar</th><th class="r">En bodega</th><th class="r">En camino</th><th class="r">Entreg.</th><th class="r">Rech.</th><th></th></tr></thead>
             <tbody></tbody>
@@ -234,13 +292,18 @@
         <div class="chart" id="ch-hora"></div>
       </div>
     </div>
-    <div class="panel tablebox" style="margin-top:16px">
+    <div class="card solo-movil" style="margin-top:12px">
+      <h3>Motoristas</h3>
+      <div class="note">Primero quien tiene más paquetes en camino.</div>
+      <div class="mlist" id="motos-movil"></div>
+    </div>
+    <div class="panel tablebox solo-desk" style="margin-top:16px">
       <table class="hist" id="tbl-hoy">
         <thead><tr><th>Motorista</th><th class="r">Asignados</th><th class="r">En camino</th><th class="r">Entregados</th><th class="r">Rechazados</th><th class="r">Primera</th><th class="r">Última</th><th class="r">Por hora</th></tr></thead>
         <tbody></tbody>
       </table>
     </div>
-    <div class="note" style="margin-top:8px;color:var(--muted);font-size:.8rem">Asignados y en camino vienen del "Rendimiento por ruta" de CPS; debajo del nombre, sus rutas. En amarillo: lleva más de 45 minutos sin registrar nada y todavía tiene paquetes en camino. La barra compara con la meta de cada motorista.</div>
+    <div class="note solo-desk" style="margin-top:8px;color:var(--muted);font-size:.8rem">Asignados y en camino vienen del "Rendimiento por ruta" de CPS; debajo del nombre, sus rutas. En amarillo: lleva más de 45 minutos sin registrar nada y todavía tiene paquetes en camino. La barra compara con la meta de cada motorista.</div>
   </section>
 
   <!-- RESUMEN -->
@@ -287,7 +350,7 @@
         <tbody></tbody>
       </table>
     </div>
-    <div class="note" style="margin-top:8px;color:var(--muted);font-size:.8rem">"Tipo" se guarda para todos: marcá como <b>Apoyo</b> a quien sale solo de vez en cuando.</div>
+    <div class="note" style="margin-top:8px;color:var(--muted);font-size:.8rem"><span class="mv-inline">En el celular se ven las columnas principales; el tipo (Fijo/Apoyo) se cambia desde la compu. </span>"Tipo" se guarda para todos: marcá como <b>Apoyo</b> a quien sale solo de vez en cuando.</div>
   </section>
 
   <!-- GANANCIA -->
@@ -559,6 +622,21 @@
         <td class="r num ${quieto ? 'warn' : ''}">${p.ultima ? esc(relojGT(p.ultima)) + ' · ' + esc(haceTxt(m)) : 'sin registros'}</td>
         <td class="r num">${p.primera ? D1(p.ritmo) : '—'}</td></tr>`;
     }).join('') : '<tr><td colspan="8" class="empty-in">Todavía no hay entregas ni paquetes asignados hoy.</td></tr>';
+    $('#motos-movil').innerHTML = pil.length ? pil.map(p => {
+      const m = p.ultima ? haceMin(p.ultima) : null;
+      const quieto = m !== null && m > 45 && (p.pend === null || p.pend > 0) && horaGT(new Date().toISOString()) < 20;
+      const w = Math.min(100, p.ent / CFG.meta_motorista * 100);
+      const chips = [];
+      if (p.pend > 0) chips.push(`<span class="amb">${N(p.pend)} en camino</span>`);
+      if (p.asig !== null) chips.push(`<span>${N(p.asig)} asignados</span>`);
+      if (p.rech) chips.push(`<span>${N(p.rech)} rechazados</span>`);
+      chips.push(p.ultima ? `<span class="${quieto ? 'warn' : ''}">última ${esc(relojGT(p.ultima))} · ${esc(haceTxt(m))}</span>` : '<span>sin registros</span>');
+      if (p.primera) chips.push(`<span>${D1(p.ritmo)} por hora</span>`);
+      return `<div class="mitem ${p.tipo === 'Apoyo' ? 'apoyo' : ''}"><div class="mtop"><b>${esc(p.nombre)}${p.tipo === 'Apoyo' ? ' <span style="font-weight:500;color:var(--muted)">(apoyo)</span>' : ''}</b><span><b style="color:var(--green-dk);font-size:1rem">${N(p.ent)}</b> entregados</span></div>
+        ${p.rutas ? `<div class="msub">${esc(p.rutas)}</div>` : ''}
+        <div class="meta-bar" style="height:7px;margin:7px 0 8px"><span style="width:${w}%"></span></div>
+        <div class="chips">${chips.join('')}</div></div>`;
+    }).join('') : '<div class="empty-in">Todavía no hay entregas ni paquetes asignados hoy.</div>';
   }
 
   function tablaRutasHoy() {
@@ -568,7 +646,7 @@
     for (const r of RUTAS) { const x = get(r.ruta); x.camino += r.pendientes; x.ent += Number(r.entregados) || 0; x.rech += Number(r.rechazados) || 0; }
     const rows = [...g.values()].map(x => ({ ...x, tot: x.llegar + x.bodega + x.camino + x.ent + x.rech })).filter(x => x.tot > 0).sort((a, b) => b.tot - a.tot);
     const tb = $('#tbl-rutas-hoy tbody');
-    if (!rows.length) { tb.innerHTML = '<tr><td colspan="7" class="empty-in">Todavía no hay datos de rutas.</td></tr>'; return; }
+    if (!rows.length) { tb.innerHTML = '<tr><td colspan="7" class="empty-in">Todavía no hay datos de rutas.</td></tr>'; $('#rutas-movil').innerHTML = '<div class="empty-in">Todavía no hay datos de rutas.</div>'; return; }
     const max = Math.max(...rows.map(r => r.tot));
     const col = [['llegar', '#b9c6bd'], ['bodega', '#e0a800'], ['camino', '#41AC3A'], ['ent', '#1F7A3D'], ['rech', '#c0392b']];
     const tot = k => rows.reduce((s, r) => s + r[k], 0);
@@ -576,6 +654,10 @@
     tb.innerHTML = rows.map(r => `<tr><td style="white-space:nowrap">${esc(r.ruta)}</td>${celda(r.llegar)}${celda(r.bodega)}${celda(r.camino)}${celda(r.ent)}${celda(r.rech)}
       <td style="width:30%;min-width:120px"><div class="stack" style="width:${Math.max(8, r.tot / max * 100)}%" title="${esc(r.ruta)}: ${r.tot} paquetes">${col.map(([k, c]) => r[k] ? `<span style="width:${r[k] / r.tot * 100}%;background:${c}"></span>` : '').join('')}</div></td></tr>`).join('')
       + `<tr><td><b>Total</b></td>${['llegar', 'bodega', 'camino', 'ent', 'rech'].map(k => `<td class="r num"><b>${N(tot(k))}</b></td>`).join('')}<td></td></tr>`;
+    const et = { llegar: 'por llegar', bodega: 'en bodega', camino: 'en camino', ent: 'entregados', rech: 'rechazados' };
+    $('#rutas-movil').innerHTML = rows.map(r => `<div class="mitem"><div class="mtop"><b>${esc(r.ruta)}</b><span>${N(r.tot)} paquetes</span></div>
+      <div class="stack">${col.map(([k, c]) => r[k] ? `<span style="width:${r[k] / r.tot * 100}%;background:${c}"></span>` : '').join('')}</div>
+      <div class="chips">${col.filter(([k]) => r[k]).map(([k, c]) => `<span class="${k === 'camino' ? 'amb' : ''}"><i style="background:${c}"></i>${N(r[k])} ${et[k]}</span>`).join('')}</div></div>`).join('');
     $('#rutas-note').textContent = 'Dónde está cada paquete, ruta por ruta' + (PEND.corte ? ' · bodega al corte de las ' + relojGT(PEND.corte) : '');
   }
 
@@ -1038,6 +1120,8 @@
     if (guard === null) return;
     if (guard.previewMode) { $('#notice').classList.add('show'); $('#btn-sync').disabled = true; return; }
     window.dropperNav.setUser(guard.user.email || '');
+    const act = document.querySelector('.topbar .nav-links a.active');
+    if (act && window.innerWidth <= 640) { const nl = act.parentElement; nl.scrollLeft = act.offsetLeft - nl.clientWidth / 2 + act.clientWidth / 2; }
     await cargarConfig();
     llenarCfg();
     document.body.classList.add('modo-hoy');
