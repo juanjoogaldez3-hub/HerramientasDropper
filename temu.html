@@ -152,6 +152,7 @@
   table.hist th[aria-sort=descending] button::after{content:" ↓"} table.hist th[aria-sort=ascending] button::after{content:" ↑"}
   table.hist td.r, table.hist th.r{text-align:right}
   table.hist tr.apoyo td{color:var(--muted)}
+  table.hist tfoot tr.tot td{font-weight:800;border-top:2px solid var(--line);background:var(--grey);border-bottom:none}
   table.hist td.good{color:var(--green);font-weight:700} table.hist td.bad{color:#c0392b;font-weight:700}
   table.hist select{font-family:inherit;font-size:.82rem;border:1px solid #cdd8cf;border-radius:8px;padding:4px 6px;background:#fcfdfc;color:var(--ink)}
   .tablebox{overflow-x:auto}
@@ -348,6 +349,7 @@
           <th data-k="pago" class="r"><button>Pago</button></th>
         </tr></thead>
         <tbody></tbody>
+        <tfoot></tfoot>
       </table>
     </div>
     <div class="note" style="margin-top:8px;color:var(--muted);font-size:.8rem"><span class="mv-inline">En el celular se ven las columnas principales; el tipo (Fijo/Apoyo) se cambia desde la compu. </span>"Tipo" se guarda para todos: marcá como <b>Apoyo</b> a quien sale solo de vez en cuando.</div>
@@ -971,7 +973,19 @@
       const va = a[sortKey], vb = b[sortKey];
       return (typeof va === 'number' ? va - vb : String(va).localeCompare(String(vb), 'es')) * sortDir;
     });
-    if (!rows.length) { tb.innerHTML = '<tr><td colspan="9" class="empty-in">Sin entregas en este período.</td></tr>'; return; }
+    const tf = $('#tbl-pil tfoot');
+    if (!rows.length) { tb.innerHTML = '<tr><td colspan="9" class="empty-in">Sin entregas en este período.</td></tr>'; tf.innerHTML = ''; return; }
+    const sum = k => rows.reduce((s, r) => s + r[k], 0);
+    const tEnt = sum('entregados'), tRech = sum('rechazos'), tDias = new Set(DP.filter(r => r.entregados > 0).map(r => r.fecha)).size;
+    tf.innerHTML = `<tr class="tot">
+      <td>Total · ${N(rows.length)} pilotos</td><td></td>
+      <td class="r num">${N(tDias)}</td>
+      <td class="r num">${N(tEnt)}</td>
+      <td class="r num">${tDias ? D1(tEnt / tDias) : '—'}</td>
+      <td class="r num">—</td>
+      <td class="r num">${N(tRech)}</td>
+      <td class="r num">${P(tEnt + tRech ? tRech / (tEnt + tRech) : 0, 1)}</td>
+      <td class="r num total">${Q(sum('pago'))}</td></tr>`;
     tb.innerHTML = rows.map(r => `<tr class="${r.tipo === 'Apoyo' ? 'apoyo' : ''}">
       <td>${esc(r.piloto)}</td>
       <td><select data-id="${esc(r.piloto_id)}" aria-label="Tipo de ${esc(r.piloto)}"><option ${r.tipo === 'Fijo' ? 'selected' : ''}>Fijo</option><option ${r.tipo === 'Apoyo' ? 'selected' : ''}>Apoyo</option></select></td>
