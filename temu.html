@@ -255,7 +255,9 @@
     <div class="presets solo-periodo" id="presets">
       <button data-p="semana">Esta semana</button>
       <button data-p="pasada">Semana pasada</button>
+      <button data-p="quincena">Quincena anterior</button>
       <button data-p="mes">Este mes</button>
+      <button data-p="mesant">Mes anterior</button>
       <button data-p="30">Últimos 30 días</button>
     </div>
     <label class="solo-periodo">Desde <input type="date" id="f-desde"></label>
@@ -609,6 +611,11 @@
     if (p === 'semana') return [lunes(h), h];
     if (p === 'pasada') { const l = lunes(h); return [addDays(l, -7), addDays(l, -1)]; }
     if (p === 'mes') return [h.slice(0, 8) + '01', h];
+    const finMes = f => addDays(addDays(f.slice(0, 8) + '28', 4).slice(0, 8) + '01', -1);   // último día del mes de f
+    const mesAnt = addDays(h.slice(0, 8) + '01', -1);                                       // último día del mes pasado
+    if (p === 'mesant') return [mesAnt.slice(0, 8) + '01', mesAnt];
+    // Quincenas: del 1 al 15 y del 16 al fin de mes
+    if (p === 'quincena') return Number(h.slice(8, 10)) <= 15 ? [mesAnt.slice(0, 8) + '16', finMes(mesAnt)] : [h.slice(0, 8) + '01', h.slice(0, 8) + '15'];
     return [addDays(h, -29), h];
   }
 
