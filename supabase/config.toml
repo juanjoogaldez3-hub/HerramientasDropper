@@ -15,3 +15,7 @@ verify_jwt = false
 # (botón de la página) o el secreto de la tarea automática (header x-temu-cron).
 [functions.temu-sync]
 verify_jwt = false
+
+# Mover paquetes en ruta (CPS). Verifica DENTRO de la función el JWT del usuario.
+[functions.temu-mover]
+verify_jwt = false

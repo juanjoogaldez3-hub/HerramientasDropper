@@ -44,6 +44,24 @@
   .stat.hero .v{color:var(--green-dk)}
 
   body.modo-hoy .solo-periodo{display:none!important}
+  body.modo-mover .solo-periodo,body.modo-mover .tm-sync{display:none!important}
+  .mv-steps{display:grid;gap:14px}
+  .mv-row{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end}
+  .mv-row label{display:flex;flex-direction:column;gap:5px;font-size:.8rem;font-weight:600;color:var(--ink);flex:1;min-width:180px}
+  .mv-row select,.mv-row input{font-family:inherit;font-size:.92rem;border:1px solid #cdd8cf;border-radius:10px;padding:9px 11px;background:#fcfdfc;color:var(--ink);width:100%}
+  .mv-row select:focus,.mv-row input:focus{outline:none;border-color:var(--green);box-shadow:0 0 0 3px rgba(31,122,61,.12)}
+  .mv-row .btn{width:auto}
+  .mv-ruta{border:1px solid var(--line);border-radius:12px;overflow:hidden;background:#fff}
+  .mv-ruta-h{display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--grey);font-weight:700;font-size:.9rem}
+  .mv-ruta-h span{margin-left:auto;font-weight:600;color:var(--muted);font-size:.8rem}
+  .mv-pk{display:flex;align-items:center;gap:10px;padding:8px 12px;border-top:1px solid var(--line);font-size:.86rem;font-variant-numeric:tabular-nums}
+  .mv-pk.no{color:var(--muted)}
+  .mv-pk small{color:var(--muted);margin-left:auto;text-align:right}
+  .mv-pk input,.mv-ruta-h input{width:17px;height:17px;accent-color:var(--green-dk);flex:none}
+  .mv-confirm{border:2px solid #e0a800;background:#fffbea;border-radius:14px;padding:14px 16px}
+  .mv-confirm p{margin:0 0 10px;font-size:.92rem}
+  .mv-res{display:grid;gap:4px;font-size:.84rem}
+  .mv-res div{display:flex;gap:8px}.mv-res .ok{color:var(--green)}.mv-res .err{color:#c0392b}
   body:not(.modo-hoy) .solo-hoy{display:none!important}
   .hoy-head{display:flex;align-items:baseline;justify-content:space-between;gap:10px;flex-wrap:wrap;margin:0 2px 12px}
   .hoy-head h3{font-family:'Sora',sans-serif;font-weight:700;font-size:1.05rem}
@@ -118,6 +136,8 @@
     table.hist{font-size:.84rem}
     #tbl-proy th:nth-child(4),#tbl-proy td:nth-child(4),#tbl-proy th:nth-child(5),#tbl-proy td:nth-child(5){display:none}
     #tbl-runs th:nth-child(2),#tbl-runs td:nth-child(2){display:none}
+    #tbl-mov th:nth-child(5),#tbl-mov td:nth-child(5),#tbl-mov th:nth-child(6),#tbl-mov td:nth-child(6){display:none}
+    .mv-pk{flex-wrap:wrap}.mv-pk small{flex-basis:100%;text-align:left;margin-left:27px}
     table.hist th,table.hist td{padding:9px 10px}
     footer{margin-top:28px}
   }
@@ -261,6 +281,7 @@
     <button data-t="pilotos">Pilotos</button>
     <button data-t="ganancia">Pago y ganancia</button>
     <button data-t="rechazos">Rechazos</button>
+    <button data-t="mover">Mover</button>
     <button data-t="ajustes">Ajustes</button>
   </div>
 
@@ -415,6 +436,51 @@
         <h3>Rechazos por piloto</h3>
         <div class="note">Qué tanto de lo que sacó cada uno regresó. En rojo, 15% o más.</div>
         <div class="chart" id="ch-rech-pil"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- MOVER -->
+  <section class="tm-tab" data-t="mover">
+    <div class="card mv-steps">
+      <div>
+        <h3>Mover paquetes en ruta</h3>
+        <div class="note" style="margin-bottom:0">Pasa paquetes que un motorista lleva <b>en camino hoy</b> a otro motorista, igual que "Mover en ruta" de CPS. Solo se pueden mover paquetes que CPS todavía tenga en camino.</div>
+      </div>
+      <div class="mv-row">
+        <label>¿Quién tiene los paquetes?
+          <select id="mv-origen"><option value="">Cargando motoristas…</option></select>
+        </label>
+        <button class="btn btn-ghost" id="mv-ver">Ver sus paquetes</button>
+      </div>
+      <div id="mv-lista"></div>
+      <div id="mv-paso2" hidden>
+        <div class="mv-row">
+          <label>Pasar a
+            <select id="mv-destino"></select>
+          </label>
+          <label>Ruta
+            <select id="mv-ruta"><option value="">La misma ruta de cada paquete</option></select>
+          </label>
+        </div>
+        <div class="mv-row" style="margin-top:10px">
+          <label style="flex:2">Motivo (queda guardado en CPS)
+            <input id="mv-motivo" maxlength="150" placeholder="Ej.: Jeremy se retiró temprano">
+          </label>
+          <button class="btn btn-primary" id="mv-btn" disabled>Mover</button>
+        </div>
+      </div>
+      <div id="mv-confirm" hidden></div>
+      <div id="mv-resultado" hidden></div>
+    </div>
+    <div class="card" style="margin-top:16px">
+      <h3>Movimientos hechos desde aquí</h3>
+      <div class="note">Los últimos 50. Se guardan con quién lo hizo y el motivo.</div>
+      <div class="tablebox">
+        <table class="hist" id="tbl-mov">
+          <thead><tr><th>Cuándo</th><th>Paquete</th><th>De</th><th>A</th><th>Ruta</th><th>Motivo</th><th>Resultado</th></tr></thead>
+          <tbody></tbody>
+        </table>
       </div>
     </div>
   </section>
@@ -1242,6 +1308,118 @@
     } finally { btn.disabled = false; }
   });
 
+  // ---------- Mover en ruta ----------
+  let MV = { destinos: null, paquetes: [], origen: null, cargado: false };
+  async function mvCall(body) {
+    const { data, error } = await sb.functions.invoke('temu-mover', { body });
+    if (error) throw error;
+    if (!data || data.error) throw new Error((data && data.error) || 'respuesta inesperada');
+    return data;
+  }
+  async function abrirMover() {
+    cargarMovs();
+    if (MV.cargado) return;
+    try {
+      MV.destinos = await mvCall({ accion: 'destinos' });
+      MV.cargado = true;
+      const opts = MV.destinos.pilotos.slice().sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
+      $('#mv-origen').innerHTML = '<option value="">Elegí un motorista</option>' + opts.map(p => `<option value="${p.id}">${esc(p.nombre)}</option>`).join('');
+      $('#mv-ruta').innerHTML = '<option value="">La misma ruta de cada paquete</option>' + MV.destinos.rutas.map(r => `<option value="${r.id}">${esc(r.codigo)}</option>`).join('');
+    } catch (e) {
+      $('#mv-origen').innerHTML = '<option value="">No se pudo cargar</option>';
+      status('No se pudieron cargar los motoristas de CPS: ' + esc(e.message || String(e)), 'err');
+    }
+  }
+  function mvSeleccion() { return $$('#mv-lista input[data-w]:checked').map(i => i.dataset.w); }
+  function mvActualizarBoton() {
+    const n = mvSeleccion().length, dest = $('#mv-destino').value, mot = $('#mv-motivo').value.trim();
+    const b = $('#mv-btn');
+    b.disabled = !n || !dest || mot.length < 3;
+    b.textContent = n ? `Mover ${n} paquete${n === 1 ? '' : 's'}` : 'Mover';
+    $('#mv-confirm').hidden = true;
+  }
+  $('#mv-ver').addEventListener('click', () => mvListar(false));
+  $('#mv-origen').addEventListener('change', () => { $('#mv-lista').innerHTML = ''; $('#mv-paso2').hidden = true; $('#mv-confirm').hidden = true; $('#mv-resultado').hidden = true; });
+  async function mvListar(dejarResultado) {
+    const pid = Number($('#mv-origen').value);
+    if (!pid) { status('Elegí primero el motorista.', 'err'); return; }
+    MV.origen = MV.destinos.pilotos.find(p => p.id === pid);
+    $('#mv-paso2').hidden = true; $('#mv-confirm').hidden = true; if (!dejarResultado) $('#mv-resultado').hidden = true;
+    $('#mv-lista').innerHTML = '<div class="status show work"><span class="spin"></span>Buscando en CPS los paquetes en camino de ' + esc(MV.origen.nombre) + '… puede tardar unos segundos.</div>';
+    $('#mv-ver').disabled = true;
+    try {
+      const d = await mvCall({ accion: 'listar', piloto_id: pid });
+      MV.paquetes = d.paquetes || [];
+      pintarListaMover();
+      if (d.sin_consultar) $('#mv-lista').insertAdjacentHTML('afterbegin', `<div class="status show err" style="margin-bottom:10px">CPS no respondió por ${d.sin_consultar} paquete(s) de sus rutas; si falta alguno, tocá “Ver sus paquetes” otra vez.</div>`);
+    } catch (e) {
+      $('#mv-lista').innerHTML = '<div class="status show err">No se pudo consultar CPS: ' + esc(e.message || String(e)) + '</div>';
+    } finally { $('#mv-ver').disabled = false; }
+  }
+  function pintarListaMover() {
+    const box = $('#mv-lista');
+    if (!MV.paquetes.length) { box.innerHTML = `<div class="empty-in">${esc(MV.origen.nombre)} no tiene paquetes en camino hoy.</div>`; $('#mv-paso2').hidden = true; return; }
+    const porRuta = new Map();
+    for (const p of MV.paquetes) { const k = p.ruta || 'Sin ruta'; if (!porRuta.has(k)) porRuta.set(k, []); porRuta.get(k).push(p); }
+    box.innerHTML = '<div class="mv-steps" style="gap:10px">' + [...porRuta].map(([ruta, ps]) => {
+      const mov = ps.filter(p => p.puede_mover && !p.error).length;
+      return `<div class="mv-ruta"><label class="mv-ruta-h"><input type="checkbox" data-ruta="${esc(ruta)}" ${mov ? 'checked' : 'disabled'}>${esc(ruta)}<span>${mov} de ${ps.length} se pueden mover</span></label>` +
+        ps.map(p => {
+          const ok = p.puede_mover && !p.error;
+          return `<label class="mv-pk ${ok ? '' : 'no'}"><input type="checkbox" data-w="${esc(p.wrhs)}" data-r="${esc(ruta)}" ${ok ? 'checked' : 'disabled'}><b>${esc(p.correlativo || '')}</b> <span style="color:var(--muted)">guía ${esc(p.wrhs)}</span><small>${ok ? '' : esc(p.error || p.motivo_no || 'CPS no deja moverlo')}</small></label>`;
+        }).join('') + '</div>';
+    }).join('') + '</div>';
+    $$('#mv-lista input[data-ruta]').forEach(c => c.addEventListener('change', () => {
+      $$(`#mv-lista input[data-r="${CSS.escape(c.dataset.ruta)}"]:not(:disabled)`).forEach(i => { i.checked = c.checked; });
+      mvActualizarBoton();
+    }));
+    $$('#mv-lista input[data-w]').forEach(c => c.addEventListener('change', mvActualizarBoton));
+    const dest = MV.destinos.pilotos.filter(p => p.id !== MV.origen.id).sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
+    $('#mv-destino').innerHTML = '<option value="">Elegí a quién</option>' + dest.map(p => `<option value="${p.id}">${esc(p.nombre)}</option>`).join('');
+    $('#mv-paso2').hidden = false;
+    mvActualizarBoton();
+  }
+  ['#mv-destino', '#mv-ruta'].forEach(sel => $(sel).addEventListener('change', mvActualizarBoton));
+  $('#mv-motivo').addEventListener('input', mvActualizarBoton);
+  $('#mv-btn').addEventListener('click', () => {
+    const w = mvSeleccion(), dest = MV.destinos.pilotos.find(p => p.id === Number($('#mv-destino').value));
+    const rutaSel = $('#mv-ruta').value, rutaTxt = rutaSel ? 'a la ruta ' + (MV.destinos.rutas.find(r => String(r.id) === rutaSel) || {}).codigo : 'en la misma ruta';
+    const box = $('#mv-confirm');
+    box.innerHTML = `<div class="mv-confirm"><p><b>¿Confirmás?</b> Se van a mover <b>${w.length} paquete${w.length === 1 ? '' : 's'}</b> de <b>${esc(MV.origen.nombre)}</b> a <b>${esc(dest.nombre)}</b> ${esc(rutaTxt)}. Esto cambia los datos en CPS.</p>
+      <p style="color:var(--muted);font-size:.84rem">Motivo: “${esc($('#mv-motivo').value.trim())}”</p>
+      <div style="display:flex;gap:10px;flex-wrap:wrap"><button class="btn btn-primary" id="mv-si" style="width:auto">Sí, mover</button><button class="btn btn-ghost" id="mv-no">Cancelar</button></div></div>`;
+    box.hidden = false;
+    $('#mv-no').addEventListener('click', () => { box.hidden = true; });
+    $('#mv-si').addEventListener('click', async () => {
+      $('#mv-si').disabled = true; $('#mv-no').disabled = true; $('#mv-btn').disabled = true;
+      $('#mv-si').innerHTML = '<span class="spin" style="border-color:#bcd9c4;border-top-color:#fff"></span> Moviendo…';
+      try {
+        const r = await mvCall({ accion: 'mover', wrhs: w, piloto_destino_id: dest.id, ruta_destino_id: rutaSel ? Number(rutaSel) : null, motivo: $('#mv-motivo').value.trim() });
+        box.hidden = true;
+        const res = $('#mv-resultado');
+        res.innerHTML = `<div class="status show ${r.fallidos ? 'err' : 'ok'}" style="margin:0 0 8px">${r.movidos} movido${r.movidos === 1 ? '' : 's'} a ${esc(dest.nombre)}${r.fallidos ? ` · ${r.fallidos} no se pudieron mover` : ''}.</div>` +
+          (r.fallidos ? '<div class="mv-res">' + r.resultados.filter(x => !x.ok).map(x => `<div class="err">✕ <b>${esc(x.correlativo || x.wrhs)}</b> ${esc(x.mensaje)}</div>`).join('') + '</div>' : '');
+        res.hidden = false;
+        cargarMovs();
+        mvListar(true);           // volver a consultar lo que le queda
+        if (r.movidos) setTimeout(() => cargarHoy && cargarHoy(), 1500);
+      } catch (e) {
+        box.innerHTML = '<div class="status show err">No se pudo mover: ' + esc(e.message || String(e)) + '</div>';
+        mvActualizarBoton();
+      }
+    });
+  });
+  async function cargarMovs() {
+    const { data, error } = await sb.from('temu_movimientos').select('*').order('created_at', { ascending: false }).limit(50);
+    const tb = $('#tbl-mov tbody');
+    if (error) { tb.innerHTML = '<tr><td colspan="7" class="empty-in">No se pudo cargar el historial.</td></tr>'; return; }
+    tb.innerHTML = (data || []).length ? data.map(m => `<tr><td style="white-space:nowrap">${esc(cuando(m.created_at))}<div style="font-size:.74rem;color:var(--muted)">${esc(m.hecho_por || '')}</div></td>
+      <td style="white-space:nowrap">${esc(m.correlativo || '')}<div style="font-size:.74rem;color:var(--muted)">${esc(m.wrhs)}</div></td>
+      <td>${esc(m.piloto_origen || '—')}</td><td>${esc(m.piloto_destino || '—')}</td><td style="white-space:nowrap">${esc(m.ruta_destino || '—')}</td>
+      <td>${esc(m.motivo || '')}</td><td class="${m.ok ? 'good' : 'bad'}">${m.ok ? 'Movido' : esc(m.mensaje || 'No se movió')}</td></tr>`).join('')
+      : '<tr><td colspan="7" class="empty-in">Todavía no se ha movido nada desde aquí.</td></tr>';
+  }
+
   // ---------- Ajustes ----------
   function llenarCfg() {
     $$('#cfg-form input').forEach(i => { const v = CFG[i.name]; i.value = i.hasAttribute('data-pct') ? +(v * 100).toFixed(2) : v; });
@@ -1266,6 +1444,8 @@
     $$('#tabs button').forEach(o => o.classList.toggle('active', o === b));
     $$('.tm-tab').forEach(s => s.classList.toggle('show', s.dataset.t === b.dataset.t));
     document.body.classList.toggle('modo-hoy', b.dataset.t === 'hoy');
+    document.body.classList.toggle('modo-mover', b.dataset.t === 'mover');
+    if (b.dataset.t === 'mover') abrirMover();
     if (b.dataset.t === 'hoy') dibujarHoy();
     else if (DP.length) dibujar();   // re-medir gráficos ocultos
   }));
