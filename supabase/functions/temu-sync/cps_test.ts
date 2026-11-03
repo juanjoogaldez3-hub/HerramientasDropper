@@ -1,5 +1,5 @@
 // Pruebas de la conversión de envíos de CPS.  Correr con:  deno test supabase/functions/temu-sync/cps_test.ts
-import { aFila, finUTC, inicioUTC, md5hex, sumarDias } from "./cps.ts";
+import { aFila, finUTC, inicioUTC, md5hex, sumarDias, unicos } from "./cps.ts";
 
 function igual(a: unknown, b: unknown, msg: string) {
   if (JSON.stringify(a) !== JSON.stringify(b)) throw new Error(`${msg}: esperaba ${JSON.stringify(b)}, salió ${JSON.stringify(a)}`);
@@ -12,7 +12,7 @@ const entregadoTrasRechazo = {
   ID_ENVIO: 1257278, CORRELATIVO: "ENV26/0709070", ID_ESTADO: 2,
   FECHA_REGISTRO: "2026-10-28T21:26:20.273+0000", CODIGO_SIZE: "S",
   COSTO_ENVIO: 11.0, GANANCIA_PILOTO: 8.24, PAGOS: "625844", RECHAZOS: null,
-  ID_ENVIO_DETALLE: 1481600, NOMBRE_COMPLETO: "Mario Chapas", MOTIVO_RECHAZO: null,
+  ID_ENVIO_DETALLE: 1481600, NOMBRE_COMPLETO: "Mario Chapas", MOTIVO_RECHAZO: null, IDENTIFICADOR_DETALLE: "94648814", BILLING_NAME: "CPX S.A.",
   LIST_PAGO_RECHAZO: [
     { TIPO_PAGO: " (  )", MOTIVO: "NO HAY PASO", FECHA_REGISTRO_RECHAZO: "2026-10-27T23:39:34.580+0000" },
     { TIPO_PAGO: "NO APLICA (  )", MOTIVO: null, FECHA_REGISTRO_PAGO: "2026-10-28T21:26:20.270+0000", FECHA_REGISTRO_RECHAZO: null },
@@ -39,6 +39,8 @@ Deno.test("entregado después de un rechazo cuenta como entregado y sin motivo",
   igual(f.motivo, null, "motivo");
   igual(f.id_envio_detalle, 1481600, "id");
   igual(f.ganancia_cps, 8.24, "ganancia");
+  igual(f.guia, "94648814", "guía");
+  igual(f.billing_name, "CPX S.A.", "factura a");
 });
 
 Deno.test("rechazo de noche cae en el día de Guatemala, con su motivo", () => {
@@ -56,4 +58,13 @@ Deno.test("sin fecha o sin id no se guarda", () => {
 Deno.test("contraseña en MD5 como la manda la página de CPS", () => {
   igual(md5hex("abc"), "900150983cd24fb0d6963f7d28e17f72", "md5 abc");
   igual(md5hex("contraseña"), "4c882dcb24bcb1bc225391a602feca7c", "md5 con ñ (utf-8)");
+});
+
+Deno.test("paquete repetido en la lista de un piloto queda una sola vez, entregado gana", () => {
+  const a = aFila({ ...soloRechazo, ID_ENVIO_DETALLE: 9 }, piloto)!;
+  const b = aFila({ ...entregadoTrasRechazo, ID_ENVIO_DETALLE: 9 }, piloto)!;
+  const c = aFila({ ...soloRechazo, ID_ENVIO_DETALLE: 10 }, piloto)!;
+  const u = unicos([b, a, c, a]);
+  igual(u.length, 2, "cantidad");
+  igual(u.find((f) => f.id_envio_detalle === 9)!.estado, "entregado", "estado del repetido");
 });

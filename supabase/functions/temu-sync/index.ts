@@ -15,7 +15,7 @@
 // la página consulta temu_sync_runs para saber cuándo terminó.
 // ============================================================
 import { createClient } from "npm:@supabase/supabase-js@2";
-import { aFila, DAY, md5hex, esFecha, finUTC, hoyLocal, inicioUTC, sumarDias, type Piloto } from "./cps.ts";
+import { aFila, unicos, DAY, md5hex, esFecha, finUTC, hoyLocal, inicioUTC, sumarDias, type Piloto } from "./cps.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_KEY  = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -91,7 +91,7 @@ async function enviosPiloto(token: string, piloto: Piloto, desde: string, hasta:
   });
   if (r?.STATUS !== undefined && r?.MSM && r.MSM !== "OK") throw new Error(`CPS: ${r.MSM}`);
   const data: any[] = Array.isArray(r?.DATA) ? r.DATA : [];
-  return data.map((x) => aFila(x, piloto)).filter((f): f is NonNullable<ReturnType<typeof aFila>> => f !== null);
+  return unicos(data.map((x) => aFila(x, piloto)).filter((f): f is NonNullable<ReturnType<typeof aFila>> => f !== null));
 }
 
 async function pendientesCps(token: string, idEmpresa: number) {

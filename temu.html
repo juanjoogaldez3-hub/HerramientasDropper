@@ -9,6 +9,8 @@
 <link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="assets/css/app.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="assets/js/config.js"></script>
 <script src="assets/js/supabaseClient.js"></script>
@@ -173,6 +175,12 @@
   table.hist th[aria-sort=descending] button::after{content:" ↓"} table.hist th[aria-sort=ascending] button::after{content:" ↑"}
   table.hist td.r, table.hist th.r{text-align:right}
   table.hist tr.apoyo td{color:var(--muted)}
+  .cb-acc{display:flex;gap:8px;flex-wrap:wrap}
+  .cb-acc .btn{width:auto}
+  .cb-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin:0 0 16px}
+  #tbl-cb-dia td:first-child{white-space:nowrap}
+  .cb-ref{font-size:.8rem;color:var(--muted);margin-top:10px}
+  @media(max-width:640px){ .cb-acc{width:100%} .cb-acc .btn{flex:1;justify-content:center} .cb-kpis{grid-template-columns:1fr 1fr;gap:8px} }
   .recibo-bar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin:0 0 12px;
     background:var(--white);border:1px solid var(--line);border-radius:14px;padding:12px 16px;box-shadow:var(--shadow)}
   .recibo-bar b{font-family:'Sora',sans-serif;font-size:.98rem}
@@ -280,6 +288,7 @@
     <button data-t="resumen">Resumen</button>
     <button data-t="pilotos">Pilotos</button>
     <button data-t="ganancia">Pago y ganancia</button>
+    <button data-t="cobro">Cobro CPS</button>
     <button data-t="rechazos">Rechazos</button>
     <button data-t="mover">Mover</button>
     <button data-t="ajustes">Ajustes</button>
@@ -422,6 +431,53 @@
       </div>
     </div>
     <div class="note" style="margin-top:12px;color:var(--muted);font-size:.8rem">No incluye otros gastos de Dropper (planilla, gasolina, renta) ni el crédito de IVA por compras. Las tarifas se cambian en <b>Ajustes</b>.</div>
+  </section>
+
+  <!-- COBRO CPS -->
+  <section class="tm-tab" data-t="cobro">
+    <div class="recibo-bar">
+      <div>
+        <b>Reporte de cobro a CPS</b>
+        <div class="note" id="cb-note" style="margin:2px 0 0">Del período seleccionado arriba. Solo se cobran los entregados.</div>
+      </div>
+      <div class="cb-acc">
+        <button class="btn btn-ghost" id="btn-cb-xlsx">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Excel
+        </button>
+        <button class="btn btn-primary" id="btn-cb-pdf">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="13" y2="17"/></svg>
+          PDF
+        </button>
+      </div>
+    </div>
+    <div class="cb-kpis">
+      <div class="stat"><div class="k">Entregas a cobrar</div><div class="v" id="cb-ent">—</div><div class="d" id="cb-tar">—</div></div>
+      <div class="stat hero"><div class="k">Total a cobrar</div><div class="v" id="cb-tot">—</div><div class="d">IVA incluido</div></div>
+      <div class="stat"><div class="k">Base sin IVA</div><div class="v" id="cb-base">—</div><div class="d" id="cb-iva">—</div></div>
+      <div class="stat"><div class="k">Sin entregar</div><div class="v" id="cb-rech">—</div><div class="d">Rechazados · no se cobran</div></div>
+    </div>
+    <div class="grid2">
+      <div class="card">
+        <h3>Por día</h3>
+        <div class="tablebox">
+          <table class="hist" id="tbl-cb-dia">
+            <thead><tr><th>Día</th><th class="r">Entregas</th><th class="r">Monto</th><th class="r"><span class="solo-desk">Sin entregar</span><span class="solo-movil">Sin ent.</span></th></tr></thead>
+            <tbody></tbody><tfoot></tfoot>
+          </table>
+        </div>
+      </div>
+      <div class="card">
+        <h3>Por motorista</h3>
+        <div class="tablebox">
+          <table class="hist" id="tbl-cb-pil">
+            <thead><tr><th>Motorista</th><th class="r">Entregas</th><th class="r">Monto</th></tr></thead>
+            <tbody></tbody><tfoot></tfoot>
+          </table>
+        </div>
+      </div>
+    </div>
+    <div class="cb-ref" id="cb-ref"></div>
   </section>
 
   <!-- RECHAZOS -->
@@ -597,6 +653,7 @@
       await cargarPend();
       hideStatus();
       dibujar();
+      if (document.querySelector('.tm-tab.show[data-t="cobro"]')) cargarCobro();
     } catch (e) {
       console.error(e);
       status('No se pudieron cargar los datos. ' + esc(e.message || ''), 'err');
@@ -1246,6 +1303,224 @@
     generarRecibos(rows);
   });
 
+  // ---------- Cobro a CPS ----------
+  let COBRO = null;
+  const fDMY = f => f ? f.slice(8, 10) + '/' + f.slice(5, 7) + '/' + f.slice(0, 4) : '';
+  async function cargarCobro() {
+    const desde = $('#f-desde').value, hasta = $('#f-hasta').value;
+    if (!desde || !hasta || desde > hasta) return;
+    $('#cb-note').textContent = 'Cargando…';
+    try {
+      const [rows, pil] = await Promise.all([
+        todas(() => sb.from('temu_envios').select('id_envio_detalle,fecha,registrado_at,correlativo,guia,piloto_id,piloto,estado,tamano,motivo,ganancia_cps,billing_name')
+          .gte('fecha', desde).lte('fecha', hasta).in('estado', ['entregado', 'rechazo']).order('registrado_at')),
+        sb.from('temu_pilotos').select('piloto_id,nombre'),
+      ]);
+      const nom = new Map((pil.data || []).map(p => [p.piloto_id, p.nombre]));
+      // Un paquete se cobra una sola vez, aunque CPS lo muestre con dos motoristas.
+      const ent = new Map(), rech = new Map();
+      for (const r of rows) {
+        const x = { ...r, motorista: nom.get(r.piloto_id) || r.piloto || '' };
+        if (r.estado === 'entregado') { if (!ent.has(r.id_envio_detalle)) ent.set(r.id_envio_detalle, x); }
+        else rech.set(r.id_envio_detalle, x);
+      }
+      const intentos = rows.filter(r => r.estado === 'rechazo').length, rechPaq = rech.size;
+      for (const k of ent.keys()) rech.delete(k);
+      const e = [...ent.values()].sort((a, b) => a.registrado_at < b.registrado_at ? -1 : 1);
+      const rj = [...rech.values()].sort((a, b) => a.registrado_at < b.registrado_at ? -1 : 1);
+      COBRO = { desde, hasta, ent: e, rech: rj, intentos, luego: rechPaq - rj.length, tarifa: CFG.tarifa, cliente: (e.find(r => r.billing_name) || {}).billing_name || 'CPX S.A.' };
+      dibujarCobro();
+    } catch (err) {
+      console.error(err);
+      $('#cb-note').textContent = 'No se pudo cargar: ' + (err.message || '');
+    }
+  }
+  function cobroCalc(c) {
+    c.tarifa = CFG.tarifa;   // si cambian la tarifa en Ajustes
+    const total = Math.round(c.ent.length * c.tarifa * 100) / 100, base = Math.round(total / (1 + CFG.iva) * 100) / 100;
+    const dias = new Map();
+    for (let f = c.desde; f <= c.hasta; f = addDays(f, 1)) dias.set(f, { fecha: f, n: 0, r: 0 });
+    c.ent.forEach(r => { const d = dias.get(r.fecha); if (d) d.n++; });
+    c.rech.forEach(r => { const d = dias.get(r.fecha); if (d) d.r++; });
+    const pm = new Map();
+    c.ent.forEach(r => { const o = pm.get(r.motorista) || { nombre: r.motorista, n: 0 }; o.n++; pm.set(r.motorista, o); });
+    return { total, base, iva: total - base, dias: [...dias.values()].filter(d => d.n || d.r), pil: [...pm.values()].sort((a, b) => b.n - a.n) };
+  }
+  function dibujarCobro() {
+    const c = COBRO; if (!c) return;
+    const k = cobroCalc(c);
+    $('#cb-note').textContent = 'Del ' + fechaLarga(c.desde) + ' al ' + fechaLarga(c.hasta) + '. Solo se cobran los entregados.';
+    $('#cb-ent').textContent = N(c.ent.length);
+    $('#cb-tar').textContent = 'a ' + Q(c.tarifa) + ' c/u';
+    $('#cb-tot').textContent = Q(k.total);
+    $('#cb-base').textContent = Q(k.base);
+    $('#cb-iva').textContent = 'IVA ' + Q(k.iva);
+    $('#cb-rech').textContent = N(c.rech.length);
+    $('#tbl-cb-dia tbody').innerHTML = k.dias.length ? k.dias.map(d => `<tr><td>${esc(dia(d.fecha))}</td><td class="r num">${N(d.n)}</td><td class="r num">${Q(d.n * c.tarifa)}</td><td class="r num">${N(d.r)}</td></tr>`).join('')
+      : '<tr><td colspan="4" class="empty-in">Sin entregas en este período.</td></tr>';
+    $('#tbl-cb-dia tfoot').innerHTML = `<tr class="tot"><td>Total</td><td class="r num">${N(c.ent.length)}</td><td class="r num">${Q(k.total)}</td><td class="r num">${N(c.rech.length)}</td></tr>`;
+    $('#tbl-cb-pil tbody').innerHTML = k.pil.length ? k.pil.map(p => `<tr><td>${esc(p.nombre)}</td><td class="r num">${N(p.n)}</td><td class="r num">${Q(p.n * c.tarifa)}</td></tr>`).join('')
+      : '<tr><td colspan="3" class="empty-in">—</td></tr>';
+    $('#tbl-cb-pil tfoot').innerHTML = `<tr class="tot"><td>Total</td><td class="r num">${N(c.ent.length)}</td><td class="r num">${Q(k.total)}</td></tr>`;
+    const gan = c.ent.reduce((s, r) => s + (Number(r.ganancia_cps) || 0), 0);
+    const sinGuia = c.ent.filter(r => !r.guia).length;
+    $('#cb-ref').innerHTML = (c.intentos ? 'Hubo ' + N(c.intentos) + ' intentos rechazados en el período' + (c.luego ? '; ' + N(c.luego) + ' de esos paquetes se entregaron después y se cobran una sola vez' : '') + '. ' : '') + (gan ? 'Para comparar: CPS registra ' + Q(gan) + ' para estos paquetes (su campo “ganancia piloto”). ' : '') +
+      (sinGuia ? '<b>' + N(sinGuia) + ' paquete(s) todavía sin número de guía</b>; tocá “Actualizar desde CPS” para traerlas.' : '');
+  }
+  const nombreCobro = (c, ext) => `Cobro_CPS_Temu_${c.desde}_${c.hasta}.${ext}`;
+  function bajar(blob, nombre) {
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = nombre; a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1500);
+  }
+  function listoCobro() {
+    if (!COBRO) { status('Todavía se están cargando los datos. Probá de nuevo en un momento.', 'err'); return false; }
+    if (!COBRO.ent.length) { status('No hay entregas en este período.', 'err'); return false; }
+    return true;
+  }
+
+  async function cobroExcel() {
+    if (!listoCobro()) return;
+    if (!window.ExcelJS) { status('No se pudo cargar el generador de Excel. Revisá tu internet y recargá la página.', 'err'); return; }
+    const c = COBRO, k = cobroCalc(c);
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet('Cobro', { views: [{ showGridLines: false }] });
+    const G = 'FF1F7A3D', GD = 'FF14572A', LIME = 'FFDDF0E2', GREY = 'FFF2F4F5', WHITE = 'FFFFFFFF', TXT = 'FF1A1A1A', QF = '"Q"#,##0.00';
+    const fill = x => ({ type: 'pattern', pattern: 'solid', fgColor: { argb: x } });
+    const bd = { top: { style: 'thin', color: { argb: 'FFD5DADE' } }, bottom: { style: 'thin', color: { argb: 'FFD5DADE' } }, left: { style: 'thin', color: { argb: 'FFD5DADE' } }, right: { style: 'thin', color: { argb: 'FFD5DADE' } } };
+    const font = (o = {}) => ({ name: 'Arial', size: 10, color: { argb: TXT }, ...o });
+    [13, 18, 16, 26, 10, 12].forEach((w, i) => ws.getColumn(i + 1).width = w);
+    const barra = (r, txt, hasta = 'F') => {
+      ws.mergeCells(`A${r}:${hasta}${r}`); const h = ws.getCell(`A${r}`); h.value = txt;
+      h.font = font({ bold: true, size: 11, color: { argb: WHITE } }); h.fill = fill(G);
+      h.alignment = { vertical: 'middle', horizontal: 'left', indent: 1 }; ws.getRow(r).height = 22;
+    };
+    const cab = (r, cols) => cols.forEach((x, j) => { const cell = ws.getCell(r, j + 1); cell.value = x; cell.font = font({ bold: true }); cell.fill = fill(GREY); cell.border = bd; cell.alignment = { horizontal: j ? 'center' : 'left' }; });
+    const fila = (r, vals, i, fmts = {}) => vals.forEach((v, j) => { const cell = ws.getCell(r, j + 1); cell.value = v; cell.fill = fill(i % 2 ? LIME : WHITE); cell.border = bd; cell.font = font(); cell.alignment = { horizontal: j ? 'center' : 'left' }; if (fmts[j]) cell.numFmt = fmts[j]; });
+    const total = (r, vals, fmts = {}) => vals.forEach((v, j) => { const cell = ws.getCell(r, j + 1); cell.value = v; cell.fill = fill(GD); cell.border = bd; cell.font = font({ bold: true, size: 11, color: { argb: WHITE } }); cell.alignment = { horizontal: j ? 'center' : 'left' }; if (fmts[j]) cell.numFmt = fmts[j]; });
+
+    ws.mergeCells('A1:F1'); ws.getRow(1).height = 46;
+    try { const id = wb.addImage({ base64: String(window.DROPPER_LOGO || '').replace(/^data:image\/png;base64,/, ''), extension: 'png' }); ws.addImage(id, { tl: { col: 0.12, row: 0.18 }, ext: { width: 180, height: 40 } }); } catch (e) { /* sin logo */ }
+    ws.mergeCells('A2:F2'); const t = ws.getCell('A2'); t.value = 'Reporte de Cobro · Temu';
+    t.font = font({ bold: true, size: 13, color: { argb: WHITE } }); t.alignment = { vertical: 'middle', horizontal: 'left', indent: 1 }; t.fill = fill(G); ws.getRow(2).height = 26;
+    [['Cliente:', c.cliente + ' (CPS LastMile)'], ['Período:', fDMY(c.desde) + ' al ' + fDMY(c.hasta)], ['Entregas:', c.ent.length], ['Tarifa:', c.tarifa]].forEach((p, i) => {
+      ws.getCell(`A${4 + i}`).value = p[0]; ws.getCell(`A${4 + i}`).font = font({ bold: true });
+      const b = ws.getCell(`B${4 + i}`); b.value = p[1]; b.font = font(); b.alignment = { horizontal: 'left' };
+      if (p[0] === 'Tarifa:') b.numFmt = QF;
+    });
+    const TAR = '$B$7';
+
+    // Resumen de cobro
+    let r = 9; barra(r, 'Resumen de cobro', 'C'); r++;
+    cab(r, ['Concepto', 'Cantidad', 'Monto']); r++;
+    const r1 = r;
+    fila(r, ['Entregas × tarifa (IVA incluido)', { formula: 'B6', result: c.ent.length }, { formula: `B${r}*${TAR}`, result: k.total }], 0, { 2: QF }); r++;
+    fila(r, ['Base sin IVA', '', { formula: `ROUND(C${r1}/${1 + CFG.iva},2)`, result: k.base }], 1, { 2: QF }); r++;
+    fila(r, [`IVA (${Math.round(CFG.iva * 100)}%)`, '', { formula: `C${r1}-C${r - 1}`, result: k.iva }], 0, { 2: QF }); r++;
+    fila(r, ['Sin entregar / rechazados (no se cobran)', c.rech.length, 0], 1, { 2: QF }); r++;
+    total(r, ['Total a cobrar', '', { formula: `C${r1}`, result: k.total }], { 2: QF }); r += 3;
+
+    // Por día
+    barra(r, 'Resumen por día', 'D'); r++;
+    cab(r, ['Fecha', 'Entregas', 'Subtotal', 'Sin entregar']); r++;
+    const d1 = r;
+    k.dias.forEach((d, i) => { fila(r, [fDMY(d.fecha), d.n, { formula: `B${r}*${TAR}`, result: d.n * c.tarifa }, d.r], i, { 2: QF }); r++; });
+    const d2 = r - 1;
+    total(r, ['TOTAL', { formula: `SUM(B${d1}:B${d2})`, result: c.ent.length }, { formula: `SUM(C${d1}:C${d2})`, result: k.total }, { formula: `SUM(D${d1}:D${d2})`, result: c.rech.length }], { 2: QF }); r += 3;
+
+    // Detalle
+    barra(r, 'Detalle de entregas'); r++;
+    cab(r, ['Fecha', 'No. de Envío', 'Guía', 'Motorista', 'Tamaño', 'Tarifa']); r++;
+    const e1 = r;
+    c.ent.forEach((x, i) => {
+      fila(r, [fDMY(x.fecha), x.correlativo || '', x.guia || '', x.motorista, x.tamano || '', { formula: TAR, result: c.tarifa }], i, { 5: QF });
+      [0, 1, 2, 3, 4, 5].forEach(j => { const cell = ws.getCell(r, j + 1); cell.font = font({ size: 9 }); if (j > 0 && j < 4) cell.alignment = { horizontal: 'left' }; });
+      r++;
+    });
+    const e2 = r - 1;
+    const lt = ws.getCell(r, 5); lt.value = 'Total'; lt.font = font({ bold: true, size: 9 }); lt.alignment = { horizontal: 'right' }; lt.fill = fill(GREY);
+    const gt = ws.getCell(r, 6); gt.value = { formula: `SUM(F${e1}:F${e2})`, result: k.total }; gt.numFmt = QF; gt.font = font({ bold: true, size: 9 }); gt.alignment = { horizontal: 'center' }; gt.fill = fill(GREY);
+
+    // Hoja aparte: rechazados
+    if (c.rech.length) {
+      const w2 = wb.addWorksheet('Sin entregar', { views: [{ showGridLines: false }] });
+      [13, 18, 16, 26, 34].forEach((w, i) => w2.getColumn(i + 1).width = w);
+      w2.mergeCells('A1:E1'); const h = w2.getCell('A1'); h.value = 'Sin entregar / rechazados (no se cobran)'; h.font = font({ bold: true, size: 11, color: { argb: WHITE } }); h.fill = fill(G); h.alignment = { vertical: 'middle', indent: 1 }; w2.getRow(1).height = 22;
+      ['Fecha', 'No. de Envío', 'Guía', 'Motorista', 'Motivo'].forEach((x, j) => { const cell = w2.getCell(2, j + 1); cell.value = x; cell.font = font({ bold: true }); cell.fill = fill(GREY); cell.border = bd; });
+      c.rech.forEach((x, i) => [fDMY(x.fecha), x.correlativo || '', x.guia || '', x.motorista, cap(x.motivo || '')].forEach((v, j) => {
+        const cell = w2.getCell(3 + i, j + 1); cell.value = v; cell.font = font({ size: 9 }); cell.border = bd; cell.fill = fill(i % 2 ? LIME : WHITE);
+      }));
+    }
+    const buf = await wb.xlsx.writeBuffer();
+    bajar(new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), nombreCobro(c, 'xlsx'));
+  }
+
+  function cobroPDF() {
+    if (!listoCobro()) return;
+    if (!window.jspdf || !window.jspdf.jsPDF.API.autoTable) { status('No se pudo cargar el generador de PDF. Revisá tu internet y recargá la página.', 'err'); return; }
+    const c = COBRO, k = cobroCalc(c);
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ unit: 'pt', format: 'a4' });
+    const PW = doc.internal.pageSize.getWidth(), M = 40;
+    const green = [31, 122, 61], greenDk = [20, 87, 42], txt = [26, 26, 26], lime = [221, 240, 226];
+    const tabla = { styles: { font: 'helvetica', fontSize: 8.5, cellPadding: 4, textColor: txt, lineColor: [213, 218, 222], lineWidth: 0.5 },
+      headStyles: { fillColor: green, textColor: [255, 255, 255], fontStyle: 'bold' }, footStyles: { fillColor: greenDk, textColor: [255, 255, 255], fontStyle: 'bold' },
+      alternateRowStyles: { fillColor: lime }, margin: { left: M, right: M }, showFoot: 'lastPage' };
+    const alinear = al => ({ didParseCell: d => { if (al[d.column.index]) d.cell.styles.halign = al[d.column.index]; } });
+    try { doc.addImage(window.DROPPER_LOGO, 'PNG', M, 26, 90, 20); } catch (e) { /* sin logo */ }
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(15); doc.setTextColor(...greenDk);
+    doc.text('Reporte de Cobro', PW - M, 36, { align: 'right' });
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(...txt);
+    doc.text(fDMY(c.desde) + ' al ' + fDMY(c.hasta), PW - M, 50, { align: 'right' });
+    doc.setDrawColor(...green); doc.setLineWidth(1.4); doc.line(M, 62, PW - M, 62);
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(12); doc.setTextColor(18, 38, 26);
+    doc.text(c.cliente + ' · CPS LastMile (Temu)', M, 84);
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5); doc.setTextColor(...txt);
+    doc.text(`Entregas: ${N(c.ent.length)}   ·   Tarifa: ${Q(c.tarifa)}   ·   Sin entregar (no se cobran): ${N(c.rech.length)}`, M, 100);
+    doc.setFont('helvetica', 'bold'); doc.setTextColor(...greenDk);
+    doc.text(`Total a cobrar: ${Q(k.total)}`, M, 116);
+
+    doc.setFontSize(10); doc.text('Resumen de cobro', M, 140);
+    doc.autoTable({ ...tabla, ...alinear(['left', 'center', 'right']), startY: 146, tableWidth: 'wrap',
+      head: [['Concepto', 'Cantidad', 'Monto']],
+      body: [[`Entregas × ${Q(c.tarifa)} (IVA incluido)`, N(c.ent.length), Q(k.total)], ['Base sin IVA', '', Q(k.base)], [`IVA (${Math.round(CFG.iva * 100)}%)`, '', Q(k.iva)]],
+      foot: [['Total a cobrar', '', Q(k.total)]],
+      columnStyles: { 0: { cellWidth: 190 }, 1: { cellWidth: 70, halign: 'center' }, 2: { cellWidth: 100, halign: 'right' } } });
+
+    let y = doc.lastAutoTable.finalY;
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(...greenDk);
+    doc.text('Resumen por día', M, y + 22);
+    doc.autoTable({ ...tabla, ...alinear(['left', 'center', 'right', 'center']), startY: y + 28, tableWidth: 'wrap',
+      head: [['Fecha', 'Entregas', 'Subtotal', 'Sin entregar']],
+      body: k.dias.map(d => [fDMY(d.fecha), N(d.n), Q(d.n * c.tarifa), N(d.r)]),
+      foot: [['TOTAL', N(c.ent.length), Q(k.total), N(c.rech.length)]],
+      columnStyles: { 0: { cellWidth: 90 }, 1: { cellWidth: 70, halign: 'center' }, 2: { cellWidth: 100, halign: 'right' }, 3: { cellWidth: 80, halign: 'center' } } });
+
+    y = doc.lastAutoTable.finalY;
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(...greenDk);
+    doc.text('Detalle de entregas', M, y + 24);
+    doc.autoTable({ ...tabla, ...alinear(['right', 'left', 'left', 'left', 'left', 'center', 'right']), startY: y + 30,
+      styles: { ...tabla.styles, fontSize: 8, overflow: 'linebreak' },
+      head: [['#', 'Fecha', 'No. de Envío', 'Guía', 'Motorista', 'Tamaño', 'Tarifa']],
+      body: c.ent.map((x, i) => [i + 1, fDMY(x.fecha), x.correlativo || '', x.guia || '', x.motorista, x.tamano || '', Q(c.tarifa)]),
+      foot: [['', '', '', '', '', 'Total', Q(k.total)]],
+      columnStyles: { 0: { cellWidth: 30, halign: 'right' }, 1: { cellWidth: 58 }, 2: { cellWidth: 92 }, 3: { cellWidth: 80 }, 4: { cellWidth: 'auto' }, 5: { cellWidth: 46, halign: 'center' }, 6: { cellWidth: 56, halign: 'right' } },
+      didDrawPage: () => {
+        const ph = doc.internal.pageSize.getHeight();
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); doc.setTextColor(150, 160, 150);
+        doc.text('Dropper · Smart Delivery', M, ph - 20);
+        doc.text('Página ' + doc.internal.getCurrentPageInfo().pageNumber, PW - M, ph - 20, { align: 'right' });
+      } });
+    doc.save(nombreCobro(c, 'pdf'));
+  }
+  $('#btn-cb-xlsx').addEventListener('click', async () => {
+    const b = $('#btn-cb-xlsx'); b.disabled = true;
+    try { await cobroExcel(); } catch (e) { console.error(e); status('No se pudo hacer el Excel. ' + esc(e.message || ''), 'err'); }
+    b.disabled = false;
+  });
+  $('#btn-cb-pdf').addEventListener('click', () => {
+    try { cobroPDF(); } catch (e) { console.error(e); status('No se pudo hacer el PDF. ' + esc(e.message || ''), 'err'); }
+  });
+
   // ---------- CSV ----------
   $('#btn-csv').addEventListener('click', () => {
     const rows = porPiloto(DP).sort((a, b) => b.entregados - a.entregados);
@@ -1446,6 +1721,7 @@
     document.body.classList.toggle('modo-hoy', b.dataset.t === 'hoy');
     document.body.classList.toggle('modo-mover', b.dataset.t === 'mover');
     if (b.dataset.t === 'mover') abrirMover();
+    if (b.dataset.t === 'cobro') cargarCobro();
     if (b.dataset.t === 'hoy') dibujarHoy();
     else if (DP.length) dibujar();   // re-medir gráficos ocultos
   }));

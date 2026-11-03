@@ -54,6 +54,8 @@ export function aFila(x: any, piloto: Piloto) {
     id_envio_detalle: x.ID_ENVIO_DETALLE,
     id_envio: typeof x?.ID_ENVIO === "number" ? x.ID_ENVIO : null,
     correlativo: x?.CORRELATIVO ?? null,
+    guia: x?.IDENTIFICADOR_DETALLE != null ? String(x.IDENTIFICADOR_DETALLE) : null,
+    billing_name: x?.BILLING_NAME ?? null,
     piloto_id: piloto.id,
     piloto: (x?.NOMBRE_COMPLETO || piloto.nombre || "").trim(),
     fecha: fechaLocal(reg),
@@ -68,3 +70,15 @@ export function aFila(x: any, piloto: Piloto) {
   };
 }
 
+
+// CPS a veces repite el mismo paquete en la lista de un piloto (por ejemplo, rechazado un día
+// y entregado otro). Se queda una sola fila: entregado gana a rechazo, y si empatan, la más reciente.
+const PESO: Record<string, number> = { entregado: 3, rechazo: 2, otro: 1 };
+export function unicos<T extends { id_envio_detalle: number; estado: string; registrado_at: string }>(filas: T[]): T[] {
+  const m = new Map<number, T>();
+  for (const f of filas) {
+    const a = m.get(f.id_envio_detalle);
+    if (!a || PESO[f.estado] > PESO[a.estado] || (PESO[f.estado] === PESO[a.estado] && f.registrado_at > a.registrado_at)) m.set(f.id_envio_detalle, f);
+  }
+  return [...m.values()];
+}
