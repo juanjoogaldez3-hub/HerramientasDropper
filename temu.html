@@ -177,10 +177,11 @@
   table.hist tr.apoyo td{color:var(--muted)}
   .cb-acc{display:flex;gap:8px;flex-wrap:wrap}
   .cb-acc .btn{width:auto}
-  .cb-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin:0 0 16px}
+  .cb-kpis{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:0 0 16px}
   #tbl-cb-dia td:first-child{white-space:nowrap}
+  #tbl-cb-dia{max-width:640px}
   .cb-ref{font-size:.8rem;color:var(--muted);margin-top:10px}
-  @media(max-width:640px){ .cb-acc{width:100%} .cb-acc .btn{flex:1;justify-content:center} .cb-kpis{grid-template-columns:1fr 1fr;gap:8px} }
+  @media(max-width:640px){ .cb-acc{width:100%} .cb-acc .btn{flex:1;justify-content:center} .cb-kpis{grid-template-columns:1fr;gap:8px} }
   .recibo-bar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin:0 0 12px;
     background:var(--white);border:1px solid var(--line);border-radius:14px;padding:12px 16px;box-shadow:var(--shadow)}
   .recibo-bar b{font-family:'Sora',sans-serif;font-size:.98rem}
@@ -457,26 +458,14 @@
       <div class="stat"><div class="k">Entregas a cobrar</div><div class="v" id="cb-ent">—</div><div class="d" id="cb-tar">—</div></div>
       <div class="stat hero"><div class="k">Total a cobrar</div><div class="v" id="cb-tot">—</div><div class="d">IVA incluido</div></div>
       <div class="stat"><div class="k">Base sin IVA</div><div class="v" id="cb-base">—</div><div class="d" id="cb-iva">—</div></div>
-      <div class="stat"><div class="k">Sin entregar</div><div class="v" id="cb-rech">—</div><div class="d">Rechazados · no se cobran</div></div>
     </div>
-    <div class="grid2">
-      <div class="card">
-        <h3>Por día</h3>
-        <div class="tablebox">
-          <table class="hist" id="tbl-cb-dia">
-            <thead><tr><th>Día</th><th class="r">Entregas</th><th class="r">Monto</th><th class="r"><span class="solo-desk">Sin entregar</span><span class="solo-movil">Sin ent.</span></th></tr></thead>
-            <tbody></tbody><tfoot></tfoot>
-          </table>
-        </div>
-      </div>
-      <div class="card">
-        <h3>Por motorista</h3>
-        <div class="tablebox">
-          <table class="hist" id="tbl-cb-pil">
-            <thead><tr><th>Motorista</th><th class="r">Entregas</th><th class="r">Monto</th></tr></thead>
-            <tbody></tbody><tfoot></tfoot>
-          </table>
-        </div>
+    <div class="card">
+      <h3>Por día</h3>
+      <div class="tablebox">
+        <table class="hist" id="tbl-cb-dia">
+          <thead><tr><th>Día</th><th class="r">Entregas</th><th class="r">Monto</th></tr></thead>
+          <tbody></tbody><tfoot></tfoot>
+        </table>
       </div>
     </div>
     <div class="cb-ref" id="cb-ref"></div>
@@ -1362,16 +1351,13 @@
     $('#cb-tot').textContent = Q(k.total);
     $('#cb-base').textContent = Q(k.base);
     $('#cb-iva').textContent = 'IVA ' + Q(k.iva);
-    $('#cb-rech').textContent = N(c.rech.length);
-    $('#tbl-cb-dia tbody').innerHTML = k.dias.length ? k.dias.map(d => `<tr><td>${esc(dia(d.fecha))}</td><td class="r num">${N(d.n)}</td><td class="r num">${Q(d.n * c.tarifa)}</td><td class="r num">${N(d.r)}</td></tr>`).join('')
-      : '<tr><td colspan="4" class="empty-in">Sin entregas en este período.</td></tr>';
-    $('#tbl-cb-dia tfoot').innerHTML = `<tr class="tot"><td>Total</td><td class="r num">${N(c.ent.length)}</td><td class="r num">${Q(k.total)}</td><td class="r num">${N(c.rech.length)}</td></tr>`;
-    $('#tbl-cb-pil tbody').innerHTML = k.pil.length ? k.pil.map(p => `<tr><td>${esc(p.nombre)}</td><td class="r num">${N(p.n)}</td><td class="r num">${Q(p.n * c.tarifa)}</td></tr>`).join('')
-      : '<tr><td colspan="3" class="empty-in">—</td></tr>';
-    $('#tbl-cb-pil tfoot').innerHTML = `<tr class="tot"><td>Total</td><td class="r num">${N(c.ent.length)}</td><td class="r num">${Q(k.total)}</td></tr>`;
+    const diasE = k.dias.filter(d => d.n);
+    $('#tbl-cb-dia tbody').innerHTML = diasE.length ? diasE.map(d => `<tr><td>${esc(dia(d.fecha))}</td><td class="r num">${N(d.n)}</td><td class="r num">${Q(d.n * c.tarifa)}</td></tr>`).join('')
+      : '<tr><td colspan="3" class="empty-in">Sin entregas en este período.</td></tr>';
+    $('#tbl-cb-dia tfoot').innerHTML = `<tr class="tot"><td>Total</td><td class="r num">${N(c.ent.length)}</td><td class="r num">${Q(k.total)}</td></tr>`;
     const gan = c.ent.reduce((s, r) => s + (Number(r.ganancia_cps) || 0), 0);
     const sinGuia = c.ent.filter(r => !r.guia).length;
-    $('#cb-ref').innerHTML = (c.intentos ? 'Hubo ' + N(c.intentos) + ' intentos rechazados en el período' + (c.luego ? '; ' + N(c.luego) + ' de esos paquetes se entregaron después y se cobran una sola vez' : '') + '. ' : '') + (gan ? 'Para comparar: CPS registra ' + Q(gan) + ' para estos paquetes (su campo “ganancia piloto”). ' : '') +
+    $('#cb-ref').innerHTML = (gan ? 'Para comparar: CPS registra ' + Q(gan) + ' para estos paquetes (su campo “ganancia piloto”). ' : '') +
       (sinGuia ? '<b>' + N(sinGuia) + ' paquete(s) todavía sin número de guía</b>; tocá “Actualizar desde CPS” para traerlas.' : '');
   }
   const nombreCobro = (c, ext) => `Cobro_CPS_Temu_${c.desde}_${c.hasta}.${ext}`;
