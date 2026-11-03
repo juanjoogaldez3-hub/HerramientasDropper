@@ -1395,8 +1395,8 @@
     const fill = x => ({ type: 'pattern', pattern: 'solid', fgColor: { argb: x } });
     const bd = { top: { style: 'thin', color: { argb: 'FFD5DADE' } }, bottom: { style: 'thin', color: { argb: 'FFD5DADE' } }, left: { style: 'thin', color: { argb: 'FFD5DADE' } }, right: { style: 'thin', color: { argb: 'FFD5DADE' } } };
     const font = (o = {}) => ({ name: 'Arial', size: 10, color: { argb: TXT }, ...o });
-    [13, 18, 16, 26, 10, 12].forEach((w, i) => ws.getColumn(i + 1).width = w);
-    const barra = (r, txt, hasta = 'F') => {
+    [34, 18, 16, 14].forEach((w, i) => ws.getColumn(i + 1).width = w);
+    const barra = (r, txt, hasta = 'D') => {
       ws.mergeCells(`A${r}:${hasta}${r}`); const h = ws.getCell(`A${r}`); h.value = txt;
       h.font = font({ bold: true, size: 11, color: { argb: WHITE } }); h.fill = fill(G);
       h.alignment = { vertical: 'middle', horizontal: 'left', indent: 1 }; ws.getRow(r).height = 22;
@@ -1405,9 +1405,9 @@
     const fila = (r, vals, i, fmts = {}) => vals.forEach((v, j) => { const cell = ws.getCell(r, j + 1); cell.value = v; cell.fill = fill(i % 2 ? LIME : WHITE); cell.border = bd; cell.font = font(); cell.alignment = { horizontal: j ? 'center' : 'left' }; if (fmts[j]) cell.numFmt = fmts[j]; });
     const total = (r, vals, fmts = {}) => vals.forEach((v, j) => { const cell = ws.getCell(r, j + 1); cell.value = v; cell.fill = fill(GD); cell.border = bd; cell.font = font({ bold: true, size: 11, color: { argb: WHITE } }); cell.alignment = { horizontal: j ? 'center' : 'left' }; if (fmts[j]) cell.numFmt = fmts[j]; });
 
-    ws.mergeCells('A1:F1'); ws.getRow(1).height = 46;
+    ws.mergeCells('A1:D1'); ws.getRow(1).height = 46;
     try { const id = wb.addImage({ base64: String(window.DROPPER_LOGO || '').replace(/^data:image\/png;base64,/, ''), extension: 'png' }); ws.addImage(id, { tl: { col: 0.12, row: 0.18 }, ext: { width: 180, height: 40 } }); } catch (e) { /* sin logo */ }
-    ws.mergeCells('A2:F2'); const t = ws.getCell('A2'); t.value = 'Reporte de Cobro · Temu';
+    ws.mergeCells('A2:D2'); const t = ws.getCell('A2'); t.value = 'Reporte de Cobro · Temu';
     t.font = font({ bold: true, size: 13, color: { argb: WHITE } }); t.alignment = { vertical: 'middle', horizontal: 'left', indent: 1 }; t.fill = fill(G); ws.getRow(2).height = 26;
     [['Cliente:', c.cliente + ' (CPS LastMile)'], ['Período:', fDMY(c.desde) + ' al ' + fDMY(c.hasta)], ['Entregas:', c.ent.length], ['Tarifa:', c.tarifa]].forEach((p, i) => {
       ws.getCell(`A${4 + i}`).value = p[0]; ws.getCell(`A${4 + i}`).font = font({ bold: true });
@@ -1423,40 +1423,29 @@
     fila(r, ['Entregas × tarifa (IVA incluido)', { formula: 'B6', result: c.ent.length }, { formula: `B${r}*${TAR}`, result: k.total }], 0, { 2: QF }); r++;
     fila(r, ['Base sin IVA', '', { formula: `ROUND(C${r1}/${1 + CFG.iva},2)`, result: k.base }], 1, { 2: QF }); r++;
     fila(r, [`IVA (${Math.round(CFG.iva * 100)}%)`, '', { formula: `C${r1}-C${r - 1}`, result: k.iva }], 0, { 2: QF }); r++;
-    fila(r, ['Sin entregar / rechazados (no se cobran)', c.rech.length, 0], 1, { 2: QF }); r++;
     total(r, ['Total a cobrar', '', { formula: `C${r1}`, result: k.total }], { 2: QF }); r += 3;
 
     // Por día
-    barra(r, 'Resumen por día', 'D'); r++;
-    cab(r, ['Fecha', 'Entregas', 'Subtotal', 'Sin entregar']); r++;
+    barra(r, 'Resumen por día', 'C'); r++;
+    cab(r, ['Fecha', 'Entregas', 'Subtotal']); r++;
     const d1 = r;
-    k.dias.forEach((d, i) => { fila(r, [fDMY(d.fecha), d.n, { formula: `B${r}*${TAR}`, result: d.n * c.tarifa }, d.r], i, { 2: QF }); r++; });
+    k.dias.filter(d => d.n).forEach((d, i) => { fila(r, [fDMY(d.fecha), d.n, { formula: `B${r}*${TAR}`, result: d.n * c.tarifa }], i, { 2: QF }); r++; });
     const d2 = r - 1;
-    total(r, ['TOTAL', { formula: `SUM(B${d1}:B${d2})`, result: c.ent.length }, { formula: `SUM(C${d1}:C${d2})`, result: k.total }, { formula: `SUM(D${d1}:D${d2})`, result: c.rech.length }], { 2: QF }); r += 3;
+    total(r, ['TOTAL', { formula: `SUM(B${d1}:B${d2})`, result: c.ent.length }, { formula: `SUM(C${d1}:C${d2})`, result: k.total }], { 2: QF }); r += 3;
 
     // Detalle
     barra(r, 'Detalle de entregas'); r++;
-    cab(r, ['Fecha', 'No. de Envío', 'Guía', 'Motorista', 'Tamaño', 'Tarifa']); r++;
+    cab(r, ['Fecha', 'No. de Envío', 'Guía', 'Tarifa']); r++;
     const e1 = r;
     c.ent.forEach((x, i) => {
-      fila(r, [fDMY(x.fecha), x.correlativo || '', x.guia || '', x.motorista, x.tamano || '', { formula: TAR, result: c.tarifa }], i, { 5: QF });
-      [0, 1, 2, 3, 4, 5].forEach(j => { const cell = ws.getCell(r, j + 1); cell.font = font({ size: 9 }); if (j > 0 && j < 4) cell.alignment = { horizontal: 'left' }; });
+      fila(r, [fDMY(x.fecha), x.correlativo || '', x.guia || '', { formula: TAR, result: c.tarifa }], i, { 3: QF });
+      [0, 1, 2, 3].forEach(j => { const cell = ws.getCell(r, j + 1); cell.font = font({ size: 9 }); if (j > 0 && j < 3) cell.alignment = { horizontal: 'left' }; });
       r++;
     });
     const e2 = r - 1;
-    const lt = ws.getCell(r, 5); lt.value = 'Total'; lt.font = font({ bold: true, size: 9 }); lt.alignment = { horizontal: 'right' }; lt.fill = fill(GREY);
-    const gt = ws.getCell(r, 6); gt.value = { formula: `SUM(F${e1}:F${e2})`, result: k.total }; gt.numFmt = QF; gt.font = font({ bold: true, size: 9 }); gt.alignment = { horizontal: 'center' }; gt.fill = fill(GREY);
+    const lt = ws.getCell(r, 3); lt.value = 'Total'; lt.font = font({ bold: true, size: 9 }); lt.alignment = { horizontal: 'right' }; lt.fill = fill(GREY);
+    const gt = ws.getCell(r, 4); gt.value = { formula: `SUM(D${e1}:D${e2})`, result: k.total }; gt.numFmt = QF; gt.font = font({ bold: true, size: 9 }); gt.alignment = { horizontal: 'center' }; gt.fill = fill(GREY);
 
-    // Hoja aparte: rechazados
-    if (c.rech.length) {
-      const w2 = wb.addWorksheet('Sin entregar', { views: [{ showGridLines: false }] });
-      [13, 18, 16, 26, 34].forEach((w, i) => w2.getColumn(i + 1).width = w);
-      w2.mergeCells('A1:E1'); const h = w2.getCell('A1'); h.value = 'Sin entregar / rechazados (no se cobran)'; h.font = font({ bold: true, size: 11, color: { argb: WHITE } }); h.fill = fill(G); h.alignment = { vertical: 'middle', indent: 1 }; w2.getRow(1).height = 22;
-      ['Fecha', 'No. de Envío', 'Guía', 'Motorista', 'Motivo'].forEach((x, j) => { const cell = w2.getCell(2, j + 1); cell.value = x; cell.font = font({ bold: true }); cell.fill = fill(GREY); cell.border = bd; });
-      c.rech.forEach((x, i) => [fDMY(x.fecha), x.correlativo || '', x.guia || '', x.motorista, cap(x.motivo || '')].forEach((v, j) => {
-        const cell = w2.getCell(3 + i, j + 1); cell.value = v; cell.font = font({ size: 9 }); cell.border = bd; cell.fill = fill(i % 2 ? LIME : WHITE);
-      }));
-    }
     const buf = await wb.xlsx.writeBuffer();
     bajar(new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), nombreCobro(c, 'xlsx'));
   }
@@ -1482,7 +1471,7 @@
     doc.setFont('helvetica', 'bold'); doc.setFontSize(12); doc.setTextColor(18, 38, 26);
     doc.text(c.cliente + ' · CPS LastMile (Temu)', M, 84);
     doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5); doc.setTextColor(...txt);
-    doc.text(`Entregas: ${N(c.ent.length)}   ·   Tarifa: ${Q(c.tarifa)}   ·   Sin entregar (no se cobran): ${N(c.rech.length)}`, M, 100);
+    doc.text(`Entregas: ${N(c.ent.length)}   ·   Tarifa: ${Q(c.tarifa)}`, M, 100);
     doc.setFont('helvetica', 'bold'); doc.setTextColor(...greenDk);
     doc.text(`Total a cobrar: ${Q(k.total)}`, M, 116);
 
@@ -1496,21 +1485,21 @@
     let y = doc.lastAutoTable.finalY;
     doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(...greenDk);
     doc.text('Resumen por día', M, y + 22);
-    doc.autoTable({ ...tabla, ...alinear(['left', 'center', 'right', 'center']), startY: y + 28, tableWidth: 'wrap',
-      head: [['Fecha', 'Entregas', 'Subtotal', 'Sin entregar']],
-      body: k.dias.map(d => [fDMY(d.fecha), N(d.n), Q(d.n * c.tarifa), N(d.r)]),
-      foot: [['TOTAL', N(c.ent.length), Q(k.total), N(c.rech.length)]],
-      columnStyles: { 0: { cellWidth: 90 }, 1: { cellWidth: 70, halign: 'center' }, 2: { cellWidth: 100, halign: 'right' }, 3: { cellWidth: 80, halign: 'center' } } });
+    doc.autoTable({ ...tabla, ...alinear(['left', 'center', 'right']), startY: y + 28, tableWidth: 'wrap',
+      head: [['Fecha', 'Entregas', 'Subtotal']],
+      body: k.dias.filter(d => d.n).map(d => [fDMY(d.fecha), N(d.n), Q(d.n * c.tarifa)]),
+      foot: [['TOTAL', N(c.ent.length), Q(k.total)]],
+      columnStyles: { 0: { cellWidth: 90 }, 1: { cellWidth: 70, halign: 'center' }, 2: { cellWidth: 100, halign: 'right' } } });
 
     y = doc.lastAutoTable.finalY;
     doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(...greenDk);
     doc.text('Detalle de entregas', M, y + 24);
-    doc.autoTable({ ...tabla, ...alinear(['right', 'left', 'left', 'left', 'left', 'center', 'right']), startY: y + 30,
+    doc.autoTable({ ...tabla, ...alinear(['right', 'left', 'left', 'left', 'right']), startY: y + 30,
       styles: { ...tabla.styles, fontSize: 8, overflow: 'linebreak' },
-      head: [['#', 'Fecha', 'No. de Envío', 'Guía', 'Motorista', 'Tamaño', 'Tarifa']],
-      body: c.ent.map((x, i) => [i + 1, fDMY(x.fecha), x.correlativo || '', x.guia || '', x.motorista, x.tamano || '', Q(c.tarifa)]),
-      foot: [['', '', '', '', '', 'Total', Q(k.total)]],
-      columnStyles: { 0: { cellWidth: 30, halign: 'right' }, 1: { cellWidth: 58 }, 2: { cellWidth: 92 }, 3: { cellWidth: 80 }, 4: { cellWidth: 'auto' }, 5: { cellWidth: 46, halign: 'center' }, 6: { cellWidth: 56, halign: 'right' } },
+      head: [['#', 'Fecha', 'No. de Envío', 'Guía', 'Tarifa']],
+      body: c.ent.map((x, i) => [i + 1, fDMY(x.fecha), x.correlativo || '', x.guia || '', Q(c.tarifa)]),
+      foot: [['', '', '', 'Total', Q(k.total)]],
+      columnStyles: { 0: { cellWidth: 36, halign: 'right' }, 1: { cellWidth: 90 }, 2: { cellWidth: 'auto' }, 3: { cellWidth: 'auto' }, 4: { cellWidth: 80, halign: 'right' } },
       didDrawPage: () => {
         const ph = doc.internal.pageSize.getHeight();
         doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); doc.setTextColor(150, 160, 150);
