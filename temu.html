@@ -319,11 +319,21 @@
       <div class="card" style="grid-column:1/-1">
         <h3>Por ruta</h3>
         <div class="note" id="rutas-note">Dónde está cada paquete, ruta por ruta.</div>
-        <div class="leg"><span><i style="background:#b9c6bd"></i>Por llegar</span><span><i style="background:#e0a800"></i>En bodega</span><span><i style="background:#41AC3A"></i>En camino</span><span><i style="background:#1F7A3D"></i>Entregados</span><span><i style="background:#c0392b"></i>Rechazados</span></div>
+        <div class="leg"><span><i style="background:#e0a800"></i>En bodega</span><span><i style="background:#41AC3A"></i>En camino</span><span><i style="background:#1F7A3D"></i>Entregados</span><span><i style="background:#c0392b"></i>Rechazados</span></div>
         <div class="mlist solo-movil" id="rutas-movil"></div>
         <div class="tablebox solo-desk">
           <table class="hist" id="tbl-rutas-hoy">
-            <thead><tr><th>Ruta</th><th class="r">Por llegar</th><th class="r">En bodega</th><th class="r">En camino</th><th class="r">Entreg.</th><th class="r">Rech.</th><th></th></tr></thead>
+            <thead><tr><th>Ruta</th><th class="r">En bodega</th><th class="r">En camino</th><th class="r">Entreg.</th><th class="r">Rech.</th><th></th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="card" style="grid-column:1/-1">
+        <h3>Llegan mañana</h3>
+        <div class="note" id="manana-note">Paquetes en el centro de recepción de CPS, por ruta. No cuentan para hoy.</div>
+        <div class="tablebox" style="max-width:560px">
+          <table class="hist" id="tbl-manana">
+            <thead><tr><th>Ruta</th><th class="r">Paquetes</th></tr></thead>
             <tbody></tbody>
           </table>
         </div>
@@ -780,24 +790,37 @@
 
   function tablaRutasHoy() {
     const g = new Map();
-    const get = r => { if (!g.has(r)) g.set(r, { ruta: r, llegar: 0, bodega: 0, camino: 0, ent: 0, rech: 0 }); return g.get(r); };
-    for (const p of PEND.rows) { const x = get(p.ruta); x.llegar += p.recepcion; x.bodega += p.activo; }
+    const get = r => { if (!g.has(r)) g.set(r, { ruta: r, bodega: 0, camino: 0, ent: 0, rech: 0 }); return g.get(r); };
+    for (const p of PEND.rows) { if (p.activo) get(p.ruta).bodega += p.activo; }
     for (const r of RUTAS) { const x = get(r.ruta); x.camino += r.pendientes; x.ent += Number(r.entregados) || 0; x.rech += Number(r.rechazados) || 0; }
-    const rows = [...g.values()].map(x => ({ ...x, tot: x.llegar + x.bodega + x.camino + x.ent + x.rech })).filter(x => x.tot > 0).sort((a, b) => b.tot - a.tot);
+    const rows = [...g.values()].map(x => ({ ...x, tot: x.bodega + x.camino + x.ent + x.rech })).filter(x => x.tot > 0).sort((a, b) => b.tot - a.tot);
     const tb = $('#tbl-rutas-hoy tbody');
-    if (!rows.length) { tb.innerHTML = '<tr><td colspan="7" class="empty-in">Todavía no hay datos de rutas.</td></tr>'; $('#rutas-movil').innerHTML = '<div class="empty-in">Todavía no hay datos de rutas.</div>'; return; }
+    tablaManana();
+    if (!rows.length) { tb.innerHTML = '<tr><td colspan="6" class="empty-in">Todavía no hay paquetes de hoy.</td></tr>'; $('#rutas-movil').innerHTML = '<div class="empty-in">Todavía no hay paquetes de hoy.</div>'; return; }
     const max = Math.max(...rows.map(r => r.tot));
-    const col = [['llegar', '#b9c6bd'], ['bodega', '#e0a800'], ['camino', '#41AC3A'], ['ent', '#1F7A3D'], ['rech', '#c0392b']];
+    const col = [['bodega', '#e0a800'], ['camino', '#41AC3A'], ['ent', '#1F7A3D'], ['rech', '#c0392b']];
     const tot = k => rows.reduce((s, r) => s + r[k], 0);
     const celda = v => `<td class="r num">${v ? N(v) : '<span style="color:#b9c6bd">0</span>'}</td>`;
-    tb.innerHTML = rows.map(r => `<tr><td style="white-space:nowrap">${esc(r.ruta)}</td>${celda(r.llegar)}${celda(r.bodega)}${celda(r.camino)}${celda(r.ent)}${celda(r.rech)}
+    tb.innerHTML = rows.map(r => `<tr><td style="white-space:nowrap">${esc(r.ruta)}</td>${celda(r.bodega)}${celda(r.camino)}${celda(r.ent)}${celda(r.rech)}
       <td style="width:30%;min-width:120px"><div class="stack" style="width:${Math.max(8, r.tot / max * 100)}%" title="${esc(r.ruta)}: ${r.tot} paquetes">${col.map(([k, c]) => r[k] ? `<span style="width:${r[k] / r.tot * 100}%;background:${c}"></span>` : '').join('')}</div></td></tr>`).join('')
-      + `<tr><td><b>Total</b></td>${['llegar', 'bodega', 'camino', 'ent', 'rech'].map(k => `<td class="r num"><b>${N(tot(k))}</b></td>`).join('')}<td></td></tr>`;
-    const et = { llegar: 'por llegar', bodega: 'en bodega', camino: 'en camino', ent: 'entregados', rech: 'rechazados' };
+      + `<tr><td><b>Total</b></td>${['bodega', 'camino', 'ent', 'rech'].map(k => `<td class="r num"><b>${N(tot(k))}</b></td>`).join('')}<td></td></tr>`;
+    const et = { bodega: 'en bodega', camino: 'en camino', ent: 'entregados', rech: 'rechazados' };
     $('#rutas-movil').innerHTML = rows.map(r => `<div class="mitem"><div class="mtop"><b>${esc(r.ruta)}</b><span>${N(r.tot)} paquetes</span></div>
       <div class="stack">${col.map(([k, c]) => r[k] ? `<span style="width:${r[k] / r.tot * 100}%;background:${c}"></span>` : '').join('')}</div>
       <div class="chips">${col.filter(([k]) => r[k]).map(([k, c]) => `<span class="${k === 'camino' ? 'amb' : ''}"><i style="background:${c}"></i>${N(r[k])} ${et[k]}</span>`).join('')}</div></div>`).join('');
-    $('#rutas-note').textContent = 'Dónde está cada paquete, ruta por ruta' + (PEND.corte ? ' · bodega al corte de las ' + relojGT(PEND.corte) : '');
+    $('#rutas-note').textContent = 'Los paquetes de hoy, ruta por ruta' + (PEND.corte ? ' · bodega al corte de las ' + relojGT(PEND.corte) : '');
+  }
+
+  function tablaManana() {
+    const tb = $('#tbl-manana tbody');
+    if (!PEND.corte) { tb.innerHTML = '<tr><td colspan="2" class="empty-in">Todavía no hay datos. Se llenan con la próxima actualización.</td></tr>'; return; }
+    const g = new Map();
+    for (const p of PEND.rows) if (p.recepcion) g.set(p.ruta, (g.get(p.ruta) || 0) + p.recepcion);
+    const rows = [...g.entries()].sort((a, b) => b[1] - a[1]);
+    const total = rows.reduce((s, r) => s + r[1], 0);
+    $('#manana-note').textContent = 'Paquetes en el centro de recepción de CPS, por ruta (corte de las ' + relojGT(PEND.corte) + '). No cuentan para hoy.';
+    tb.innerHTML = rows.length ? rows.map(([r, n]) => `<tr><td>${esc(r)}</td><td class="r num">${N(n)}</td></tr>`).join('') + `<tr><td><b>Total</b></td><td class="r num"><b>${N(total)}</b></td></tr>`
+      : '<tr><td colspan="2" class="empty-in">Por ahora no hay paquetes por llegar.</td></tr>';
   }
 
   function chartHora(ent) {
