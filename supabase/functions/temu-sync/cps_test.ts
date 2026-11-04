@@ -1,5 +1,5 @@
 // Pruebas de la conversión de envíos de CPS.  Correr con:  deno test supabase/functions/temu-sync/cps_test.ts
-import { aFila, finUTC, inicioUTC, md5hex, sumarDias, unicos } from "./cps.ts";
+import { aFila, contarZonas, finUTC, inicioUTC, md5hex, sumarDias, unicos, zonaDe } from "./cps.ts";
 
 function igual(a: unknown, b: unknown, msg: string) {
   if (JSON.stringify(a) !== JSON.stringify(b)) throw new Error(`${msg}: esperaba ${JSON.stringify(b)}, salió ${JSON.stringify(a)}`);
@@ -67,4 +67,22 @@ Deno.test("paquete repetido en la lista de un piloto queda una sola vez, entrega
   const u = unicos([b, a, c, a]);
   igual(u.length, 2, "cantidad");
   igual(u.find((f) => f.id_envio_detalle === 9)!.estado, "entregado", "estado del repetido");
+});
+
+Deno.test("zona sacada de la dirección, aunque venga pegada", () => {
+  igual(zonaDe("9na Avenida A 4-67zona3MixcoNueva Monserrat,MIXCO,GUATEMALA"), 3, "pegada");
+  igual(zonaDe("4ta Calle 2-35 zona 7de Mixco,MIXCO,GUATEMALA"), 7, "7de");
+  igual(zonaDe("colonia belen z7mixco,MIXCO,GUATEMALA"), 7, "z7");
+  igual(zonaDe("6 avenida Zona 10 de Mixco"), 10, "Zona 10");
+  igual(zonaDe("Calzada Mateo Flores 8-23 zona 3 De Mixco"), 3, "calzada no confunde");
+  igual(zonaDe("Belencito 1ra ave B 4-28,MIXCO,GUATEMALA"), null, "sin zona");
+});
+
+Deno.test("conteo por zona y estado", () => {
+  const c = contarZonas([
+    { DIRECCION_DESTINO: "zona 10", ID_ESTADO: 1 }, { DIRECCION_DESTINO: "zona 10", ID_ESTADO: 2 },
+    { DIRECCION_DESTINO: "zona 9", ID_ESTADO: 3 }, { DIRECCION_DESTINO: "Belencito", ID_ESTADO: 1 },
+  ]);
+  igual(c.find((x) => x.zona === "10"), { zona: "10", en_camino: 1, entregados: 1, rechazados: 0, total: 2 }, "zona 10");
+  igual(c.find((x) => x.zona === "?")?.en_camino, 1, "sin zona");
 });

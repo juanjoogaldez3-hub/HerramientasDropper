@@ -180,6 +180,9 @@
   .cb-kpis{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:0 0 16px}
   #tbl-cb-dia td:first-child{white-space:nowrap}
   #tbl-cb-dia{max-width:640px}
+  .zonas{display:flex;flex-wrap:wrap;gap:5px;margin-top:6px;white-space:normal}
+  .zonas span{font-size:.74rem;background:#eef4f0;color:var(--ink);border-radius:7px;padding:2px 7px;font-weight:500;font-variant-numeric:tabular-nums}
+  .zonas span b{color:var(--green-dk)} .zonas span em{font-style:normal;color:#a3520a;font-weight:600}
   .cb-ref{font-size:.8rem;color:var(--muted);margin-top:10px}
   @media(max-width:640px){ .cb-acc{width:100%} .cb-acc .btn{flex:1;justify-content:center} .cb-kpis{grid-template-columns:1fr;gap:8px} }
   .recibo-bar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin:0 0 12px;
@@ -620,7 +623,7 @@
 
   // ---------- Estado ----------
   let CFG = { tarifa: 9.5, pago_motorista: 5, iva: 0.12, isr_tasa: 0.07, isr_limite_mes: 30000, isr_bajo: 0.05, isr_alto: 0.07, meta_diaria: 500, meta_motorista: 50, dias_mes: 26 };
-  let DP = [], DP_PREV = [], MOT = [], PEND = { corte: null, rows: [] }, HOY = [], RUTAS = [], LAST_RUN = null;
+  let DP = [], DP_PREV = [], MOT = [], PEND = { corte: null, rows: [] }, HOY = [], RUTAS = [], ZONAS = [], LAST_RUN = null;
   let sortKey = 'entregados', sortDir = -1;
 
   function status(msg, type) { const s = $('#status'); s.className = 'status show ' + (type || ''); s.innerHTML = (type === 'work' ? '<span class="spin"></span>' : '') + msg; }
@@ -686,11 +689,13 @@
   async function cargarHoy() {
     try {
       const h = hoyGT();
-      const [rows, pil, rut] = await Promise.all([
+      const [rows, pil, rut, zon] = await Promise.all([
         todas(() => sb.from('temu_envios').select('piloto_id,piloto,estado,registrado_at').eq('fecha', h).order('registrado_at')),
         sb.from('temu_pilotos').select('piloto_id,nombre,tipo'),
         sb.from('temu_rutas_piloto').select('piloto_id,ruta,total,pendientes,entregados,rechazados').eq('fecha', h),
+        sb.from('temu_zonas_ruta').select('ruta,zona,en_camino,entregados,rechazados,total').eq('fecha', h),
       ]);
+      ZONAS = (zon.data || []).map(z => ({ ...z, total: Number(z.total), en_camino: Number(z.en_camino) }));
       window.__tiposHoy = new Map((pil.data || []).map(p => [p.piloto_id, p]));
       RUTAS = (rut.data || []).map(r => ({ ...r, total: Number(r.total), pendientes: Number(r.pendientes) }));
       const tipos = new Map((pil.data || []).map(p => [p.piloto_id, p]));
@@ -801,14 +806,21 @@
     const col = [['bodega', '#8f9a94'], ['camino', '#E8820C'], ['ent', '#1F7A3D'], ['rech', '#c0392b']];
     const tot = k => rows.reduce((s, r) => s + r[k], 0);
     const celda = v => `<td class="r num">${v ? N(v) : '<span style="color:#b9c6bd">0</span>'}</td>`;
-    tb.innerHTML = rows.map(r => `<tr><td style="white-space:nowrap">${esc(r.ruta)}</td>${celda(r.bodega)}${celda(r.camino)}${celda(r.ent)}${celda(r.rech)}
+    tb.innerHTML = rows.map(r => `<tr><td style="white-space:nowrap">${esc(r.ruta)}${zonasHtml(r.ruta)}</td>${celda(r.bodega)}${celda(r.camino)}${celda(r.ent)}${celda(r.rech)}
       <td style="width:30%;min-width:120px"><div class="stack" style="width:${Math.max(8, r.tot / max * 100)}%" title="${esc(r.ruta)}: ${r.tot} paquetes">${col.map(([k, c]) => r[k] ? `<span style="width:${r[k] / r.tot * 100}%;background:${c}"></span>` : '').join('')}</div></td></tr>`).join('')
       + `<tr><td><b>Total</b></td>${['bodega', 'camino', 'ent', 'rech'].map(k => `<td class="r num"><b>${N(tot(k))}</b></td>`).join('')}<td></td></tr>`;
     const et = { bodega: 'en bodega', camino: 'en camino', ent: 'entregados', rech: 'rechazados' };
     $('#rutas-movil').innerHTML = rows.map(r => `<div class="mitem"><div class="mtop"><b>${esc(r.ruta)}</b><span>${N(r.tot)} paquetes</span></div>
       <div class="stack">${col.map(([k, c]) => r[k] ? `<span style="width:${r[k] / r.tot * 100}%;background:${c}"></span>` : '').join('')}</div>
-      <div class="chips">${col.filter(([k]) => r[k]).map(([k, c]) => `<span class="${k === 'camino' ? 'amb' : ''}"><i style="background:${c}"></i>${N(r[k])} ${et[k]}</span>`).join('')}</div></div>`).join('');
-    $('#rutas-note').textContent = 'Los paquetes de hoy, ruta por ruta' + (PEND.corte ? ' · bodega al corte de las ' + relojGT(PEND.corte) : '');
+      <div class="chips">${col.filter(([k]) => r[k]).map(([k, c]) => `<span class="${k === 'camino' ? 'amb' : ''}"><i style="background:${c}"></i>${N(r[k])} ${et[k]}</span>`).join('')}</div>${zonasHtml(r.ruta)}</div>`).join('');
+    $('#rutas-note').textContent = 'Los paquetes de hoy, ruta por ruta' + (PEND.corte ? ' · bodega al corte de las ' + relojGT(PEND.corte) : '') + (ZONAS.length ? ' · abajo de cada ruta, cuántos son de cada zona según la dirección' : '');
+  }
+
+  // Zonas dentro de una ruta (sacadas de la dirección): "Z10 30 · 12 en camino"
+  function zonasHtml(ruta) {
+    const zs = ZONAS.filter(z => z.ruta === ruta && z.total > 0).sort((a, b) => (a.zona === '?') - (b.zona === '?') || b.total - a.total);
+    if (!zs.length) return '';
+    return '<div class="zonas">' + zs.map(z => `<span title="${z.zona === '?' ? 'La dirección no dice la zona' : 'Zona ' + esc(z.zona)}: ${z.total} paquetes hoy, ${z.en_camino} en camino"><b>${z.zona === '?' ? 'Sin zona' : 'Z' + esc(z.zona)}</b> ${N(z.total)}${z.en_camino ? ` <em>· ${N(z.en_camino)} en camino</em>` : ''}</span>`).join('') + '</div>';
   }
 
   function tablaManana() {

@@ -82,3 +82,27 @@ export function unicos<T extends { id_envio_detalle: number; estado: string; reg
   }
   return [...m.values()];
 }
+
+// Zona escrita en la dirección: "zona 10", "zona3Mixco", "z7mixco", "Zona 9de Mixco"… null si no la dice.
+export function zonaDe(direccion: unknown): number | null {
+  const m = String(direccion ?? "").match(/(?<![a-z])(?:zona|zon|z)\s*\.?\s*(\d{1,2})(?!\d)/i);
+  if (!m) return null;
+  const z = Number(m[1]);
+  return z >= 1 && z <= 25 ? z : null;
+}
+
+// Cuenta los paquetes de una ruta por zona y estado (1 en camino, 2 entregado, 3 rechazado).
+export function contarZonas(items: any[]) {
+  const g = new Map<string, { zona: string; en_camino: number; entregados: number; rechazados: number; total: number }>();
+  for (const x of items) {
+    const z = zonaDe(x?.DIRECCION_DESTINO);
+    const k = z === null ? "?" : String(z);
+    const f = g.get(k) ?? { zona: k, en_camino: 0, entregados: 0, rechazados: 0, total: 0 };
+    if (x?.ID_ESTADO === 1) f.en_camino++;
+    else if (x?.ID_ESTADO === 2) f.entregados++;
+    else if (x?.ID_ESTADO === 3) f.rechazados++;
+    f.total++;
+    g.set(k, f);
+  }
+  return [...g.values()];
+}
