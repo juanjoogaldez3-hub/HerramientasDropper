@@ -15,7 +15,7 @@
 // la página consulta temu_sync_runs para saber cuándo terminó.
 // ============================================================
 import { createClient } from "npm:@supabase/supabase-js@2";
-import { aFila, contarZonas, unicos, DAY, md5hex, esFecha, finUTC, hoyLocal, inicioUTC, sumarDias, type Piloto } from "./cps.ts";
+import { aFila, contarZonasPendientes, unicos, DAY, md5hex, esFecha, finUTC, hoyLocal, inicioUTC, sumarDias, type Piloto } from "./cps.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_KEY  = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -127,19 +127,12 @@ async function rutasPiloto(token: string, idEmpresa: number, fecha: string) {
   return [...g.values()];
 }
 
-// Paquetes de hoy por ruta y zona (la zona se saca de la dirección; la dirección no se guarda)
-async function zonasRutas(token: string, rutas: string[], fecha: string) {
+// Lo que viene para mañana, por ruta y zona (la zona se saca de la dirección; la dirección no se guarda)
+async function zonasPendientes(token: string, idEmpresa: number) {
+  const r = await cps("/Graphics/EnviosPendientesTemuProveedor", { token, body: { ID_EMPRESA: idEmpresa } });
+  const items: any[] = Array.isArray(r) ? r : Array.isArray(r?.DATA) ? r.DATA : [];
   const corte = new Date().toISOString();
-  const filas: any[] = [];
-  for (const codigo of rutas) {
-    const det = await cps("/Graphics/getReporteRutasDetalleTemuEmpresa", {
-      token,
-      body: { CODIGO: codigo, ID_CLIENTE: "670", FECHA_INICIO: Date.parse(inicioUTC(fecha)), FECHA_FIN: Date.parse(finUTC(fecha)), TEMU: 1 },
-    });
-    const items: any[] = Array.isArray(det) ? det : Array.isArray(det?.DATA) ? det.DATA : [];
-    for (const z of contarZonas(items)) filas.push({ fecha, ruta: codigo, ...z, corte_at: corte });
-  }
-  return filas;
+  return contarZonasPendientes(items).map((z) => ({ ...z, corte_at: corte }));
 }
 
 // ---------- Corrida completa ----------
@@ -196,6 +189,21 @@ async function sincronizar(runId: string, desde: string, hasta: string) {
       }
     }
 
+    // Lo que viene para mañana, por zona (si falla, no tumba lo demás)
+    if (idEmpresa !== null) {
+      try {
+        const zonas = await zonasPendientes(token, idEmpresa);
+        const { error: zDel } = await admin.from("temu_zonas_pendientes").delete().neq("ruta", "");
+        if (zDel) throw new Error(zDel.message);
+        if (zonas.length) {
+          const { error } = await admin.from("temu_zonas_pendientes").insert(zonas);
+          if (error) throw new Error(error.message);
+        }
+      } catch (e) {
+        errorPend = [errorPend, "Zonas de mañana: " + (e instanceof Error ? e.message : String(e))].filter(Boolean).join(" · ");
+      }
+    }
+
     // Pendientes de hoy por motorista (lo que cada uno lleva y no ha entregado)
     if (idEmpresa !== null) {
       try {
@@ -206,18 +214,6 @@ async function sincronizar(runId: string, desde: string, hasta: string) {
         if (filas.length) {
           const { error } = await admin.from("temu_rutas_piloto").insert(filas);
           if (error) throw new Error(error.message);
-        }
-        // Zonas de cada ruta (si falla, no tumba lo demás)
-        try {
-          const zonas = await zonasRutas(token, [...new Set(filas.map((f) => f.ruta as string))], hoy);
-          const { error: zDel } = await admin.from("temu_zonas_ruta").delete().eq("fecha", hoy);
-          if (zDel) throw new Error(zDel.message);
-          if (zonas.length) {
-            const { error } = await admin.from("temu_zonas_ruta").insert(zonas);
-            if (error) throw new Error(error.message);
-          }
-        } catch (e) {
-          errorPend = [errorPend, "Zonas: " + (e instanceof Error ? e.message : String(e))].filter(Boolean).join(" · ");
         }
       } catch (e) {
         errorPend = [errorPend, "Pendientes por motorista: " + (e instanceof Error ? e.message : String(e))].filter(Boolean).join(" · ");

@@ -106,3 +106,19 @@ export function contarZonas(items: any[]) {
   }
   return [...g.values()];
 }
+
+// Lo que viene para mañana (listado de pendientes Temu de CPS), contado por ruta y zona.
+// ID_ESTADO_OBJETO 11 = centro de recepción (por llegar), 1 = activo en centro (en bodega).
+export function contarZonasPendientes(items: any[]) {
+  const g = new Map<string, { ruta: string; zona: string; por_llegar: number; en_bodega: number }>();
+  for (const x of items) {
+    const ruta = String(x?.RUTA_FINAL ?? "Sin ruta");
+    const z = zonaDe(x?.DIRECCION);
+    const zona = z === null ? "?" : String(z);
+    const k = ruta + "|" + zona;
+    const f = g.get(k) ?? { ruta, zona, por_llegar: 0, en_bodega: 0 };
+    if (x?.ID_ESTADO_OBJETO === 1) f.en_bodega++; else f.por_llegar++;
+    g.set(k, f);
+  }
+  return [...g.values()];
+}

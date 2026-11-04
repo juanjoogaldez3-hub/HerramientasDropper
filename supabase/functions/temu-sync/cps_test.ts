@@ -1,5 +1,5 @@
 // Pruebas de la conversión de envíos de CPS.  Correr con:  deno test supabase/functions/temu-sync/cps_test.ts
-import { aFila, contarZonas, finUTC, inicioUTC, md5hex, sumarDias, unicos, zonaDe } from "./cps.ts";
+import { aFila, contarZonas, contarZonasPendientes, finUTC, inicioUTC, md5hex, sumarDias, unicos, zonaDe } from "./cps.ts";
 
 function igual(a: unknown, b: unknown, msg: string) {
   if (JSON.stringify(a) !== JSON.stringify(b)) throw new Error(`${msg}: esperaba ${JSON.stringify(b)}, salió ${JSON.stringify(a)}`);
@@ -85,4 +85,14 @@ Deno.test("conteo por zona y estado", () => {
   ]);
   igual(c.find((x) => x.zona === "10"), { zona: "10", en_camino: 1, entregados: 1, rechazados: 0, total: 2 }, "zona 10");
   igual(c.find((x) => x.zona === "?")?.en_camino, 1, "sin zona");
+});
+
+Deno.test("lo que viene mañana por ruta y zona", () => {
+  const c = contarZonasPendientes([
+    { RUTA_FINAL: "MIXCO Z9", DIRECCION: "zona 10 de Mixco", ID_ESTADO_OBJETO: 11 },
+    { RUTA_FINAL: "MIXCO Z9", DIRECCION: "zona10", ID_ESTADO_OBJETO: 1 },
+    { RUTA_FINAL: "MIXCO Z9", DIRECCION: "zona 9de mixco", ID_ESTADO_OBJETO: 11 },
+  ]);
+  igual(c.find((x) => x.zona === "10"), { ruta: "MIXCO Z9", zona: "10", por_llegar: 1, en_bodega: 1 }, "z10");
+  igual(c.find((x) => x.zona === "9")?.por_llegar, 1, "z9");
 });
