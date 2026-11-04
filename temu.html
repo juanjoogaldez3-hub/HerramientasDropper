@@ -96,7 +96,7 @@
   .chips{display:flex;flex-wrap:wrap;gap:5px 6px}
   .chips span{display:inline-flex;align-items:center;gap:5px;font-size:.76rem;background:var(--grey);border-radius:8px;padding:3px 8px;font-variant-numeric:tabular-nums;white-space:nowrap}
   .chips span i{width:8px;height:8px;border-radius:2px;display:inline-block}
-  .chips span.amb{background:#fff7df;color:#8a6200;font-weight:700}
+  .chips span.amb{background:#fff0e0;color:#a3520a;font-weight:700}
   .chips span.warn{background:#fdecea;color:#a3261a;font-weight:700}
   .mitem.apoyo{opacity:.7}
   @media (max-width:640px){
@@ -149,7 +149,7 @@
   table.hist td .mini span{display:block;height:100%;background:var(--green)}
   table.hist td.warn{color:#b07d00;font-weight:700}
   #tbl-hoy td:not(:first-child){white-space:nowrap}
-  #tbl-hoy td.pend{color:#b07d00;font-weight:700}
+  #tbl-hoy td.pend{color:#c96a00;font-weight:700}
   .tm-tabs{margin:6px 0 16px;max-width:100%;overflow-x:auto;scrollbar-width:none}
   .tm-tabs::-webkit-scrollbar{display:none}
   .tm-tabs button{white-space:nowrap;flex:none}
@@ -304,9 +304,9 @@
       <span class="live"><span class="dot"></span><span id="hoy-live">Se actualiza solo cada 5 minutos</span></span>
     </div>
     <div class="flow5">
-      <div class="fstep"><div class="k"><i style="background:#b9c6bd"></i>Por llegar</div><div class="v" id="f-llegar">—</div><div class="d">en centro de recepción de CPS · nos llegan mañana</div></div>
-      <div class="fstep"><div class="k"><i style="background:#e0a800"></i>En bodega</div><div class="v" id="f-bodega">—</div><div class="d">ya en nuestra bodega, sin asignar</div></div>
-      <div class="fstep"><div class="k"><i style="background:#41AC3A"></i>En camino</div><div class="v" id="f-camino">—</div><div class="d" id="f-camino-d">asignados a motoristas, sin entregar</div></div>
+      <div class="fstep"><div class="k"><i style="background:#8fb8de"></i>Por llegar</div><div class="v" id="f-llegar">—</div><div class="d">en centro de recepción de CPS · nos llegan mañana</div></div>
+      <div class="fstep"><div class="k"><i style="background:#8f9a94"></i>En bodega</div><div class="v" id="f-bodega">—</div><div class="d">ya en nuestra bodega, sin asignar</div></div>
+      <div class="fstep"><div class="k"><i style="background:#E8820C"></i>En camino</div><div class="v" id="f-camino">—</div><div class="d" id="f-camino-d">asignados a motoristas, sin entregar</div></div>
       <div class="fstep hero"><div class="k"><i style="background:#1F7A3D"></i>Entregados hoy</div><div class="v" id="f-ent">—</div><div class="d" id="f-meta">—</div><div class="meta-bar"><span id="f-bar" style="width:0"></span></div></div>
       <div class="fstep bad"><div class="k"><i style="background:#c0392b"></i>Rechazados hoy</div><div class="v" id="f-rech">—</div><div class="d" id="f-rech-d"></div></div>
     </div>
@@ -319,7 +319,7 @@
       <div class="card" style="grid-column:1/-1">
         <h3>Por ruta</h3>
         <div class="note" id="rutas-note">Dónde está cada paquete, ruta por ruta.</div>
-        <div class="leg"><span><i style="background:#e0a800"></i>En bodega</span><span><i style="background:#41AC3A"></i>En camino</span><span><i style="background:#1F7A3D"></i>Entregados</span><span><i style="background:#c0392b"></i>Rechazados</span></div>
+        <div class="leg"><span><i style="background:#8f9a94"></i>En bodega</span><span><i style="background:#E8820C"></i>En camino</span><span><i style="background:#1F7A3D"></i>Entregados</span><span><i style="background:#c0392b"></i>Rechazados</span></div>
         <div class="mlist solo-movil" id="rutas-movil"></div>
         <div class="tablebox solo-desk">
           <table class="hist" id="tbl-rutas-hoy">
@@ -798,7 +798,7 @@
     tablaManana();
     if (!rows.length) { tb.innerHTML = '<tr><td colspan="6" class="empty-in">Todavía no hay paquetes de hoy.</td></tr>'; $('#rutas-movil').innerHTML = '<div class="empty-in">Todavía no hay paquetes de hoy.</div>'; return; }
     const max = Math.max(...rows.map(r => r.tot));
-    const col = [['bodega', '#e0a800'], ['camino', '#41AC3A'], ['ent', '#1F7A3D'], ['rech', '#c0392b']];
+    const col = [['bodega', '#8f9a94'], ['camino', '#E8820C'], ['ent', '#1F7A3D'], ['rech', '#c0392b']];
     const tot = k => rows.reduce((s, r) => s + r[k], 0);
     const celda = v => `<td class="r num">${v ? N(v) : '<span style="color:#b9c6bd">0</span>'}</td>`;
     tb.innerHTML = rows.map(r => `<tr><td style="white-space:nowrap">${esc(r.ruta)}</td>${celda(r.bodega)}${celda(r.camino)}${celda(r.ent)}${celda(r.rech)}
@@ -1068,13 +1068,13 @@
     const max = Math.max(...rows.map(r => r.total)) || 1;
     const x = v => lw + (v / max) * (W - lw - vw);
     let s = `<svg viewBox="0 0 ${W} ${H}" height="${H}">`;
-    s += `<rect x="${lw}" y="4" width="9" height="9" rx="2" fill="#1F7A3D"/><text class="tick" x="${lw + 14}" y="9" dy="0.32em">Por llegar</text>`;
-    s += `<rect x="${lw + 110}" y="4" width="9" height="9" rx="2" fill="#41AC3A"/><text class="tick" x="${lw + 124}" y="9" dy="0.32em">En bodega sin asignar</text>`;
+    s += `<rect x="${lw}" y="4" width="9" height="9" rx="2" fill="#8fb8de"/><text class="tick" x="${lw + 14}" y="9" dy="0.32em">Por llegar</text>`;
+    s += `<rect x="${lw + 110}" y="4" width="9" height="9" rx="2" fill="#8f9a94"/><text class="tick" x="${lw + 124}" y="9" dy="0.32em">En bodega sin asignar</text>`;
     rows.forEach((r, i) => {
       const yy = top + i * row;
       s += `<text class="lbl" x="${lw - 8}" y="${yy + row / 2}" dy="0.32em" text-anchor="end">${esc(r.ruta)}</text>`;
-      s += `<rect data-i="${i}" x="${lw}" y="${yy + 7}" width="${Math.max(0, x(r.recepcion) - lw)}" height="${row - 14}" rx="3" fill="#1F7A3D"/>`;
-      s += `<rect data-i="${i}" x="${x(r.recepcion)}" y="${yy + 7}" width="${Math.max(0, x(r.total) - x(r.recepcion))}" height="${row - 14}" fill="#41AC3A"/>`;
+      s += `<rect data-i="${i}" x="${lw}" y="${yy + 7}" width="${Math.max(0, x(r.recepcion) - lw)}" height="${row - 14}" rx="3" fill="#8fb8de"/>`;
+      s += `<rect data-i="${i}" x="${x(r.recepcion)}" y="${yy + 7}" width="${Math.max(0, x(r.total) - x(r.recepcion))}" height="${row - 14}" fill="#8f9a94"/>`;
       s += `<text class="val" x="${x(r.total) + 6}" y="${yy + row / 2}" dy="0.32em">${N(r.total)}</text>`;
     });
     box.innerHTML = s + '</svg>';
