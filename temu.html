@@ -46,7 +46,14 @@
   .stat.hero .v{color:var(--green-dk)}
 
   body.modo-hoy .solo-periodo{display:none!important}
-  body.modo-mover .solo-periodo,body.modo-mover .tm-sync{display:none!important}
+  body.modo-mover .solo-periodo,body.modo-mover .tm-sync,body.modo-buscar .solo-periodo{display:none!important}
+  .bg-res{display:grid;gap:14px;margin-top:14px}
+  .bg-ahora{border-radius:14px;padding:14px 16px;border:1px solid var(--line);background:#fafcfa}
+  .bg-ahora.ok{border-color:#c4e3cd;background:#f3faf5} .bg-ahora.warn{border-color:#f3c99a;background:#fff7ee} .bg-ahora.bad{border-color:#f0b9b2;background:#fdf3f2}
+  .bg-ahora .t{font-family:'Sora',sans-serif;font-weight:800;font-size:1.15rem;margin-bottom:4px}
+  .bg-kv{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px 16px;margin-top:10px;font-size:.88rem}
+  .bg-kv div span{display:block;font-size:.7rem;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);font-weight:700}
+  .bg-kv div b{font-weight:700}
   .mv-steps{display:grid;gap:14px}
   .mv-row{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end}
   .mv-row label{display:flex;flex-direction:column;gap:5px;font-size:.8rem;font-weight:600;color:var(--ink);flex:1;min-width:180px}
@@ -297,6 +304,7 @@
     <button data-t="cobro">Cobro CPS</button>
     <button data-t="rechazos">Rechazos</button>
     <button data-t="mover">Mover</button>
+    <button data-t="buscar">Buscar guía</button>
     <button data-t="ajustes">Ajustes</button>
   </div>
 
@@ -497,6 +505,21 @@
         <div class="note">Qué tanto de lo que sacó cada uno regresó. En rojo, 15% o más.</div>
         <div class="chart" id="ch-rech-pil"></div>
       </div>
+    </div>
+  </section>
+
+  <!-- BUSCAR GUÍA -->
+  <section class="tm-tab" data-t="buscar">
+    <div class="card">
+      <h3>Buscar un paquete</h3>
+      <div class="note">Escribí la guía (por ejemplo 94647158) o el número de envío (ENV26/0711273). Te dice dónde está ahorita en CPS y todo lo que ha pasado con él.</div>
+      <form class="mv-row" id="bg-form" autocomplete="off">
+        <label>Guía o número de envío
+          <input id="bg-q" inputmode="text" placeholder="94647158" style="font-family:inherit;font-size:1rem;border:1px solid #cdd8cf;border-radius:10px;padding:10px 12px;width:100%;background:#fcfdfc">
+        </label>
+        <button class="btn btn-primary" id="bg-btn" type="submit" style="width:auto">Buscar</button>
+      </form>
+      <div id="bg-res" class="bg-res"></div>
     </div>
   </section>
 
@@ -1712,6 +1735,64 @@
       : '<tr><td colspan="7" class="empty-in">Todavía no se ha movido nada desde aquí.</td></tr>';
   }
 
+  // ---------- Buscar guía ----------
+  const ESTADOS_CPS = { 11: 'En el centro de recepción de CPS (nos llega mañana)', 1: 'En nuestra bodega, sin asignar' };
+  async function buscarGuia(q) {
+    const box = $('#bg-res');
+    q = String(q || '').trim().toUpperCase();
+    if (!q) return;
+    box.innerHTML = '<div class="note"><span class="spin"></span> Buscando…</div>';
+    try {
+      // Si escribieron el número de envío, buscamos su guía en lo que ya tenemos
+      let guia = q.replace(/\s+/g, '');
+      const esEnv = /^ENV/.test(guia);
+      if (esEnv) {
+        const { data } = await sb.from('temu_envios').select('guia').eq('correlativo', guia).not('guia', 'is', null).limit(1);
+        if (!data || !data.length) { box.innerHTML = '<div class="bg-ahora warn"><div class="t">No lo encontré</div>Ese número de envío no está en lo que hemos traído de CPS. Probá con la guía.</div>'; return; }
+        guia = data[0].guia;
+      } else guia = guia.replace(/\D/g, '');
+      if (!guia) { box.innerHTML = '<div class="bg-ahora warn">Escribí una guía o un número de envío.</div>'; return; }
+      const [hist, movs, cps] = await Promise.all([
+        sb.from('temu_envios').select('fecha,registrado_at,correlativo,piloto_id,piloto,estado,motivo,tamano').eq('guia', guia).order('registrado_at'),
+        sb.from('temu_movimientos').select('created_at,hecho_por,piloto_origen,piloto_destino,ruta_destino,motivo,ok,mensaje').eq('wrhs', guia).order('created_at'),
+        sb.functions.invoke('temu-mover', { body: { accion: 'buscar', guia } }),
+      ]);
+      const H = (hist.data || []), M = (movs.data || []), C = cps.data || {};
+      const nom = id => ((window.__tiposHoy && window.__tiposHoy.get(id)) || {}).nombre;
+      const c = C.cps, pend = C.pendiente;
+      const entregado = H.find(r => r.estado === 'entregado');
+      const ultimo = H[H.length - 1];
+      const corr = (c && c.correlativo) || (pend && pend.correlativo) || (ultimo && ultimo.correlativo) || '';
+      // Dónde está ahorita
+      let cls = '', titulo = '', texto = '';
+      if (entregado) { cls = 'ok'; titulo = 'Entregado'; texto = 'El ' + esc(fechaLarga(entregado.fecha)) + ' a las ' + esc(relojGT(entregado.registrado_at)) + ' por ' + esc(nom(entregado.piloto_id) || entregado.piloto) + '.'; }
+      else if (pend) { cls = ''; titulo = ESTADOS_CPS[pend.id_estado_objeto] || cap(pend.estado || 'Pendiente'); texto = 'Ruta ' + esc(pend.ruta || '—') + '.'; }
+      else if (c && c.puede_mover) { cls = 'warn'; titulo = 'En camino'; texto = 'Lo lleva ' + esc(c.piloto || '—') + ' en la ruta ' + esc(c.ruta || '—') + '. Se puede mover desde la pestaña Mover.'; }
+      else if (c) {
+        cls = ultimo && ultimo.estado === 'rechazo' ? 'bad' : 'warn';
+        titulo = ultimo && ultimo.estado === 'rechazo' ? 'Rechazado y sin volver a salir' : 'No está en ruta';
+        texto = 'En CPS sigue asignado a ' + esc(c.piloto || '—') + ' (' + esc(c.ruta || '—') + '), estado ' + esc(c.id_estado_objeto ?? '—') + '. ' + esc(c.motivo_no || '');
+        if (ultimo && ultimo.estado === 'rechazo') texto += ' Último rechazo: ' + esc(fechaLarga(ultimo.fecha)) + (ultimo.motivo ? ' · ' + esc(cap(ultimo.motivo)) : '') + ' (hace ' + N(diffDays(ultimo.fecha, hoyGT())) + ' días).';
+      } else { cls = 'warn'; titulo = 'CPS no lo encontró'; texto = esc(C.error_cps || cps.error?.message || 'Revisá el número.'); }
+      let html = `<div class="bg-ahora ${cls}"><div class="t">${titulo}</div><div>${texto}</div>
+        <div class="bg-kv"><div><span>Guía</span><b>${esc(guia)}</b></div><div><span>Envío</span><b>${esc(corr || '—')}</b></div>
+        ${c ? `<div><span>Motorista en CPS</span><b>${esc(c.piloto || '—')}</b></div><div><span>Ruta en CPS</span><b>${esc(c.ruta || '—')}</b></div>` : ''}
+        ${ultimo && ultimo.tamano ? `<div><span>Tamaño</span><b>${esc(ultimo.tamano)}</b></div>` : ''}</div></div>`;
+      // Historial
+      const ev = H.map(r => ({ t: r.registrado_at, txt: (r.estado === 'entregado' ? '<b class="good" style="color:var(--green)">Entregado</b>' : r.estado === 'rechazo' ? '<b style="color:#c0392b">Rechazado</b>' : 'Registrado') + ' · ' + esc(nom(r.piloto_id) || r.piloto) + (r.motivo ? ' · ' + esc(cap(r.motivo)) : '') }))
+        .concat(M.map(m => ({ t: m.created_at, txt: (m.ok ? '<b>Movido</b>' : '<b>Intento de mover</b>') + ' de ' + esc(m.piloto_origen || '—') + ' a ' + esc(m.piloto_destino || '—') + (m.motivo ? ' · “' + esc(m.motivo) + '”' : '') + (m.hecho_por ? ' · por ' + esc(m.hecho_por) : '') + (m.ok ? '' : ' · ' + esc(m.mensaje || '')) })))
+        .sort((a, b) => a.t < b.t ? -1 : 1);
+      html += `<div><h3 style="font-size:.95rem;margin:0 0 6px">Historial</h3>` + (ev.length
+        ? '<div class="tablebox"><table class="hist"><tbody>' + ev.map(e => `<tr><td style="white-space:nowrap">${esc(cuando(e.t))}</td><td>${e.txt}</td></tr>`).join('') + '</tbody></table></div>'
+        : '<div class="note">No tenemos entregas ni rechazos de este paquete en lo que hemos traído de CPS.</div>') + '</div>';
+      box.innerHTML = html;
+    } catch (e) {
+      console.error(e);
+      box.innerHTML = '<div class="bg-ahora bad">No se pudo buscar: ' + esc(e.message || String(e)) + '</div>';
+    }
+  }
+  $('#bg-form').addEventListener('submit', ev => { ev.preventDefault(); buscarGuia($('#bg-q').value); });
+
   // ---------- Ajustes ----------
   function llenarCfg() {
     $$('#cfg-form input').forEach(i => { const v = CFG[i.name]; i.value = i.hasAttribute('data-pct') ? +(v * 100).toFixed(2) : v; });
@@ -1737,6 +1818,8 @@
     $$('.tm-tab').forEach(s => s.classList.toggle('show', s.dataset.t === b.dataset.t));
     document.body.classList.toggle('modo-hoy', b.dataset.t === 'hoy');
     document.body.classList.toggle('modo-mover', b.dataset.t === 'mover');
+    document.body.classList.toggle('modo-buscar', b.dataset.t === 'buscar');
+    if (b.dataset.t === 'buscar') setTimeout(() => $('#bg-q').focus(), 50);
     if (b.dataset.t === 'mover') abrirMover();
     if (b.dataset.t === 'cobro') cargarCobro();
     if (b.dataset.t === 'hoy') dibujarHoy();

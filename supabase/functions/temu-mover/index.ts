@@ -7,6 +7,9 @@
 //   { "accion": "listar", "piloto_id": 599 }
 //       → paquetes de HOY que ese motorista lleva EN CAMINO, por ruta,
 //         con su guía (WRHS) y si CPS deja moverlo.
+//   { "accion": "buscar", "guia": "94647158" }
+//       → dónde está ese paquete ahorita en CPS (ruta, motorista, estado) y si
+//         está en lo que viene mañana. Solo lectura; sin datos de quien recibe.
 //   { "accion": "mover", "wrhs": ["9466..."], "piloto_destino_id": 607,
 //     "ruta_destino_id": 338 | null, "motivo": "..." }
 //       → mueve cada paquete (uno por uno, como la página de CPS).
@@ -75,6 +78,8 @@ async function consultar(token: string, wrhs: string) {
     id_ruta: d.ID_RUTA ?? null, ruta: d.RUTA_CODIGO ?? null,
     piloto_id: d.ID_USUARIO_PILOTO ?? null, piloto: d.PILOTO ?? null,
     puede_mover: d.PUEDE_MOVER === true, motivo_no: d.MOTIVO_NO_MOVER ?? null,
+    id_estado_objeto: typeof d.ID_ESTADO_OBJETO === "number" ? d.ID_ESTADO_OBJETO : null,
+    asignaciones_activas: typeof d.ASIGNACIONES_ACTIVAS === "number" ? d.ASIGNACIONES_ACTIVAS : null,
   };
 }
 async function enParalelo<T, R>(items: T[], fn: (x: T) => Promise<R>): Promise<R[]> {
@@ -110,6 +115,22 @@ async function listar(token: string, idEmpresa: number, pilotoId: number) {
     }
   }
   return { fecha: hoy, rutas_revisadas: rutas, paquetes, sin_consultar: sinConsultar };
+}
+
+async function buscar(token: string, idEmpresa: number, guia: string) {
+  const g = String(guia ?? "").trim();
+  if (!/^[A-Za-z0-9-]{4,30}$/.test(g)) throw new Error("Escribí un número de guía válido");
+  let cps_: any = null, errorCps: string | null = null;
+  try { cps_ = await consultar(token, g); } catch (e) { errorCps = e instanceof Error ? e.message : String(e); }
+  // ¿Está en lo que viene para mañana (recepción / bodega)?
+  let pendiente: any = null;
+  try {
+    const r = await cps("/Graphics/EnviosPendientesTemuProveedor", token, { ID_EMPRESA: idEmpresa });
+    const l: any[] = Array.isArray(r) ? r : r?.DATA ?? [];
+    const x = l.find((p) => String(p?.IDENTIFICADOR_DETALLE) === g);
+    if (x) pendiente = { ruta: x.RUTA_FINAL ?? null, estado: x.ESTADO_OBJETO ?? null, id_estado_objeto: x.ID_ESTADO_OBJETO ?? null, desde: x.FECHA_PENDIENTE ?? null, correlativo: x.CORRELATIVO ?? null };
+  } catch { /* si falla, se muestra lo demás */ }
+  return { guia: g, cps: cps_, error_cps: errorCps, pendiente };
 }
 
 async function mover(token: string, idEmpresa: number, body: any, email: string | null) {
@@ -172,6 +193,7 @@ Deno.serve(async (req) => {
       if (!Number.isFinite(pid)) return json({ error: "Falta el motorista" }, 400);
       return json({ ok: true, ...(await listar(token, idEmpresa, pid)) });
     }
+    if (body.accion === "buscar") return json({ ok: true, ...(await buscar(token, idEmpresa, body.guia)) });
     if (body.accion === "mover") return json({ ok: true, ...(await mover(token, idEmpresa, body, u.user.email ?? null)) });
     return json({ error: "accion_desconocida" }, 400);
   } catch (e) {
