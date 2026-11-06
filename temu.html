@@ -454,6 +454,25 @@
         </div>
       </div>
     </div>
+    <div class="card" style="margin-top:16px">
+      <h3>Lo que deposita CPS</h3>
+      <div class="note">CPS es agente retenedor: al pagar la factura se queda con una parte del ISR y del IVA y la paga a la SAT a nombre de Dropper.</div>
+      <div class="grid2" style="margin-top:6px">
+        <div class="flow">
+          <div><span id="l-r-fact">Factura (IVA incluido)</span><b id="r-fact">—</b></div>
+          <div><span id="l-r-isr">(−) Retención ISR</span><b id="r-isr">—</b></div>
+          <div><span id="l-r-iva">(−) Retención IVA</span><b id="r-iva">—</b></div>
+          <div class="fin"><span>Depósito esperado</span><span id="r-dep">—</span></div>
+        </div>
+        <div>
+          <div class="flow">
+            <div><span>ISR que falta pagar a la SAT</span><b id="r-isr-pend">—</b></div>
+            <div><span>IVA que falta pagar a la SAT</span><b id="r-iva-pend">—</b></div>
+          </div>
+          <div class="note" style="margin-top:8px" id="r-nota">—</div>
+        </div>
+      </div>
+    </div>
     <div class="note" style="margin-top:12px;color:var(--muted);font-size:.8rem">No incluye otros gastos de Dropper (planilla, gasolina, renta) ni el crédito de IVA por compras. Las tarifas se cambian en <b>Ajustes</b>.</div>
   </section>
 
@@ -578,6 +597,8 @@
         <label>Pago al motorista (Q)<small>Por entrega</small><input type="number" step="0.01" min="0" name="pago_motorista"></label>
         <label>IVA (%)<small>Incluido en la tarifa</small><input type="number" step="0.01" min="0" name="iva" data-pct></label>
         <label>ISR del período (%)<small>Siempre pasan de Q30,000 al mes</small><input type="number" step="0.01" min="0" name="isr_tasa" data-pct></label>
+        <label>Retención de ISR que hace CPS (%)<small>Sobre la base sin IVA</small><input type="number" step="0.01" min="0" name="ret_isr" data-pct></label>
+        <label>Retención de IVA que hace CPS (%)<small>Sobre el IVA de la factura</small><input type="number" step="0.01" min="0" name="ret_iva" data-pct></label>
         <label>Meta diaria<small>Entregas por día</small><input type="number" step="1" min="1" name="meta_diaria"></label>
         <label>Meta por motorista<small>Entregas por día</small><input type="number" step="1" min="1" name="meta_motorista"></label>
         <label>Días de trabajo al mes<small>Para la proyección</small><input type="number" step="1" min="1" max="31" name="dias_mes"></label>
@@ -645,7 +666,7 @@
   }
 
   // ---------- Estado ----------
-  let CFG = { tarifa: 9.5, pago_motorista: 5, iva: 0.12, isr_tasa: 0.07, isr_limite_mes: 30000, isr_bajo: 0.05, isr_alto: 0.07, meta_diaria: 500, meta_motorista: 50, dias_mes: 26 };
+  let CFG = { tarifa: 9.5, pago_motorista: 5, iva: 0.12, isr_tasa: 0.07, ret_isr: 0.05, ret_iva: 0.15, isr_limite_mes: 30000, isr_bajo: 0.05, isr_alto: 0.07, meta_diaria: 500, meta_motorista: 50, dias_mes: 26 };
   let DP = [], DP_PREV = [], MOT = [], PEND = { corte: null, rows: [] }, HOY = [], RUTAS = [], ZONAS = [], LAST_RUN = null;
   let sortKey = 'entregados', sortDir = -1;
 
@@ -1223,6 +1244,17 @@
     $('#l-moto').textContent = '(−) Motoristas (' + Q(CFG.pago_motorista) + ' c/u)';
     $('#g-fact').textContent = Q(t.fact); $('#g-iva').textContent = Q(t.iva); $('#g-base').textContent = Q(t.base);
     $('#g-isr').textContent = Q(t.isr); $('#g-moto').textContent = Q(t.moto); $('#g-libre').textContent = Q(t.libre);
+    // Retenciones de CPS (redondeadas como en la factura)
+    const r2 = x => Math.round(x * 100) / 100;
+    const fT = r2(t.fact), bT = r2(fT / (1 + CFG.iva)), ivaT = r2(fT - bT);
+    const rIsr = r2(bT * CFG.ret_isr), rIva = r2(ivaT * CFG.ret_iva), dep = r2(fT - rIsr - rIva);
+    $('#l-r-fact').textContent = 'Factura (' + N(t.ent) + ' × ' + Q(CFG.tarifa) + ', IVA incluido)';
+    $('#l-r-isr').textContent = '(−) Retención ISR ' + P(CFG.ret_isr) + ' de ' + Q(bT);
+    $('#l-r-iva').textContent = '(−) Retención IVA ' + P(CFG.ret_iva) + ' de ' + Q(ivaT);
+    $('#r-fact').textContent = Q(fT); $('#r-isr').textContent = Q(rIsr); $('#r-iva').textContent = Q(rIva); $('#r-dep').textContent = Q(dep);
+    $('#r-isr-pend').textContent = Q(Math.max(0, r2(t.isr - rIsr)));
+    $('#r-iva-pend').textContent = Q(Math.max(0, r2(ivaT - rIva)));
+    $('#r-nota').innerHTML = 'ISR: el tablero calcula ' + P(CFG.isr_tasa) + ' (' + Q(t.isr) + ') y CPS retiene ' + P(CFG.ret_isr) + '; la diferencia se paga en la declaración. IVA: antes de restar el crédito por compras. Pedile a CPS las <b>constancias de retención</b> y pasáselas al contador. No cambia lo libre para Dropper: las retenciones ya están dentro del IVA y el ISR de arriba.';
     $('#g-por').textContent = t.ent ? 'Libre por entrega: ' + Q(t.libre / t.ent) + ' de cada ' + Q(CFG.tarifa) + '.' : '';
     $('#proy-note').textContent = 'Mes de ' + N(CFG.dias_mes) + ' días. ISR del mes: ' + P(CFG.isr_bajo) + ' hasta ' + Q(CFG.isr_limite_mes) + ' sin IVA y ' + P(CFG.isr_alto) + ' sobre lo que pase.';
     const esc2 = [['Ritmo actual (' + N(t.prom) + ' diarios)', mes(t.prom)], ['Meta (' + N(CFG.meta_diaria) + ' diarios)', mes(CFG.meta_diaria)]];
