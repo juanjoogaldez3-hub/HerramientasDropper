@@ -72,6 +72,40 @@
   .mv-res{display:grid;gap:4px;font-size:.84rem}
   .mv-res div{display:flex;gap:8px}.mv-res .ok{color:var(--green)}.mv-res .err{color:#c0392b}
   body:not(.modo-hoy) .solo-hoy{display:none!important}
+  /* ---- Hoy: tablero en dos columnas ---- */
+  .wrap{max-width:1440px}
+  .hoy-mini{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));background:var(--white);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);margin-bottom:16px}
+  .hoy-mini>div{padding:10px 16px;display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;min-width:0}
+  .hoy-mini>div+div{border-left:1px solid var(--line)}
+  .hoy-mini .k{font-size:.72rem;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);font-weight:700;width:100%}
+  .hoy-mini b{font-family:'Sora',sans-serif;font-weight:800;font-size:1.25rem}
+  .hoy-mini small{font-size:.76rem;color:var(--muted)}
+  .hoy-grid{display:grid;gap:16px}
+  .hg-col{display:grid;gap:16px;align-content:start;min-width:0}
+  .hoy-grid .card{min-width:0}
+  .hg-h{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:6px}
+  .hg-h h3{margin:0}
+  .hg-h .note{margin:0;font-size:.78rem}
+  #tbl-hoy td:first-child{min-width:140px}
+  #tbl-hoy th,#tbl-hoy td{padding-left:7px;padding-right:7px;vertical-align:top}
+  #tbl-hoy th{white-space:nowrap}
+  #tbl-hoy .mini{width:44px}
+  .hg-pie{margin:8px 0 0;font-size:.76rem;color:var(--muted)}
+  .hg-der .mlist{gap:8px}
+  .hg-der .mitem{padding:9px 11px}
+  @media (min-width:1100px){
+    .hoy-grid{grid-template-columns:minmax(0,1.7fr) minmax(330px,1fr);align-items:start}
+  }
+  @media (max-width:1099px){
+    .hg-col{display:contents}
+    .hg-motos{order:1}.hg-rutas{order:2}.hg-manana{order:3}.hg-hora{order:4}
+  }
+  @media (max-width:640px){
+    .hoy-mini{grid-template-columns:1fr}
+    .hoy-mini>div+div{border-left:0;border-top:1px solid var(--line)}
+    .hoy-mini>div{padding:8px 14px}
+    .hoy-mini .k{width:auto}
+  }
   .hoy-head{display:flex;align-items:baseline;justify-content:space-between;gap:10px;flex-wrap:wrap;margin:0 2px 12px}
   .hoy-head h3{font-family:'Sora',sans-serif;font-weight:700;font-size:1.05rem}
   .hoy-head .live{font-size:.8rem;color:var(--muted);display:inline-flex;align-items:center;gap:6px}
@@ -321,52 +355,52 @@
       <div class="fstep hero"><div class="k"><i style="background:#1F7A3D"></i>Entregados hoy</div><div class="v" id="f-ent">—</div><div class="d" id="f-meta">—</div><div class="meta-bar"><span id="f-bar" style="width:0"></span></div></div>
       <div class="fstep bad"><div class="k"><i style="background:#c0392b"></i>Rechazados hoy</div><div class="v" id="f-rech">—</div><div class="d" id="f-rech-d"></div></div>
     </div>
-    <div class="summary" style="margin-bottom:16px">
-      <div class="stat"><div class="k">Motoristas en la calle</div><div class="v" id="h-motos">—</div><div class="d" id="h-motos-d">con paquetes o entregas hoy</div></div>
-      <div class="stat"><div class="k">Última hora</div><div class="v" id="h-hora">—</div><div class="d">entregas en los últimos 60 min</div></div>
-      <div class="stat"><div class="k">Para repartir mañana</div><div class="v" id="h-manana">—</div><div class="d" id="h-manana-d">por llegar + en bodega</div></div>
+    <div class="hoy-mini">
+      <div><span class="k">Motoristas en la calle</span><b id="h-motos">—</b><small id="h-motos-d">con paquetes o entregas hoy</small></div>
+      <div><span class="k">Última hora</span><b id="h-hora">—</b><small>entregas en los últimos 60 min</small></div>
+      <div><span class="k">Para repartir mañana</span><b id="h-manana">—</b><small id="h-manana-d">por llegar + en bodega</small></div>
     </div>
-    <div class="grid2">
-      <div class="card" style="grid-column:1/-1">
-        <h3>Por ruta</h3>
-        <div class="note" id="rutas-note">Dónde está cada paquete, ruta por ruta.</div>
-        <div class="leg"><span><i style="background:#8f9a94"></i>En bodega</span><span><i style="background:#E8820C"></i>En camino</span><span><i style="background:#1F7A3D"></i>Entregados</span><span><i style="background:#c0392b"></i>Rechazados</span></div>
-        <div class="mlist solo-movil" id="rutas-movil"></div>
-        <div class="tablebox solo-desk">
-          <table class="hist" id="tbl-rutas-hoy">
-            <thead><tr><th>Ruta</th><th class="r">En bodega</th><th class="r">En camino</th><th class="r">Entreg.</th><th class="r">Rech.</th><th></th></tr></thead>
-            <tbody></tbody>
-          </table>
-        </div>
-      </div>
-      <div class="card" style="grid-column:1/-1">
-        <h3>Llegan mañana</h3>
-        <div class="note" id="manana-note">Paquetes en el centro de recepción de CPS, por ruta. No cuentan para hoy.</div>
-        <div class="tablebox" style="max-width:560px">
-          <table class="hist" id="tbl-manana">
-            <thead><tr><th>Ruta</th><th class="r">Paquetes</th></tr></thead>
-            <tbody></tbody>
-          </table>
-        </div>
-      </div>
-      <div class="card" style="grid-column:1/-1">
-        <h3>Entregas por hora</h3>
-        <div class="note">Cuántas se entregaron en cada hora de hoy.</div>
-        <div class="chart" id="ch-hora"></div>
-      </div>
-    </div>
-    <div class="card solo-movil" style="margin-top:12px">
-      <h3>Motoristas</h3>
-      <div class="note">Primero quien tiene más paquetes en camino.</div>
-      <div class="mlist" id="motos-movil"></div>
-    </div>
-    <div class="panel tablebox solo-desk" style="margin-top:16px">
-      <table class="hist" id="tbl-hoy">
-        <thead><tr><th>Motorista</th><th class="r">Asignados</th><th class="r">En camino</th><th class="r">Entregados</th><th class="r">Rechazados</th><th class="r">Primera</th><th class="r">Última</th><th class="r">Por hora</th></tr></thead>
+    <div class="hoy-grid">
+      <div class="hg-col hg-izq">
+        <div class="card hg-motos">
+          <div class="hg-h"><h3>Motoristas</h3><span class="note">Primero quien tiene más paquetes en camino</span></div>
+          <div class="solo-movil"><div class="mlist" id="motos-movil"></div></div>
+          <div class="tablebox solo-desk">
+            <table class="hist" id="tbl-hoy">
+        <thead><tr><th>Motorista</th><th class="r">Asig.</th><th class="r">En camino</th><th class="r">Entreg.</th><th class="r">Rech.</th><th class="r">Primera</th><th class="r">Última</th><th class="r" title="Entregas por hora">x hora</th></tr></thead>
         <tbody></tbody>
       </table>
+          </div>
+          <div class="note solo-desk hg-pie">Asignados y en camino vienen del "Rendimiento por ruta" de CPS; debajo del nombre, sus rutas. En amarillo: lleva más de 45 minutos sin registrar nada y todavía tiene paquetes en camino.</div>
+        </div>
+        <div class="card hg-hora">
+          <div class="hg-h"><h3>Entregas por hora</h3><span class="note">cuántas se entregaron en cada hora de hoy</span></div>
+          <div class="chart" id="ch-hora"></div>
+        </div>
+      </div>
+      <div class="hg-col hg-der">
+        <div class="card hg-rutas">
+          <div class="hg-h"><h3>Por ruta</h3></div>
+          <div class="note" id="rutas-note">Los paquetes de hoy, ruta por ruta.</div>
+          <div class="leg"><span><i style="background:#8f9a94"></i>En bodega</span><span><i style="background:#E8820C"></i>En camino</span><span><i style="background:#1F7A3D"></i>Entregados</span><span><i style="background:#c0392b"></i>Rechazados</span></div>
+          <div class="mlist" id="rutas-movil"></div>
+          <div hidden><table class="hist" id="tbl-rutas-hoy">
+            <thead><tr><th>Ruta</th><th class="r">En bodega</th><th class="r">En camino</th><th class="r">Entreg.</th><th class="r">Rech.</th><th></th></tr></thead>
+            <tbody></tbody>
+          </table></div>
+        </div>
+        <div class="card hg-manana">
+          <div class="hg-h"><h3>Llegan mañana</h3></div>
+          <div class="note" id="manana-note">Paquetes en el centro de recepción de CPS, por ruta. No cuentan para hoy.</div>
+          <div class="tablebox">
+            <table class="hist" id="tbl-manana">
+              <thead><tr><th>Ruta</th><th class="r">Paquetes</th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
     </div>
-    <div class="note solo-desk" style="margin-top:8px;color:var(--muted);font-size:.8rem">Asignados y en camino vienen del "Rendimiento por ruta" de CPS; debajo del nombre, sus rutas. En amarillo: lleva más de 45 minutos sin registrar nada y todavía tiene paquetes en camino. La barra compara con la meta de cada motorista.</div>
   </section>
 
   <!-- RESUMEN -->
@@ -817,7 +851,7 @@
         <td class="r num">${N(p.ent)}<span class="mini"><span style="width:${w}%"></span></span></td>
         <td class="r num">${N(p.rech)}</td>
         <td class="r num">${p.primera ? esc(relojGT(p.primera)) : '—'}</td>
-        <td class="r num ${quieto ? 'warn' : ''}">${p.ultima ? esc(relojGT(p.ultima)) + ' · ' + esc(haceTxt(m)) : 'sin registros'}</td>
+        <td class="r num ${quieto ? 'warn' : ''}">${p.ultima ? esc(relojGT(p.ultima)) + `<div style="font-size:.72rem;font-weight:500;color:var(--muted)">${esc(haceTxt(m))}</div>` : 'sin registros'}</td>
         <td class="r num">${p.primera ? D1(p.ritmo) : '—'}</td></tr>`;
     }).join('') : '<tr><td colspan="8" class="empty-in">Todavía no hay entregas ni paquetes asignados hoy.</td></tr>';
     $('#motos-movil').innerHTML = pil.length ? pil.map(p => {
