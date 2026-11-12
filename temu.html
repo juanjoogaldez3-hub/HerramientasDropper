@@ -117,6 +117,7 @@
   .pk-est{margin-left:auto;font-size:.74rem;font-weight:700;border-radius:7px;padding:2px 8px;background:var(--grey)}
   .pk-est.bod{background:#eceeed;color:#4f5a55}.pk-est.lleg{background:#e8f1fa;color:#2f5f8a}
   .pk-est.amb{background:#fff0e0;color:#a3520a}.pk-est.okc{background:#e6f4ea;color:var(--green-dk)}.pk-est.warn{background:#fdecea;color:#a3261a}
+  .pk-rec{font-size:.84rem;margin-top:4px;color:var(--muted)}.pk-rec b{color:var(--ink);font-weight:600}
   .pk-dir{font-size:.86rem;margin:5px 0 2px;line-height:1.35;word-break:break-word}
   .pk-map a{color:var(--green-dk);font-weight:700;text-decoration:none}
   .hg-pie{margin:8px 0 0;font-size:.76rem;color:var(--muted)}
@@ -605,7 +606,7 @@
   <section class="tm-tab" data-t="buscar">
     <div class="card">
       <h3>Buscar un paquete</h3>
-      <div class="note">Escribí la guía (por ejemplo 94647158) o el número de envío (ENV26/0711273). Te dice dónde está ahorita en CPS y todo lo que ha pasado con él.</div>
+      <div class="note">Escribí la guía (por ejemplo 94647158) o el número de envío (ENV26/0711273). Te dice dónde está ahorita en CPS, quién lo recibe y todo lo que ha pasado con él.</div>
       <form class="mv-row" id="bg-form" autocomplete="off">
         <label>Guía o número de envío
           <input id="bg-q" inputmode="text" placeholder="94647158" style="font-family:inherit;font-size:1rem;border:1px solid #cdd8cf;border-radius:10px;padding:10px 12px;width:100%;background:#fcfdfc">
@@ -978,6 +979,7 @@
       const mapa = p.direccion ? `<a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(p.direccion)}" target="_blank" rel="noopener">Mapa</a>` : '';
       return `<div class="pk ${p.zona_ok === false ? 'pk-fuera' : ''}">
         <div class="pk-top"><b>${esc(p.guia)}</b><span class="pk-env">${esc(p.correlativo || '')}</span><span class="pk-est ${cl}">${et}</span></div>
+        ${p.recibe ? `<div class="pk-rec">Recibe: <b>${esc(p.recibe)}</b></div>` : ''}
         <div class="pk-dir">${esc(p.direccion || 'Sin dirección en CPS')}</div>
         <div class="zonas">${zona}<span>${esc(p.ruta)}</span>${d.porRuta && p.piloto ? `<span>${esc(p.piloto)}</span>` : ''}${p.motivo ? `<span>${esc(cap(p.motivo))}</span>` : ''}${mapa ? `<span class="pk-map">${mapa}</span>` : ''}</div>
       </div>`;
@@ -1946,6 +1948,7 @@
       } else { cls = 'warn'; titulo = 'CPS no lo encontró'; texto = esc(C.error_cps || cps.error?.message || 'Revisá el número.'); }
       let html = `<div class="bg-ahora ${cls}"><div class="t">${titulo}</div><div>${texto}</div>
         <div class="bg-kv"><div><span>Guía</span><b>${esc(guia)}</b></div><div><span>Envío</span><b>${esc(corr || '—')}</b></div>
+        ${(c && c.recibe) || (pend && pend.recibe) ? `<div><span>Recibe</span><b>${esc((c && c.recibe) || pend.recibe)}</b></div>` : ''}
         ${c ? `<div><span>Motorista en CPS</span><b>${esc(c.piloto || '—')}</b></div><div><span>Ruta en CPS</span><b>${esc(c.ruta || '—')}</b></div>` : ''}
         ${ultimo && ultimo.tamano ? `<div><span>Tamaño</span><b>${esc(ultimo.tamano)}</b></div>` : ''}</div></div>`;
       // Historial

@@ -9,12 +9,13 @@
 //         con su guía (WRHS) y si CPS deja moverlo.
 //   { "accion": "buscar", "guia": "94647158" }
 //       → dónde está ese paquete ahorita en CPS (ruta, motorista, estado) y si
-//         está en lo que viene mañana. Solo lectura; sin datos de quien recibe.
+//         está en lo que viene mañana. Solo lectura; el nombre de quien recibe se
+//         muestra pero no se guarda.
 //   { "accion": "paquetes", "piloto_id": 599 }  ó  { "accion": "paquetes", "ruta": "DP 7 MIXCO" }
 //       → paquetes de HOY de ese motorista o de esa ruta (en una ruta, también los que
 //         siguen en bodega), con guía, envío, estado,
-//         dirección y zona (y si la zona no es la de la ruta). Solo lectura; la
-//         dirección se lee de CPS en el momento y no se guarda.
+//         dirección, quien recibe y zona (y si la zona no es la de la ruta). Solo
+//         lectura; dirección y nombre se leen de CPS en el momento y no se guardan.
 //   { "accion": "paquetes", "ruta": "DP 7 MIXCO", "manana": true }
 //       → solo los de esa ruta que llegan mañana (centro de recepción de CPS).
 //   { "accion": "mover", "wrhs": ["9466..."], "piloto_destino_id": 607,
@@ -87,6 +88,7 @@ async function consultar(token: string, wrhs: string) {
     puede_mover: d.PUEDE_MOVER === true, motivo_no: d.MOTIVO_NO_MOVER ?? null,
     id_estado_objeto: typeof d.ID_ESTADO_OBJETO === "number" ? d.ID_ESTADO_OBJETO : null,
     asignaciones_activas: typeof d.ASIGNACIONES_ACTIVAS === "number" ? d.ASIGNACIONES_ACTIVAS : null,
+    recibe: d.CLIENTE_EXTERNO ? String(d.CLIENTE_EXTERNO).trim() : null,
   };
 }
 async function enParalelo<T, R>(items: T[], fn: (x: T) => Promise<R>): Promise<R[]> {
@@ -164,6 +166,7 @@ async function paquetes(token: string, idEmpresa: number, body: any) {
         estado: ESTADO_RUTA[x.ID_ESTADO] ?? "otro", motivo: x.MOTIVO_RECHAZO ?? null,
         ruta: codigo, piloto: c?.piloto ?? null, piloto_id: c?.piloto_id ?? null,
         direccion: String(x.DIRECCION_DESTINO ?? "").replace(/\s+/g, " ").trim() || null,
+        recibe: String(x.CLIENTE_EXTERNO ?? c?.recibe ?? "").trim() || null,
         zona: z, zona_ok: z === null || !esperadas.length ? null : esperadas.includes(z),
       });
     });
@@ -190,6 +193,7 @@ async function pendientesRuta(token: string, idEmpresa: number, ruta: string, es
       estado: x.ID_ESTADO_OBJETO === 1 ? "bodega" : "por_llegar", motivo: null,
       ruta, piloto: null, piloto_id: null,
       direccion: String(x.DIRECCION ?? "").replace(/\s+/g, " ").trim() || null,
+      recibe: String(x.CLIENTE_EXTERNO ?? "").trim() || null,
       zona: z, zona_ok: z === null || !esperadas.length ? null : esperadas.includes(z),
     };
   });
@@ -206,7 +210,7 @@ async function buscar(token: string, idEmpresa: number, guia: string) {
     const r = await cps("/Graphics/EnviosPendientesTemuProveedor", token, { ID_EMPRESA: idEmpresa });
     const l: any[] = Array.isArray(r) ? r : r?.DATA ?? [];
     const x = l.find((p) => String(p?.IDENTIFICADOR_DETALLE) === g);
-    if (x) pendiente = { ruta: x.RUTA_FINAL ?? null, estado: x.ESTADO_OBJETO ?? null, id_estado_objeto: x.ID_ESTADO_OBJETO ?? null, desde: x.FECHA_PENDIENTE ?? null, correlativo: x.CORRELATIVO ?? null };
+    if (x) pendiente = { ruta: x.RUTA_FINAL ?? null, estado: x.ESTADO_OBJETO ?? null, id_estado_objeto: x.ID_ESTADO_OBJETO ?? null, desde: x.FECHA_PENDIENTE ?? null, correlativo: x.CORRELATIVO ?? null, recibe: x.CLIENTE_EXTERNO ?? null };
   } catch { /* si falla, se muestra lo demás */ }
   return { guia: g, cps: cps_, error_cps: errorCps, pendiente };
 }
