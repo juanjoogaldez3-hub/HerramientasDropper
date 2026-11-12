@@ -115,6 +115,7 @@
   .pk-top b{font-variant-numeric:tabular-nums}
   .pk-env{font-size:.78rem;color:var(--muted)}
   .pk-est{margin-left:auto;font-size:.74rem;font-weight:700;border-radius:7px;padding:2px 8px;background:var(--grey)}
+  .pk-est.bod{background:#eceeed;color:#4f5a55}.pk-est.lleg{background:#e8f1fa;color:#2f5f8a}
   .pk-est.amb{background:#fff0e0;color:#a3520a}.pk-est.okc{background:#e6f4ea;color:var(--green-dk)}.pk-est.warn{background:#fdecea;color:#a3261a}
   .pk-dir{font-size:.86rem;margin:5px 0 2px;line-height:1.35;word-break:break-word}
   .pk-map a{color:var(--green-dk);font-weight:700;text-decoration:none}
@@ -409,7 +410,7 @@
       <div class="hg-col hg-der">
         <div class="card hg-rutas">
           <div class="hg-h"><h3>Por ruta</h3></div>
-          <div class="note" id="rutas-note">Los paquetes de hoy, ruta por ruta. Tocá una para ver sus paquetes.</div>
+          <div class="note" id="rutas-note">Los paquetes de hoy, ruta por ruta. Tocá una para ver sus paquetes, también los que siguen en bodega.</div>
           <div class="leg"><span><i style="background:#8f9a94"></i>En bodega</span><span><i style="background:#E8820C"></i>En camino</span><span><i style="background:#1F7A3D"></i>Entregados</span><span><i style="background:#c0392b"></i>Rechazados</span></div>
           <div class="mlist" id="rutas-movil"></div>
           <div hidden><table class="hist" id="tbl-rutas-hoy">
@@ -939,7 +940,7 @@
 
   // ---------- Paquetes de un motorista o de una ruta (se abre con clic) ----------
   let PKS = null, PKS_FILTRO = 'todos';
-  const EST_PK = { en_camino: ['En camino', 'amb'], entregado: ['Entregado', 'okc'], rechazado: ['Rechazado', 'warn'], otro: ['Otro', ''] };
+  const EST_PK = { en_camino: ['En camino', 'amb'], bodega: ['En bodega', 'bod'], por_llegar: ['Llega mañana', 'lleg'], entregado: ['Entregado', 'okc'], rechazado: ['Rechazado', 'warn'], otro: ['Otro', ''] };
   async function abrirPaquetes(q, titulo) {
     const ov = $('#pk-ov');
     $('#pk-tit').textContent = titulo;
@@ -952,7 +953,7 @@
       const { data, error } = await sb.functions.invoke('temu-mover', { body: { accion: 'paquetes', ...q } });
       if (error || !data || data.error) throw new Error((data && data.error) || (error && error.message) || 'sin respuesta');
       if (ov.hidden) return;
-      PKS = { ...data, porRuta: !!q.ruta };
+      PKS = { ...data, porRuta: !!q.ruta && !q.manana, manana: !!q.manana };
       dibujarPaquetes();
     } catch (e) {
       $('#pk-sub').textContent = '';
@@ -964,8 +965,11 @@
     const L = d.paquetes || [];
     const n = k => L.filter(p => k === 'todos' ? true : k === 'fuera' ? p.zona_ok === false : p.estado === k).length;
     const fuera = n('fuera');
-    $('#pk-sub').textContent = N(L.length) + ' paquetes hoy · ' + (d.rutas || []).join(', ') + (fuera ? ' · ' + N(fuera) + ' de otra zona' : '');
-    const fs = [['todos', 'Todos'], ['en_camino', 'En camino'], ['entregado', 'Entregados'], ['rechazado', 'Rechazados']].concat(fuera ? [['fuera', 'Otra zona']] : []);
+    const hoyN = L.filter(p => p.estado !== 'bodega').length;
+    $('#pk-sub').textContent = d.manana ? N(L.length) + ' paquetes llegan mañana · ' + (d.rutas || []).join(', ') + (fuera ? ' · ' + N(fuera) + ' de otra zona' : '')
+      : N(hoyN) + ' paquetes hoy · ' + (d.rutas || []).join(', ') + (n('bodega') ? ' · ' + N(n('bodega')) + ' en bodega' : '') + (fuera ? ' · ' + N(fuera) + ' de otra zona' : '');
+    const fs = d.manana ? [['todos', 'Todos']].concat(fuera ? [['fuera', 'Otra zona']] : [])
+      : [['todos', 'Todos'], ['en_camino', 'En camino'], ['bodega', 'En bodega'], ['entregado', 'Entregados'], ['rechazado', 'Rechazados']].filter(([k]) => k === 'todos' || n(k) || k === 'en_camino' || (k === 'bodega' && d.porRuta)).concat(fuera ? [['fuera', 'Otra zona']] : []);
     $('#pk-filtros').innerHTML = fs.map(([k, t]) => `<button data-f="${k}" class="${PKS_FILTRO === k ? 'active' : ''}">${t} <span>${N(n(k))}</span></button>`).join('');
     const vis = L.filter(p => PKS_FILTRO === 'todos' ? true : PKS_FILTRO === 'fuera' ? p.zona_ok === false : p.estado === PKS_FILTRO);
     $('#pk-lista').innerHTML = vis.length ? vis.map(p => {
@@ -986,6 +990,7 @@
     if (m && (m.closest('#tbl-hoy') || m.closest('#motos-movil'))) { abrirPaquetes({ piloto_id: Number(m.dataset.pid) }, 'Paquetes de ' + m.dataset.nom); return; }
     const r = ev.target.closest('[data-ruta]');
     if (r && r.closest('#rutas-movil')) { abrirPaquetes({ ruta: r.dataset.ruta }, 'Ruta ' + r.dataset.ruta); return; }
+    if (r && r.closest('#tbl-manana')) { abrirPaquetes({ ruta: r.dataset.ruta, manana: true }, 'Llegan mañana · ' + r.dataset.ruta); return; }
     const f = ev.target.closest('#pk-filtros button');
     if (f) { PKS_FILTRO = f.dataset.f; dibujarPaquetes(); return; }
     if (ev.target.id === 'pk-ov' || ev.target.closest('#pk-x')) cerrarPaquetes();
@@ -1007,8 +1012,8 @@
     for (const p of PEND.rows) if (p.recepcion) g.set(p.ruta, (g.get(p.ruta) || 0) + p.recepcion);
     const rows = [...g.entries()].sort((a, b) => b[1] - a[1]);
     const total = rows.reduce((s, r) => s + r[1], 0);
-    $('#manana-note').textContent = 'Paquetes en el centro de recepción de CPS, por ruta y zona (corte de las ' + relojGT(PEND.corte) + '). No cuentan para hoy.';
-    tb.innerHTML = rows.length ? rows.map(([r, n]) => `<tr><td>${esc(r)}${zonasHtml(r)}</td><td class="r num" style="vertical-align:top">${N(n)}</td></tr>`).join('') + `<tr><td><b>Total</b></td><td class="r num"><b>${N(total)}</b></td></tr>`
+    $('#manana-note').textContent = 'Paquetes en el centro de recepción de CPS, por ruta y zona (corte de las ' + relojGT(PEND.corte) + '). No cuentan para hoy. Tocá una ruta para ver sus paquetes.';
+    tb.innerHTML = rows.length ? rows.map(([r, n]) => `<tr class="clic" data-ruta="${esc(r)}" title="Ver los paquetes que llegan mañana"><td>${esc(r)}${zonasHtml(r)}</td><td class="r num" style="vertical-align:top">${N(n)}</td></tr>`).join('') + `<tr><td><b>Total</b></td><td class="r num"><b>${N(total)}</b></td></tr>`
       : '<tr><td colspan="2" class="empty-in">Por ahora no hay paquetes por llegar.</td></tr>';
   }
 

@@ -11,9 +11,12 @@
 //       → dónde está ese paquete ahorita en CPS (ruta, motorista, estado) y si
 //         está en lo que viene mañana. Solo lectura; sin datos de quien recibe.
 //   { "accion": "paquetes", "piloto_id": 599 }  ó  { "accion": "paquetes", "ruta": "DP 7 MIXCO" }
-//       → paquetes de HOY de ese motorista o de esa ruta, con guía, envío, estado,
+//       → paquetes de HOY de ese motorista o de esa ruta (en una ruta, también los que
+//         siguen en bodega), con guía, envío, estado,
 //         dirección y zona (y si la zona no es la de la ruta). Solo lectura; la
 //         dirección se lee de CPS en el momento y no se guarda.
+//   { "accion": "paquetes", "ruta": "DP 7 MIXCO", "manana": true }
+//       → solo los de esa ruta que llegan mañana (centro de recepción de CPS).
 //   { "accion": "mover", "wrhs": ["9466..."], "piloto_destino_id": 607,
 //     "ruta_destino_id": 338 | null, "motivo": "..." }
 //       → mueve cada paquete (uno por uno, como la página de CPS).
@@ -134,6 +137,12 @@ async function paquetes(token: string, idEmpresa: number, body: any) {
   const pilotoId = body.piloto_id == null || body.piloto_id === "" ? null : Number(body.piloto_id);
   const rutaPedida = body.ruta ? String(body.ruta) : null;
   if (pilotoId === null && !rutaPedida) throw new Error("Falta el motorista o la ruta");
+  const manana = body.manana === true && !!rutaPedida;
+  if (manana) {
+    const out = await pendientesRuta(token, idEmpresa, rutaPedida!, new Set([11]), new Set());
+    out.sort((a, b) => (a.zona_ok === false ? 0 : 1) - (b.zona_ok === false ? 0 : 1) || (a.zona ?? 99) - (b.zona ?? 99));
+    return { fecha: hoy, rutas: [rutaPedida], paquetes: out, sin_consultar: 0, manana: true };
+  }
   const barras = await cps("/Graphics/RutasGraficaBarrasTemuEmpresa", token, { ID_EMPRESA: idEmpresa, FECHA_INICIO: ini, FECHA_FIN: fin });
   const lista: any[] = Array.isArray(barras) ? barras : barras?.DATA ?? [];
   const rutas = rutaPedida ? [rutaPedida]
@@ -159,9 +168,31 @@ async function paquetes(token: string, idEmpresa: number, body: any) {
       });
     });
   }
-  const orden: Record<string, number> = { en_camino: 0, rechazado: 1, entregado: 2, otro: 3 };
+  // En una ruta, también lo que sigue en bodega sin asignar (lo de mañana va en "Llegan mañana")
+  if (rutaPedida) {
+    try { out.push(...await pendientesRuta(token, idEmpresa, rutaPedida, new Set([1]), new Set(out.map((p) => p.guia)))); }
+    catch { /* si falla, se muestra lo de hoy */ }
+  }
+  const orden: Record<string, number> = { en_camino: 0, bodega: 1, rechazado: 2, entregado: 3, por_llegar: 4, otro: 5 };
   out.sort((a, b) => (orden[a.estado] - orden[b.estado]) || String(a.ruta).localeCompare(String(b.ruta)) || (a.zona ?? 99) - (b.zona ?? 99));
   return { fecha: hoy, rutas, paquetes: out, sin_consultar: sinConsultar };
+}
+
+// Paquetes de una ruta en el listado de pendientes de CPS: 1 = en bodega sin asignar, 11 = llega mañana
+async function pendientesRuta(token: string, idEmpresa: number, ruta: string, estados: Set<number>, ya: Set<string>) {
+  const r = await cps("/Graphics/EnviosPendientesTemuProveedor", token, { ID_EMPRESA: idEmpresa });
+  const l: any[] = (Array.isArray(r) ? r : r?.DATA ?? []).filter((x: any) => String(x?.RUTA_FINAL) === ruta && x?.IDENTIFICADOR_DETALLE && estados.has(x?.ID_ESTADO_OBJETO));
+  const esperadas = zonasRuta(ruta);
+  return l.filter((x) => !ya.has(String(x.IDENTIFICADOR_DETALLE))).map((x) => {
+    const z = zonaDe(x.DIRECCION);
+    return {
+      guia: String(x.IDENTIFICADOR_DETALLE), correlativo: x.CORRELATIVO ?? null,
+      estado: x.ID_ESTADO_OBJETO === 1 ? "bodega" : "por_llegar", motivo: null,
+      ruta, piloto: null, piloto_id: null,
+      direccion: String(x.DIRECCION ?? "").replace(/\s+/g, " ").trim() || null,
+      zona: z, zona_ok: z === null || !esperadas.length ? null : esperadas.includes(z),
+    };
+  });
 }
 
 async function buscar(token: string, idEmpresa: number, guia: string) {
