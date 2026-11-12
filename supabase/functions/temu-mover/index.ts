@@ -10,6 +10,10 @@
 //   { "accion": "buscar", "guia": "94647158" }
 //       → dónde está ese paquete ahorita en CPS (ruta, motorista, estado) y si
 //         está en lo que viene mañana. Solo lectura; sin datos de quien recibe.
+//   { "accion": "paquetes", "piloto_id": 599 }  ó  { "accion": "paquetes", "ruta": "DP 7 MIXCO" }
+//       → paquetes de HOY de ese motorista o de esa ruta, con guía, envío, estado,
+//         dirección y zona (y si la zona no es la de la ruta). Solo lectura; la
+//         dirección se lee de CPS en el momento y no se guarda.
 //   { "accion": "mover", "wrhs": ["9466..."], "piloto_destino_id": 607,
 //     "ruta_destino_id": 338 | null, "motivo": "..." }
 //       → mueve cada paquete (uno por uno, como la página de CPS).
@@ -27,7 +31,7 @@ const ANON_KEY     = Deno.env.get("SUPABASE_ANON_KEY")!;
 const CPS_API      = (Deno.env.get("CPS_API_URL") ?? "https://app.cpslogistics.com:8042/CpsLastMile").replace(/\/$/, "");
 const ID_CLIENTE_TEMU = "670";        // el que usa CPS en "Rendimiento por ruta"
 const MAX_MOVER    = 150;
-const CONCURRENCIA = 6;
+const CONCURRENCIA = 8;
 const TZ_H         = -6;
 
 const CORS = {
@@ -117,6 +121,49 @@ async function listar(token: string, idEmpresa: number, pilotoId: number) {
   return { fecha: hoy, rutas_revisadas: rutas, paquetes, sin_consultar: sinConsultar };
 }
 
+// Zonas de una ruta según su código: "DP 7 MIXCO" → [7], "MIXCO Z9" → [9], "3 MIXCO" → [3]
+function zonasRuta(codigo: string): number[] { return [...String(codigo).matchAll(/\d{1,2}/g)].map((m) => Number(m[0])); }
+function zonaDe(d: unknown): number | null {
+  const m = String(d ?? "").match(/(?<![a-z])(?:zona|zon|z)\s*\.?\s*(\d{1,2})(?!\d)/i);
+  if (!m) return null; const z = Number(m[1]); return z >= 1 && z <= 25 ? z : null;
+}
+const ESTADO_RUTA: Record<number, string> = { 1: "en_camino", 2: "entregado", 3: "rechazado" };
+
+async function paquetes(token: string, idEmpresa: number, body: any) {
+  const { hoy, ini, fin } = hoyRango();
+  const pilotoId = body.piloto_id == null || body.piloto_id === "" ? null : Number(body.piloto_id);
+  const rutaPedida = body.ruta ? String(body.ruta) : null;
+  if (pilotoId === null && !rutaPedida) throw new Error("Falta el motorista o la ruta");
+  const barras = await cps("/Graphics/RutasGraficaBarrasTemuEmpresa", token, { ID_EMPRESA: idEmpresa, FECHA_INICIO: ini, FECHA_FIN: fin });
+  const lista: any[] = Array.isArray(barras) ? barras : barras?.DATA ?? [];
+  const rutas = rutaPedida ? [rutaPedida]
+    : [...new Set(lista.filter((x) => x?.ID_USUARIO_PILOTO === pilotoId && Number(x?.TOTAL_PAQUETES) > 0).map((x) => String(x.CODIGO)))];
+  const out: any[] = [];
+  let sinConsultar = 0;
+  for (const codigo of rutas) {
+    const det = await cps("/Graphics/getReporteRutasDetalleTemuEmpresa", token, { CODIGO: codigo, ID_CLIENTE: ID_CLIENTE_TEMU, FECHA_INICIO: ini, FECHA_FIN: fin, TEMU: 1 });
+    const items: any[] = (Array.isArray(det) ? det : det?.DATA ?? []).filter((x: any) => x?.IDENTIFICADOR_DETALLE);
+    const esperadas = zonasRuta(codigo);
+    // De quién es cada paquete: se consulta en CPS (el detalle por ruta no lo trae)
+    const info = await enParalelo(items, async (x: any) => { try { return await consultar(token, String(x.IDENTIFICADOR_DETALLE)); } catch { return null; } });
+    items.forEach((x: any, k: number) => {
+      const c = info[k];
+      if (pilotoId !== null) { if (!c) { sinConsultar++; return; } if (c.piloto_id !== pilotoId) return; }
+      const z = zonaDe(x.DIRECCION_DESTINO);
+      out.push({
+        guia: String(x.IDENTIFICADOR_DETALLE), correlativo: x.CORRELATIVO ?? c?.correlativo ?? null,
+        estado: ESTADO_RUTA[x.ID_ESTADO] ?? "otro", motivo: x.MOTIVO_RECHAZO ?? null,
+        ruta: codigo, piloto: c?.piloto ?? null, piloto_id: c?.piloto_id ?? null,
+        direccion: String(x.DIRECCION_DESTINO ?? "").replace(/\s+/g, " ").trim() || null,
+        zona: z, zona_ok: z === null || !esperadas.length ? null : esperadas.includes(z),
+      });
+    });
+  }
+  const orden: Record<string, number> = { en_camino: 0, rechazado: 1, entregado: 2, otro: 3 };
+  out.sort((a, b) => (orden[a.estado] - orden[b.estado]) || String(a.ruta).localeCompare(String(b.ruta)) || (a.zona ?? 99) - (b.zona ?? 99));
+  return { fecha: hoy, rutas, paquetes: out, sin_consultar: sinConsultar };
+}
+
 async function buscar(token: string, idEmpresa: number, guia: string) {
   const g = String(guia ?? "").trim();
   if (!/^[A-Za-z0-9-]{4,30}$/.test(g)) throw new Error("Escribí un número de guía válido");
@@ -193,6 +240,7 @@ Deno.serve(async (req) => {
       if (!Number.isFinite(pid)) return json({ error: "Falta el motorista" }, 400);
       return json({ ok: true, ...(await listar(token, idEmpresa, pid)) });
     }
+    if (body.accion === "paquetes") return json({ ok: true, ...(await paquetes(token, idEmpresa, body)) });
     if (body.accion === "buscar") return json({ ok: true, ...(await buscar(token, idEmpresa, body.guia)) });
     if (body.accion === "mover") return json({ ok: true, ...(await mover(token, idEmpresa, body, u.user.email ?? null)) });
     return json({ error: "accion_desconocida" }, 400);

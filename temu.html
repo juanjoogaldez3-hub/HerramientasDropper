@@ -90,6 +90,34 @@
   #tbl-hoy th,#tbl-hoy td{padding-left:7px;padding-right:7px;vertical-align:top}
   #tbl-hoy th{white-space:nowrap}
   #tbl-hoy .mini{width:44px}
+  tr.clic,.mitem.clic{cursor:pointer}
+  tr.clic:hover td{background:#f3faf5}
+  .mitem.clic:hover{border-color:#b8dcc3;background:#fafdfb}
+  .zonas span.fuera{background:#fdecea;color:#a3261a}
+  .zonas span.fuera b{color:#a3261a}
+  .pk-ov{position:fixed;inset:0;background:rgba(10,20,14,.45);z-index:60;display:flex;justify-content:flex-end}
+  .pk-ov[hidden]{display:none}
+  body.pk-abierto{overflow:hidden}
+  .pk-panel{background:var(--white,#fff);width:min(620px,100%);height:100%;display:flex;flex-direction:column;box-shadow:-10px 0 40px rgba(0,0,0,.18)}
+  .pk-head{padding:16px 18px 10px;border-bottom:1px solid var(--line)}
+  .pk-head h3{margin:0;font-family:'Sora',sans-serif;font-size:1.05rem}
+  .pk-head .x{float:right;border:0;background:var(--grey);border-radius:10px;width:34px;height:34px;font-size:1.1rem;cursor:pointer}
+  #pk-sub{font-size:.8rem;color:var(--muted);margin-top:3px}
+  #pk-filtros{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
+  #pk-filtros button{border:1px solid var(--line);background:#fff;border-radius:999px;padding:5px 11px;font:inherit;font-size:.8rem;cursor:pointer}
+  #pk-filtros button span{color:var(--muted);font-weight:700;margin-left:3px}
+  #pk-filtros button.active{background:var(--green-dk);border-color:var(--green-dk);color:#fff}
+  #pk-filtros button.active span{color:#d6eedd}
+  #pk-lista{overflow:auto;padding:12px 18px 30px;display:grid;gap:8px;align-content:start}
+  .pk{border:1px solid var(--line);border-radius:12px;padding:10px 12px;background:#fff}
+  .pk.pk-fuera{border-color:#f0b9b2;background:#fffafa}
+  .pk-top{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
+  .pk-top b{font-variant-numeric:tabular-nums}
+  .pk-env{font-size:.78rem;color:var(--muted)}
+  .pk-est{margin-left:auto;font-size:.74rem;font-weight:700;border-radius:7px;padding:2px 8px;background:var(--grey)}
+  .pk-est.amb{background:#fff0e0;color:#a3520a}.pk-est.okc{background:#e6f4ea;color:var(--green-dk)}.pk-est.warn{background:#fdecea;color:#a3261a}
+  .pk-dir{font-size:.86rem;margin:5px 0 2px;line-height:1.35;word-break:break-word}
+  .pk-map a{color:var(--green-dk);font-weight:700;text-decoration:none}
   .hg-pie{margin:8px 0 0;font-size:.76rem;color:var(--muted)}
   .hg-der .mlist{gap:8px}
   .hg-der .mitem{padding:9px 11px}
@@ -363,7 +391,7 @@
     <div class="hoy-grid">
       <div class="hg-col hg-izq">
         <div class="card hg-motos">
-          <div class="hg-h"><h3>Motoristas</h3><span class="note">Primero quien tiene más paquetes en camino</span></div>
+          <div class="hg-h"><h3>Motoristas</h3><span class="note">Primero quien tiene más paquetes en camino · tocá uno para ver sus paquetes</span></div>
           <div class="solo-movil"><div class="mlist" id="motos-movil"></div></div>
           <div class="tablebox solo-desk">
             <table class="hist" id="tbl-hoy">
@@ -381,7 +409,7 @@
       <div class="hg-col hg-der">
         <div class="card hg-rutas">
           <div class="hg-h"><h3>Por ruta</h3></div>
-          <div class="note" id="rutas-note">Los paquetes de hoy, ruta por ruta.</div>
+          <div class="note" id="rutas-note">Los paquetes de hoy, ruta por ruta. Tocá una para ver sus paquetes.</div>
           <div class="leg"><span><i style="background:#8f9a94"></i>En bodega</span><span><i style="background:#E8820C"></i>En camino</span><span><i style="background:#1F7A3D"></i>Entregados</span><span><i style="background:#c0392b"></i>Rechazados</span></div>
           <div class="mlist" id="rutas-movil"></div>
           <div hidden><table class="hist" id="tbl-rutas-hoy">
@@ -399,6 +427,17 @@
             </table>
           </div>
         </div>
+      </div>
+    </div>
+    <div class="pk-ov" id="pk-ov" hidden>
+      <div class="pk-panel" role="dialog" aria-modal="true" aria-labelledby="pk-tit">
+        <div class="pk-head">
+          <button class="x" id="pk-x" aria-label="Cerrar">✕</button>
+          <h3 id="pk-tit">Paquetes</h3>
+          <div id="pk-sub"></div>
+          <div id="pk-filtros"></div>
+        </div>
+        <div id="pk-lista"></div>
       </div>
     </div>
   </section>
@@ -845,7 +884,7 @@
       const m = p.ultima ? haceMin(p.ultima) : null;
       const quieto = m !== null && m > 45 && (p.pend === null || p.pend > 0) && horaGT(new Date().toISOString()) < 20;
       const w = Math.min(100, p.ent / CFG.meta_motorista * 100);
-      return `<tr class="${p.tipo === 'Apoyo' ? 'apoyo' : ''}"><td>${esc(p.nombre)}${p.rutas ? `<div style="font-size:.74rem;color:var(--muted);font-weight:500">${esc(p.rutas)}</div>` : ''}</td>
+      return `<tr class="${p.tipo === 'Apoyo' ? 'apoyo' : ''} clic" data-pid="${p.id}" data-nom="${esc(p.nombre)}" title="Ver sus paquetes"><td>${esc(p.nombre)}${p.rutas ? `<div style="font-size:.74rem;color:var(--muted);font-weight:500">${esc(p.rutas)}</div>` : ''}</td>
         <td class="r num">${p.asig === null ? '—' : N(p.asig)}</td>
         <td class="r num ${p.pend > 0 ? 'pend' : ''}">${p.pend === null ? '—' : N(p.pend)}</td>
         <td class="r num">${N(p.ent)}<span class="mini"><span style="width:${w}%"></span></span></td>
@@ -864,7 +903,7 @@
       if (p.rech) chips.push(`<span>${N(p.rech)} rechazados</span>`);
       chips.push(p.ultima ? `<span class="${quieto ? 'warn' : ''}">última ${esc(relojGT(p.ultima))} · ${esc(haceTxt(m))}</span>` : '<span>sin registros</span>');
       if (p.primera) chips.push(`<span>${D1(p.ritmo)} por hora</span>`);
-      return `<div class="mitem ${p.tipo === 'Apoyo' ? 'apoyo' : ''}"><div class="mtop"><b>${esc(p.nombre)}${p.tipo === 'Apoyo' ? ' <span style="font-weight:500;color:var(--muted)">(apoyo)</span>' : ''}</b><span><b style="color:var(--green-dk);font-size:1rem">${N(p.ent)}</b> entregados</span></div>
+      return `<div class="mitem clic ${p.tipo === 'Apoyo' ? 'apoyo' : ''}" data-pid="${p.id}" data-nom="${esc(p.nombre)}"><div class="mtop"><b>${esc(p.nombre)}${p.tipo === 'Apoyo' ? ' <span style="font-weight:500;color:var(--muted)">(apoyo)</span>' : ''}</b><span><b style="color:var(--green-dk);font-size:1rem">${N(p.ent)}</b> entregados</span></div>
         ${p.rutas ? `<div class="msub">${esc(p.rutas)}</div>` : ''}
         <div class="meta-bar" style="height:7px;margin:7px 0 8px"><span style="width:${w}%"></span></div>
         <div class="chips">${chips.join('')}</div></div>`;
@@ -888,17 +927,77 @@
       <td style="width:30%;min-width:120px"><div class="stack" style="width:${Math.max(8, r.tot / max * 100)}%" title="${esc(r.ruta)}: ${r.tot} paquetes">${col.map(([k, c]) => r[k] ? `<span style="width:${r[k] / r.tot * 100}%;background:${c}"></span>` : '').join('')}</div></td></tr>`).join('')
       + `<tr><td><b>Total</b></td>${['bodega', 'camino', 'ent', 'rech'].map(k => `<td class="r num"><b>${N(tot(k))}</b></td>`).join('')}<td></td></tr>`;
     const et = { bodega: 'en bodega', camino: 'en camino', ent: 'entregados', rech: 'rechazados' };
-    $('#rutas-movil').innerHTML = rows.map(r => `<div class="mitem"><div class="mtop"><b>${esc(r.ruta)}</b><span>${N(r.tot)} paquetes</span></div>
+    $('#rutas-movil').innerHTML = rows.map(r => `<div class="mitem clic" data-ruta="${esc(r.ruta)}"><div class="mtop"><b>${esc(r.ruta)}</b><span>${N(r.tot)} paquetes ›</span></div>
       <div class="stack">${col.map(([k, c]) => r[k] ? `<span style="width:${r[k] / r.tot * 100}%;background:${c}"></span>` : '').join('')}</div>
       <div class="chips">${col.filter(([k]) => r[k]).map(([k, c]) => `<span class="${k === 'camino' ? 'amb' : ''}"><i style="background:${c}"></i>${N(r[k])} ${et[k]}</span>`).join('')}</div></div>`).join('');
-    $('#rutas-note').textContent = 'Los paquetes de hoy, ruta por ruta' + (PEND.corte ? ' · bodega al corte de las ' + relojGT(PEND.corte) : '');
+    $('#rutas-note').textContent = 'Los paquetes de hoy, ruta por ruta · tocá una para ver sus paquetes' + (PEND.corte ? ' · bodega al corte de las ' + relojGT(PEND.corte) : '');
   }
 
   // Zonas de lo que viene mañana en una ruta (sacadas de la dirección): "Z10 40 · Z9 15"
+  // Zonas de una ruta según su código: "DP 7 MIXCO" → [7], "MIXCO Z9" → [9]
+  const zonasRuta = c => [...String(c).matchAll(/\d{1,2}/g)].map(m => Number(m[0]));
+
+  // ---------- Paquetes de un motorista o de una ruta (se abre con clic) ----------
+  let PKS = null, PKS_FILTRO = 'todos';
+  const EST_PK = { en_camino: ['En camino', 'amb'], entregado: ['Entregado', 'okc'], rechazado: ['Rechazado', 'warn'], otro: ['Otro', ''] };
+  async function abrirPaquetes(q, titulo) {
+    const ov = $('#pk-ov');
+    $('#pk-tit').textContent = titulo;
+    $('#pk-sub').textContent = 'Buscando en CPS…';
+    $('#pk-lista').innerHTML = '<div class="note"><span class="spin"></span> Trayendo los paquetes de hoy… puede tardar unos segundos.</div>';
+    $('#pk-filtros').innerHTML = '';
+    ov.hidden = false; document.body.classList.add('pk-abierto');
+    PKS = null; PKS_FILTRO = 'todos';
+    try {
+      const { data, error } = await sb.functions.invoke('temu-mover', { body: { accion: 'paquetes', ...q } });
+      if (error || !data || data.error) throw new Error((data && data.error) || (error && error.message) || 'sin respuesta');
+      if (ov.hidden) return;
+      PKS = { ...data, porRuta: !!q.ruta };
+      dibujarPaquetes();
+    } catch (e) {
+      $('#pk-sub').textContent = '';
+      $('#pk-lista').innerHTML = '<div class="bg-ahora bad">No se pudo traer de CPS: ' + esc(e.message || String(e)) + '</div>';
+    }
+  }
+  function dibujarPaquetes() {
+    const d = PKS; if (!d) return;
+    const L = d.paquetes || [];
+    const n = k => L.filter(p => k === 'todos' ? true : k === 'fuera' ? p.zona_ok === false : p.estado === k).length;
+    const fuera = n('fuera');
+    $('#pk-sub').textContent = N(L.length) + ' paquetes hoy · ' + (d.rutas || []).join(', ') + (fuera ? ' · ' + N(fuera) + ' de otra zona' : '');
+    const fs = [['todos', 'Todos'], ['en_camino', 'En camino'], ['entregado', 'Entregados'], ['rechazado', 'Rechazados']].concat(fuera ? [['fuera', 'Otra zona']] : []);
+    $('#pk-filtros').innerHTML = fs.map(([k, t]) => `<button data-f="${k}" class="${PKS_FILTRO === k ? 'active' : ''}">${t} <span>${N(n(k))}</span></button>`).join('');
+    const vis = L.filter(p => PKS_FILTRO === 'todos' ? true : PKS_FILTRO === 'fuera' ? p.zona_ok === false : p.estado === PKS_FILTRO);
+    $('#pk-lista').innerHTML = vis.length ? vis.map(p => {
+      const [et, cl] = EST_PK[p.estado] || EST_PK.otro;
+      const zona = p.zona === null ? '<span title="La dirección no dice la zona">Sin zona</span>' : `<span class="${p.zona_ok === false ? 'fuera' : ''}" ${p.zona_ok === false ? 'title="La dirección no es de la zona de esta ruta"' : ''}>Zona ${esc(p.zona)}${p.zona_ok === false ? ' · otra zona' : ''}</span>`;
+      const mapa = p.direccion ? `<a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(p.direccion)}" target="_blank" rel="noopener">Mapa</a>` : '';
+      return `<div class="pk ${p.zona_ok === false ? 'pk-fuera' : ''}">
+        <div class="pk-top"><b>${esc(p.guia)}</b><span class="pk-env">${esc(p.correlativo || '')}</span><span class="pk-est ${cl}">${et}</span></div>
+        <div class="pk-dir">${esc(p.direccion || 'Sin dirección en CPS')}</div>
+        <div class="zonas">${zona}<span>${esc(p.ruta)}</span>${d.porRuta && p.piloto ? `<span>${esc(p.piloto)}</span>` : ''}${p.motivo ? `<span>${esc(cap(p.motivo))}</span>` : ''}${mapa ? `<span class="pk-map">${mapa}</span>` : ''}</div>
+      </div>`;
+    }).join('') : '<div class="note">No hay paquetes en este filtro.</div>';
+    if (d.sin_consultar) $('#pk-lista').insertAdjacentHTML('beforeend', `<div class="note">${N(d.sin_consultar)} paquete(s) de esas rutas no se pudieron consultar en CPS y no aparecen.</div>`);
+  }
+  function cerrarPaquetes() { $('#pk-ov').hidden = true; document.body.classList.remove('pk-abierto'); PKS = null; }
+  document.addEventListener('click', ev => {
+    const m = ev.target.closest('[data-pid]');
+    if (m && (m.closest('#tbl-hoy') || m.closest('#motos-movil'))) { abrirPaquetes({ piloto_id: Number(m.dataset.pid) }, 'Paquetes de ' + m.dataset.nom); return; }
+    const r = ev.target.closest('[data-ruta]');
+    if (r && r.closest('#rutas-movil')) { abrirPaquetes({ ruta: r.dataset.ruta }, 'Ruta ' + r.dataset.ruta); return; }
+    const f = ev.target.closest('#pk-filtros button');
+    if (f) { PKS_FILTRO = f.dataset.f; dibujarPaquetes(); return; }
+    if (ev.target.id === 'pk-ov' || ev.target.closest('#pk-x')) cerrarPaquetes();
+  });
+  document.addEventListener('keydown', ev => { if (ev.key === 'Escape' && !$('#pk-ov').hidden) cerrarPaquetes(); });
+
   function zonasHtml(ruta) {
     const zs = ZONAS.filter(z => z.ruta === ruta && z.por_llegar > 0).sort((a, b) => (a.zona === '?') - (b.zona === '?') || b.por_llegar - a.por_llegar);
     if (!zs.length) return '';
-    return '<div class="zonas">' + zs.map(z => `<span title="${z.zona === '?' ? 'La dirección no dice la zona' : 'Zona ' + esc(z.zona)}: ${z.por_llegar} paquetes llegan mañana"><b>${z.zona === '?' ? 'Sin zona' : 'Zona ' + esc(z.zona)}</b> ${N(z.por_llegar)}</span>`).join('') + '</div>';
+    const esp = zonasRuta(ruta);
+    return '<div class="zonas">' + zs.map(z => { const fuera = z.zona !== '?' && esp.length && !esp.includes(Number(z.zona));
+      return `<span class="${fuera ? 'fuera' : ''}" title="${z.zona === '?' ? 'La dirección no dice la zona' : 'Zona ' + esc(z.zona) + (fuera ? ' — no es la zona de esta ruta' : '')}: ${z.por_llegar} paquetes llegan mañana"><b>${z.zona === '?' ? 'Sin zona' : 'Zona ' + esc(z.zona)}</b> ${N(z.por_llegar)}${fuera ? ' · otra zona' : ''}</span>`; }).join('') + '</div>';
   }
 
   function tablaManana() {
