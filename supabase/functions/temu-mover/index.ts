@@ -98,6 +98,12 @@ async function enParalelo<T, R>(items: T[], fn: (x: T) => Promise<R>): Promise<R
   }));
   return out;
 }
+// "2026-11-12T14:47:01.597+0000" -> ISO
+function isoCps(v: unknown): string | null {
+  if (!v) return null;
+  const d = new Date(String(v).replace(/([+-]\d{2})(\d{2})$/, "$1:$2"));
+  return isNaN(d.getTime()) ? null : d.toISOString();
+}
 function hoyRango() {
   const hoy = new Date(Date.now() + TZ_H * 36e5).toISOString().slice(0, 10);
   const ini = Date.parse(hoy + "T00:00:00Z") - TZ_H * 36e5;
@@ -167,6 +173,7 @@ async function paquetes(token: string, idEmpresa: number, body: any) {
         ruta: codigo, piloto: c?.piloto ?? null, piloto_id: c?.piloto_id ?? null,
         direccion: String(x.DIRECCION_DESTINO ?? "").replace(/\s+/g, " ").trim() || null,
         recibe: String(x.CLIENTE_EXTERNO ?? c?.recibe ?? "").trim() || null,
+        salio: isoCps(x.FECHA_REGISTRO),     // hora en que la ruta salió (CPS la da por ruta, no por paquete)
         zona: z, zona_ok: z === null || !esperadas.length ? null : esperadas.includes(z),
       });
     });
@@ -194,6 +201,7 @@ async function pendientesRuta(token: string, idEmpresa: number, ruta: string, es
       ruta, piloto: null, piloto_id: null,
       direccion: String(x.DIRECCION ?? "").replace(/\s+/g, " ").trim() || null,
       recibe: String(x.CLIENTE_EXTERNO ?? "").trim() || null,
+      desde: isoCps(x.FECHA_PENDIENTE),     // desde cuándo está en ese estado
       zona: z, zona_ok: z === null || !esperadas.length ? null : esperadas.includes(z),
     };
   });

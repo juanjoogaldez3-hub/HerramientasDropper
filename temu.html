@@ -118,6 +118,7 @@
   .pk-est.bod{background:#eceeed;color:#4f5a55}.pk-est.lleg{background:#e8f1fa;color:#2f5f8a}
   .pk-est.amb{background:#fff0e0;color:#a3520a}.pk-est.okc{background:#e6f4ea;color:var(--green-dk)}.pk-est.warn{background:#fdecea;color:#a3261a}
   .pk-rec{font-size:.84rem;margin-top:4px;color:var(--muted)}.pk-rec b{color:var(--ink);font-weight:600}
+  .pk-hrs{font-size:.78rem;color:var(--muted);margin-top:4px}.pk-hrs b{color:var(--ink);font-weight:700}.pk-hrs span{margin:0 3px;color:#b9c6bd}
   .pk-dir{font-size:.86rem;margin:5px 0 2px;line-height:1.35;word-break:break-word}
   .pk-map a{color:var(--green-dk);font-weight:700;text-decoration:none}
   .hg-pie{margin:8px 0 0;font-size:.76rem;color:var(--muted)}
@@ -962,6 +963,14 @@
       const { data, error } = await sb.functions.invoke('temu-mover', { body: { accion: 'paquetes', ...q } });
       if (error || !data || data.error) throw new Error((data && data.error) || (error && error.message) || 'sin respuesta');
       if (ov.hidden) return;
+      // Hora de entrega o rechazo de cada paquete: la tenemos guardada (temu_envios)
+      const guias = (data.paquetes || []).map(p => p.guia);
+      const fin = new Map();
+      for (let i = 0; i < guias.length; i += 200) {
+        const { data: f } = await sb.from('temu_envios').select('guia,estado,registrado_at').in('guia', guias.slice(i, i + 200)).gte('fecha', hoyGT()).in('estado', ['entregado', 'rechazo']);
+        for (const r of f || []) { const a = fin.get(r.guia); if (!a || r.registrado_at > a.registrado_at) fin.set(r.guia, r); }
+      }
+      for (const p of data.paquetes || []) { const f = fin.get(p.guia); if (f) p.hora_fin = f.registrado_at; }
       PKS = { ...data, porRuta: !!q.ruta && !q.manana, manana: !!q.manana, hora: new Date().toISOString() };
       dibujarPaquetes();
     } catch (e) {
@@ -989,11 +998,28 @@
       return `<div class="pk ${p.zona_ok === false ? 'pk-fuera' : ''}">
         <div class="pk-top"><b>${esc(p.guia)}</b><span class="pk-env">${esc(p.correlativo || '')}</span><span class="pk-est ${cl}">${et}</span></div>
         ${p.recibe ? `<div class="pk-rec">Recibe: <b>${esc(p.recibe)}</b></div>` : ''}
+        ${horasPk(p)}
         <div class="pk-dir">${esc(p.direccion || 'Sin dirección en CPS')}</div>
         <div class="zonas">${zona}<span>${esc(p.ruta)}</span>${d.porRuta && p.piloto ? `<span>${esc(p.piloto)}</span>` : ''}${p.motivo ? `<span>${esc(cap(p.motivo))}</span>` : ''}${mapa ? `<span class="pk-map">${mapa}</span>` : ''}</div>
       </div>`;
     }).join('') : '<div class="note">No hay paquetes en este filtro.</div>';
     if (d.sin_consultar) $('#pk-lista').insertAdjacentHTML('beforeend', `<div class="note">${N(d.sin_consultar)} paquete(s) de esas rutas no se pudieron consultar en CPS y no aparecen.</div>`);
+  }
+  // Línea de horas del paquete: salió en ruta → entregado / rechazado
+  function horasPk(p) {
+    const h = [];
+    if (p.estado === 'bodega') { if (p.desde) h.push('En bodega desde <b>' + esc(relojGT(p.desde)) + '</b>'); }
+    else if (p.estado === 'por_llegar') { if (p.desde) h.push('En CPS desde <b>' + esc(cuando(p.desde)) + '</b>'); }
+    else {
+      if (p.salio) h.push((p.estado === 'en_camino' ? 'En camino desde ' : 'Salió en ruta ') + '<b>' + esc(relojGT(p.salio)) + '</b>' + (p.estado === 'en_camino' ? ' (' + esc(haceTxt(haceMin(p.salio))) + ')' : ''));
+      if (p.hora_fin) h.push((p.estado === 'rechazado' ? 'Rechazado ' : 'Entregado ') + '<b>' + esc(relojGT(p.hora_fin)) + '</b>' + (p.salio ? ' · ' + esc(duracion(p.salio, p.hora_fin)) + ' después' : ''));
+      else if (p.estado === 'entregado' || p.estado === 'rechazado') h.push((p.estado === 'rechazado' ? 'Rechazado' : 'Entregado') + ' (hora por confirmar en la próxima actualización)');
+    }
+    return h.length ? '<div class="pk-hrs">' + h.join(' <span>›</span> ') + '</div>' : '';
+  }
+  function duracion(a, b) {
+    const m = Math.max(0, Math.round((Date.parse(b) - Date.parse(a)) / 60000));
+    return m < 60 ? m + ' min' : Math.floor(m / 60) + ' h ' + String(m % 60).padStart(2, '0') + ' min';
   }
   function cerrarPaquetes() { $('#pk-ov').hidden = true; document.body.classList.remove('pk-abierto'); PKS = null; }
   document.addEventListener('click', ev => {
