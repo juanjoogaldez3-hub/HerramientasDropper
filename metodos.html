@@ -151,13 +151,15 @@
 const $=s=>document.querySelector(s);
 const drop=$('#drop'), fileInput=$('#file');
 let RAW=[];      // {mensajero, fecha(Date), express(bool)}  (solo Entregado)
-let DAYS=[], MENS=[], CELL={};   // CELL[mensajero][dia] = {exp,est}
+let DAYS=[], MENS=[], CELL={}, NAMEOF={};   // CELL[key][dia]={exp,est}; NAMEOF[key]=nombre a mostrar
 let METRIC='total';              // total | exp | est
 
 function status(msg,type){ const s=$('#status'); s.className='status show '+(type||''); s.innerHTML=(type==='work'?'<span class="spin"></span>':'')+msg; }
 function hideStatus(){ $('#status').className='status'; }
 function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
 function norm(s){ return String(s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,''); }
+// Clave para agrupar al mismo mensajero: ignora mayúsculas/tildes, junta espacios dobles y quita un "Dropper" al final.
+function normName(s){ return norm(s).replace(/\s+/g,' ').trim().replace(/\s+dropper$/,'').trim(); }
 function nf(n){ return Number(n||0).toLocaleString('es-GT'); }
 function f1(n){ return Number(n||0).toLocaleString('es-GT',{minimumFractionDigits:1,maximumFractionDigits:1}); }
 function toDate(v){ if(v instanceof Date) return isNaN(v)?null:v; if(typeof v==='number') return new Date(Math.round((v-25569)*86400*1000)); const t=Date.parse(v); return isNaN(t)?null:new Date(t); }
@@ -207,7 +209,7 @@ function parseWorkbook(buf){
     if(!entregado){ return null; }
     const fdt=parseDateTime(t[C.fecha]??r[C.fecha]);
     if(!mensajero || !fdt) { if(mensajero&&!fdt) sinEstado++; return null; }
-    return { mensajero, fecha:fdt, express:/express/.test(norm(g(C.metodo))) };
+    return { mensajero, key:normName(mensajero), fecha:fdt, express:/express/.test(norm(g(C.metodo))) };
   }).filter(Boolean);
 
   if(!RAW.length){ status('No encontré envíos <b>Entregados</b> con mensajero y fecha.','err'); return; }
@@ -235,14 +237,22 @@ function buildView(){
   const [from,to]=currentRange();
   const rows=RAW.filter(r=>inRange(r.fecha,from,to));
   const daySet=new Set(), menSet=new Set(); CELL={};
+  const nameCount={};   // key -> { nombreOriginal: vecesQueAparece }
   rows.forEach(r=>{
-    const dk=dayKey(r.fecha); daySet.add(dk); menSet.add(r.mensajero);
-    if(!CELL[r.mensajero]) CELL[r.mensajero]={};
-    if(!CELL[r.mensajero][dk]) CELL[r.mensajero][dk]={exp:0,est:0};
-    if(r.express) CELL[r.mensajero][dk].exp++; else CELL[r.mensajero][dk].est++;
+    const dk=dayKey(r.fecha); daySet.add(dk); menSet.add(r.key);
+    if(!CELL[r.key]) CELL[r.key]={};
+    if(!CELL[r.key][dk]) CELL[r.key][dk]={exp:0,est:0};
+    if(r.express) CELL[r.key][dk].exp++; else CELL[r.key][dk].est++;
+    (nameCount[r.key] || (nameCount[r.key]={}));
+    nameCount[r.key][r.mensajero]=(nameCount[r.key][r.mensajero]||0)+1;
+  });
+  // Nombre a mostrar = la variante que más aparece (desempate: la más larga)
+  NAMEOF={};
+  Object.keys(nameCount).forEach(k=>{
+    NAMEOF[k]=Object.entries(nameCount[k]).sort((a,b)=> b[1]-a[1] || b[0].length-a[0].length)[0][0];
   });
   DAYS=[...daySet].sort();
-  MENS=[...menSet].sort((a,b)=>a.localeCompare(b,'es'));
+  MENS=[...menSet].sort((a,b)=>(NAMEOF[a]||a).localeCompare(NAMEOF[b]||b,'es'));
   const active=!!(from||to);
   $('#df-count').textContent = active ? `Mostrando ${rows.length} de ${RAW.length} entregas` : `${RAW.length} entregas`;
   render();
@@ -270,7 +280,7 @@ function renderMatrix(){
   const dayHead=DAYS.map(d=>`<th class="num daycol">${fmtDayCol(d)}</th>`).join('');
   const body=MENS.map(m=>{
     const cells=DAYS.map(d=>{ const v=cellVal(CELL[m]&&CELL[m][d],METRIC); return `<td class="num">${v?v:'<span class="z">·</span>'}</td>`; }).join('');
-    return `<tr><td class="nm">${esc(m)}</td>${cells}<td class="num b rowtot">${rowTotal(m,METRIC)}</td><td class="num prom">${f1(prom(m,METRIC))}</td></tr>`;
+    return `<tr><td class="nm">${esc(NAMEOF[m]||m)}</td>${cells}<td class="num b rowtot">${rowTotal(m,METRIC)}</td><td class="num prom">${f1(prom(m,METRIC))}</td></tr>`;
   }).join('');
   const colTots=DAYS.map(d=>`<td class="num">${colTotal(d,METRIC)}</td>`).join('');
   $('#panel').innerHTML=`<div class="tbl-wrap"><table class="hist matrix"><thead><tr><th class="nm">Mensajero</th>${dayHead}<th class="num rowtot">Total</th><th class="num prom" title="Promedio de envíos por día trabajado">Prom/día</th></tr></thead><tbody>${body}</tbody><tfoot><tr><td class="nm">Total</td>${colTots}<td class="num">${grandTotal(METRIC)}</td><td class="num prom">${f1(promGlobal(METRIC))}</td></tr></tfoot></table></div>`;
@@ -306,7 +316,7 @@ $('#btn-xlsx').addEventListener('click',async()=>{
       const head=['Mensajero',...DAYS.map(ddmm),'Total','Prom/día'];
       head.forEach((x,j)=>{ const c=ws.getCell(r,j+1); c.value=x; c.font={name:'Arial',bold:true,size:9,color:{argb:TXT}}; c.fill=fill(GREY); c.border=bd; c.alignment={horizontal:j===0?'left':'center'}; }); r++;
       MENS.forEach((m,i)=>{ const even=i%2===0;
-        const vals=[m,...DAYS.map(d=>cellVal(CELL[m]&&CELL[m][d],metric)),rowTotal(m,metric),Number(prom(m,metric).toFixed(1))];
+        const vals=[NAMEOF[m]||m,...DAYS.map(d=>cellVal(CELL[m]&&CELL[m][d],metric)),rowTotal(m,metric),Number(prom(m,metric).toFixed(1))];
         vals.forEach((v,j)=>{ const strong=j===totIdx||j===promIdx; const c=ws.getCell(r,j+1); c.value=(j>0&&j<totIdx&&v===0)?null:v; c.fill=fill(even?WHITE:LIME); c.border=bd; c.font={name:'Arial',size:9,bold:strong,color:{argb:strong?GD:TXT}}; c.alignment={horizontal:j===0?'left':'center'}; if(j===promIdx) c.numFmt='#,##0.0'; }); r++;
       });
       const tot=['Total',...DAYS.map(d=>colTotal(d,metric)),grandTotal(metric),Number(promGlobal(metric).toFixed(1))];
