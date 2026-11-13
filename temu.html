@@ -255,6 +255,11 @@
   .mt-row b{font-family:'Sora',sans-serif;font-weight:700;color:var(--ink);text-align:right}
   .mt-row b.up{color:var(--green)} .mt-row b.down{color:#c0392b}
   .mt-row small{display:block;font-weight:500;color:var(--muted);font-size:.74rem}
+  /* Ganancias/plata: solo el admin. Para el resto se ocultan. */
+  body.no-admin .solo-admin{display:none!important}
+  body.no-admin #tbl-pil th:last-child,
+  body.no-admin #tbl-pil tbody td:last-child,
+  body.no-admin #tbl-pil tfoot td:last-child{display:none}
 
   table.hist th button{all:unset;cursor:pointer;display:block;width:100%}
   table.hist th[aria-sort=descending] button::after{content:" ↓"} table.hist th[aria-sort=ascending] button::after{content:" ↑"}
@@ -369,8 +374,8 @@
     <div class="stat hero"><div class="k">Entregados</div><div class="v" id="k-ent">—</div><div class="d" id="d-ent"></div></div>
     <div class="stat"><div class="k">Promedio diario</div><div class="v" id="k-prom">—</div><div class="d" id="d-prom"></div></div>
     <div class="stat"><div class="k">Por motorista al día</div><div class="v" id="k-moto-dia">—</div><div class="d" id="d-moto-dia"></div></div>
-    <div class="stat hero"><div class="k">Libre para Dropper</div><div class="v" id="k-libre">—</div><div class="d" id="d-libre"></div></div>
-    <div class="stat"><div class="k">Pago a motoristas</div><div class="v" id="k-pago">—</div><div class="d" id="d-pago"></div></div>
+    <div class="stat hero solo-admin"><div class="k">Libre para Dropper</div><div class="v" id="k-libre">—</div><div class="d" id="d-libre"></div></div>
+    <div class="stat solo-admin"><div class="k">Pago a motoristas</div><div class="v" id="k-pago">—</div><div class="d" id="d-pago"></div></div>
     <div class="stat"><div class="k">Rechazos</div><div class="v" id="k-rech">—</div><div class="d" id="d-rech"></div></div>
   </div>
 
@@ -379,12 +384,12 @@
     <button data-t="resumen">Resumen</button>
     <button data-t="pilotos">Pilotos</button>
     <button data-t="motorista">Motorista</button>
-    <button data-t="ganancia">Pago y ganancia</button>
-    <button data-t="cobro">Cobro CPS</button>
+    <button data-t="ganancia" class="solo-admin">Pago y ganancia</button>
+    <button data-t="cobro" class="solo-admin">Cobro CPS</button>
     <button data-t="rechazos">Rechazos</button>
     <button data-t="mover">Mover</button>
     <button data-t="buscar">Buscar guía</button>
-    <button data-t="ajustes">Ajustes</button>
+    <button data-t="ajustes" class="solo-admin">Ajustes</button>
   </div>
 
   <!-- HOY -->
@@ -487,7 +492,7 @@
       <div class="note">Más oscuro, más entregas. Vacío: no salió ese día.</div>
       <div class="chart heatwrap" id="ch-heat"></div>
     </div>
-    <div class="recibo-bar">
+    <div class="recibo-bar solo-admin">
       <div>
         <b>Recibos de pago</b>
         <div class="note" id="rec-note" style="margin:2px 0 0">Del período seleccionado arriba.</div>
@@ -542,7 +547,7 @@
   </section>
 
   <!-- GANANCIA -->
-  <section class="tm-tab" data-t="ganancia">
+  <section class="tm-tab solo-admin" data-t="ganancia">
     <div class="grid2">
       <div class="card">
         <h3>Período seleccionado</h3>
@@ -591,7 +596,7 @@
   </section>
 
   <!-- COBRO CPS -->
-  <section class="tm-tab" data-t="cobro">
+  <section class="tm-tab solo-admin" data-t="cobro">
     <div class="recibo-bar">
       <div>
         <b>Reporte de cobro a CPS</b>
@@ -702,7 +707,7 @@
   </section>
 
   <!-- AJUSTES -->
-  <section class="tm-tab" data-t="ajustes">
+  <section class="tm-tab solo-admin" data-t="ajustes">
     <div class="card" style="margin-bottom:16px">
       <h3>Tarifas y metas</h3>
       <div class="note">Se guardan para todo el equipo y cambian todos los cálculos del tablero.</div>
@@ -1343,14 +1348,14 @@
     const flojoD = dias.slice().sort((a, b) => a.entregados - b.entregados)[0];
     let racha = 0, maxR = 0, pf = null;
     dias.forEach(d => { racha = (pf && diffDays(pf, d.fecha) === 1) ? racha + 1 : 1; if (racha > maxR) maxR = racha; pf = d.fecha; });
-    const kpi = (k, v, d) => `<div class="stat"><div class="k">${k}</div><div class="v">${v}</div>${d ? `<div class="d">${d}</div>` : ''}</div>`;
+    const kpi = (k, v, d, cls) => `<div class="stat ${cls || ''}"><div class="k">${k}</div><div class="v">${v}</div>${d ? `<div class="d">${d}</div>` : ''}</div>`;
     $('#mt-kpis').innerHTML = [
       kpi('Entregados', N(p.entregados), part ? P(part) + ' del equipo' : ''),
       kpi('Por día', D1(p.promedio), 'meta ' + N(CFG.meta_motorista)),
       kpi('Mejor día', N(p.mejor), ''),
       kpi('Días trabajados', N(p.dias), ''),
       kpi('Rechazos', N(p.rechazos), P(p.pct, 1) + ' de lo que salió'),
-      kpi('Pago estimado', Q(p.pago), Q(CFG.pago_motorista) + ' por entrega'),
+      kpi('Pago estimado', Q(p.pago), Q(CFG.pago_motorista) + ' por entrega', 'solo-admin'),
     ].join('');
     const row = (k, v, cls) => `<div class="mt-row"><span>${k}</span><b class="${cls || ''}">${v}</b></div>`;
     const signo = v => (v >= 0 ? '+' : '') + P(v);
@@ -2192,6 +2197,11 @@
     if (guard === null) return;
     if (guard.previewMode) { $('#notice').classList.add('show'); $('#btn-sync').disabled = true; return; }
     window.dropperNav.setUser(guard.user.email || '');
+    // Solo el admin ve las ganancias / cobros / tarifas. Los demás, nada de plata.
+    let esAdmin = false;
+    try { const r = await sb.rpc('is_asis_admin'); esAdmin = r && r.data === true; } catch (e) {}
+    if (!esAdmin) esAdmin = (guard.user.email || '').toLowerCase() === 'juanjoogaldez3@gmail.com';
+    if (!esAdmin) document.body.classList.add('no-admin');
     const act = document.querySelector('.topbar .nav-links a.active');
     if (act && window.innerWidth <= 640) { const nl = act.parentElement; nl.scrollLeft = act.offsetLeft - nl.clientWidth / 2 + act.clientWidth / 2; }
     await cargarConfig();
