@@ -246,6 +246,15 @@
   .tip div{display:flex;justify-content:space-between;gap:14px} .tip span:last-child{font-weight:700}
   .heatwrap{overflow-x:auto}
   .empty-in{padding:30px 10px;text-align:center;color:var(--muted);font-size:.9rem}
+  .mt-head{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+  .mt-sel{font:inherit;font-size:.95rem;font-weight:600;border:1px solid #cdd8cf;border-radius:10px;padding:9px 12px;background:#fcfdfc;max-width:100%;min-width:180px;color:var(--ink)}
+  .mt-extra{display:flex;flex-direction:column;gap:2px;margin-top:4px}
+  .mt-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:9px 2px;border-bottom:1px solid var(--line);font-size:.92rem}
+  .mt-row:last-child{border-bottom:none}
+  .mt-row span{color:var(--muted)}
+  .mt-row b{font-family:'Sora',sans-serif;font-weight:700;color:var(--ink);text-align:right}
+  .mt-row b.up{color:var(--green)} .mt-row b.down{color:#c0392b}
+  .mt-row small{display:block;font-weight:500;color:var(--muted);font-size:.74rem}
 
   table.hist th button{all:unset;cursor:pointer;display:block;width:100%}
   table.hist th[aria-sort=descending] button::after{content:" ↓"} table.hist th[aria-sort=ascending] button::after{content:" ↑"}
@@ -369,6 +378,7 @@
     <button data-t="hoy" class="active">Hoy</button>
     <button data-t="resumen">Resumen</button>
     <button data-t="pilotos">Pilotos</button>
+    <button data-t="motorista">Motorista</button>
     <button data-t="ganancia">Pago y ganancia</button>
     <button data-t="cobro">Cobro CPS</button>
     <button data-t="rechazos">Rechazos</button>
@@ -505,6 +515,30 @@
       </table>
     </div>
     <div class="note" style="margin-top:8px;color:var(--muted);font-size:.8rem"><span class="mv-inline">En el celular se ven las columnas principales; el tipo (Fijo/Apoyo) se cambia desde la compu. </span>"Tipo" se guarda para todos: marcá como <b>Apoyo</b> a quien sale solo de vez en cuando.</div>
+  </section>
+
+  <!-- MOTORISTA (detalle de uno) -->
+  <section class="tm-tab" data-t="motorista">
+    <div class="card" style="margin-bottom:16px">
+      <div class="mt-head">
+        <h3 style="margin:0">Detalle de un motorista</h3>
+        <select id="mt-sel" class="mt-sel" aria-label="Elegir motorista"></select>
+      </div>
+      <div class="note">Todo lo del motorista elegido, en el período de arriba.</div>
+      <div class="summary" id="mt-kpis" style="margin-top:12px"></div>
+    </div>
+    <div class="grid2">
+      <div class="card">
+        <h3>Entregas por día</h3>
+        <div class="note">Barras: entregados de este motorista. Línea punteada: la meta por motorista.</div>
+        <div class="chart" id="mt-dias"></div>
+      </div>
+      <div class="card">
+        <h3>Cómo va</h3>
+        <div class="note">Comparado con el equipo y con la meta.</div>
+        <div id="mt-extra" class="mt-extra"></div>
+      </div>
+    </div>
   </section>
 
   <!-- GANANCIA -->
@@ -1185,6 +1219,7 @@
     else { chartDias(); chartProm(); chartHeat(); chartMotivos(); chartRechPil(); }
     chartPend();
     tablaPilotos();
+    dibujarMotorista();
     ganancia(t);
   }
 
@@ -1279,6 +1314,86 @@
       color: r => r.tipo === 'Apoyo' ? '#b9c6bd' : (r.promedio >= CFG.meta_motorista ? '#41AC3A' : '#1F7A3D'),
       refLine: CFG.meta_motorista, refLabel: 'Meta ' + N(CFG.meta_motorista),
       tipFn: r => [r.piloto + (r.tipo === 'Apoyo' ? ' (apoyo)' : ''), [['Por día trabajado', D1(r.promedio)], ['Días que salió', N(r.dias)], ['Mejor día', N(r.mejor)], ['Le falta para la meta', D1(Math.max(0, CFG.meta_motorista - r.promedio))]]],
+    });
+  }
+
+  // ---------- Detalle de un motorista ----------
+  let MT_SEL = null;
+  function dibujarMotorista() {
+    const sel = $('#mt-sel'); if (!sel) return;
+    const pilotos = porPiloto(DP).sort((a, b) => b.entregados - a.entregados);
+    if (!pilotos.length) { sel.innerHTML = '<option>Sin datos</option>'; $('#mt-kpis').innerHTML = ''; $('#mt-extra').innerHTML = ''; $('#mt-dias').innerHTML = '<div class="empty-in">Sin entregas en este período.</div>'; return; }
+    if (!pilotos.some(p => String(p.piloto_id) === String(MT_SEL))) MT_SEL = String(pilotos[0].piloto_id);
+    sel.innerHTML = pilotos.map(p => `<option value="${esc(p.piloto_id)}"${String(p.piloto_id) === String(MT_SEL) ? ' selected' : ''}>${esc(p.piloto)}</option>`).join('');
+    renderMotorista(pilotos);
+  }
+  function renderMotorista(pilotos) {
+    pilotos = pilotos || porPiloto(DP).sort((a, b) => b.entregados - a.entregados);
+    const p = pilotos.find(x => String(x.piloto_id) === String(MT_SEL)); if (!p) return;
+    const puesto = pilotos.findIndex(x => String(x.piloto_id) === String(MT_SEL)) + 1;
+    const teamEnt = pilotos.reduce((s, x) => s + x.entregados, 0);
+    const teamDias = pilotos.reduce((s, x) => s + x.dias, 0);
+    const promEquipo = teamDias ? teamEnt / teamDias : 0;
+    const vsEq = promEquipo ? (p.promedio - promEquipo) / promEquipo : 0;
+    const part = teamEnt ? p.entregados / teamEnt : 0;
+    const dias = DP.filter(r => String(r.piloto_id) === String(MT_SEL) && r.entregados > 0).sort((a, b) => a.fecha < b.fecha ? -1 : 1);
+    const cumplio = dias.filter(d => d.entregados >= CFG.meta_motorista).length;
+    const pctCump = dias.length ? cumplio / dias.length : 0;
+    const mejorD = dias.slice().sort((a, b) => b.entregados - a.entregados)[0];
+    const flojoD = dias.slice().sort((a, b) => a.entregados - b.entregados)[0];
+    let racha = 0, maxR = 0, pf = null;
+    dias.forEach(d => { racha = (pf && diffDays(pf, d.fecha) === 1) ? racha + 1 : 1; if (racha > maxR) maxR = racha; pf = d.fecha; });
+    const kpi = (k, v, d) => `<div class="stat"><div class="k">${k}</div><div class="v">${v}</div>${d ? `<div class="d">${d}</div>` : ''}</div>`;
+    $('#mt-kpis').innerHTML = [
+      kpi('Entregados', N(p.entregados), part ? P(part) + ' del equipo' : ''),
+      kpi('Por día', D1(p.promedio), 'meta ' + N(CFG.meta_motorista)),
+      kpi('Mejor día', N(p.mejor), ''),
+      kpi('Días trabajados', N(p.dias), ''),
+      kpi('Rechazos', N(p.rechazos), P(p.pct, 1) + ' de lo que salió'),
+      kpi('Pago estimado', Q(p.pago), Q(CFG.pago_motorista) + ' por entrega'),
+    ].join('');
+    const row = (k, v, cls) => `<div class="mt-row"><span>${k}</span><b class="${cls || ''}">${v}</b></div>`;
+    const signo = v => (v >= 0 ? '+' : '') + P(v);
+    $('#mt-extra').innerHTML =
+      row('Puesto por entregas', '#' + puesto + ' de ' + pilotos.length) +
+      row('Participación del equipo', P(part)) +
+      row('Vs. promedio del equipo', signo(vsEq), vsEq >= 0 ? 'up' : 'down') +
+      row('Cumplió la meta', P(pctCump) + ' de los días', pctCump >= 0.5 ? 'up' : 'down') +
+      (mejorD ? row('Mejor día', N(mejorD.entregados) + ' <small>' + esc(dia(mejorD.fecha)) + '</small>') : '') +
+      (flojoD ? row('Día más flojo', N(flojoD.entregados) + ' <small>' + esc(dia(flojoD.fecha)) + '</small>') : '') +
+      row('Mejor racha', maxR + (maxR === 1 ? ' día' : ' días seguidos'));
+    chartDiasMoto();
+  }
+  function chartDiasMoto() {
+    const box = $('#mt-dias'); if (!box) return; box.innerHTML = '';
+    const rows = DP.filter(r => String(r.piloto_id) === String(MT_SEL) && (r.entregados > 0 || r.rechazos > 0)).sort((a, b) => a.fecha < b.fecha ? -1 : 1);
+    if (!rows.length) { box.innerHTML = '<div class="empty-in">No salió en este período.</div>'; return; }
+    const meta = CFG.meta_motorista;
+    const W = Math.max(300, box.clientWidth), H = 250;
+    const ymax = niceMax(Math.max(meta, ...rows.map(r => r.entregados)) * 1.08);
+    const ticks = [0, ymax / 4, ymax / 2, ymax * 3 / 4, ymax];
+    const m = { t: 14, r: 6, b: 42, l: medir(box, ticks.map(N), 'tick') + 10 };
+    const iw = W - m.l - m.r, ih = H - m.t - m.b;
+    const band = iw / rows.length, bw = Math.min(32, band * 0.7);
+    const y = v => m.t + ih - (v / ymax) * ih;
+    const cx = i => m.l + band * i + band / 2;
+    const step = Math.ceil(rows.length / Math.max(1, Math.floor(iw / 46)));
+    let s = `<svg viewBox="0 0 ${W} ${H}" height="${H}">`;
+    for (const v of ticks) s += `<line x1="${m.l}" x2="${W - m.r}" y1="${y(v)}" y2="${y(v)}" stroke="#eef2ef"/><text class="tick" x="${m.l - 8}" y="${y(v)}" dy="0.32em" text-anchor="end">${N(v)}</text>`;
+    rows.forEach((r, i) => {
+      s += `<rect data-i="${i}" x="${cx(i) - bw / 2}" y="${y(r.entregados)}" width="${bw}" height="${y(0) - y(r.entregados)}" rx="4" fill="${r.entregados >= meta ? '#41AC3A' : '#1F7A3D'}"/>`;
+      if (band >= 22) s += `<text class="val" x="${cx(i)}" y="${y(r.entregados) - 5}" text-anchor="middle">${N(r.entregados)}</text>`;
+      if (i % step === 0) s += `<text class="lbl" x="${cx(i)}" y="${H - m.b + 16}" text-anchor="middle">${esc(dia(r.fecha))}</text>`;
+    });
+    s += `<line x1="${m.l}" x2="${W - m.r}" y1="${y(meta)}" y2="${y(meta)}" stroke="#c0392b" stroke-width="1.5" stroke-dasharray="5 4"/>`;
+    s += `<text class="tick" x="${W - m.r}" y="${y(meta) - 6}" text-anchor="end" style="fill:#c0392b">Meta ${N(meta)}</text>`;
+    s += `<line x1="${m.l}" x2="${W - m.r}" y1="${y(0)}" y2="${y(0)}" stroke="#cdd8cf"/></svg>`;
+    box.innerHTML = s;
+    const tip = tooltip(box);
+    $$('rect[data-i]', box).forEach(el => {
+      const r = rows[+el.dataset.i];
+      el.addEventListener('pointermove', ev => tip.show(ev, dia(r.fecha) + ' · ' + fechaLarga(r.fecha), [['Entregados', N(r.entregados)], ['Rechazos', N(r.rechazos)], ['De la meta', P(r.entregados / meta)]]));
+      el.addEventListener('pointerleave', tip.hide);
     });
   }
 
@@ -2059,6 +2174,7 @@
     if (b.dataset.t === 'hoy') dibujarHoy();
     else if (DP.length) dibujar();   // re-medir gráficos ocultos
   }));
+  $('#mt-sel').addEventListener('change', e => { MT_SEL = e.target.value; renderMotorista(); });
   function aplicarPreset(p) {
     const [d, h] = preset(p);
     $('#f-desde').value = d; $('#f-hasta').value = h;
