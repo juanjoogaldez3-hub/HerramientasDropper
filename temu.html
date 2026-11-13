@@ -2200,7 +2200,7 @@
     // Solo el admin ve las ganancias / cobros / tarifas. Los demás, nada de plata.
     let esAdmin = false;
     try { const r = await sb.rpc('is_asis_admin'); esAdmin = r && r.data === true; } catch (e) {}
-    if (!esAdmin) esAdmin = (guard.user.email || '').toLowerCase() === 'juanjoogaldez3@gmail.com';
+    if (!esAdmin) esAdmin = ['jogaldez@droppergt.com', 'juanjoogaldez3@gmail.com'].includes((guard.user.email || '').toLowerCase());
     if (!esAdmin) document.body.classList.add('no-admin');
     const act = document.querySelector('.topbar .nav-links a.active');
     if (act && window.innerWidth <= 640) { const nl = act.parentElement; nl.scrollLeft = act.offsetLeft - nl.clientWidth / 2 + act.clientWidth / 2; }
