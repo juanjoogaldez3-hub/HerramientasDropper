@@ -768,6 +768,32 @@
     const { data, error } = await sb.from('temu_config').select('*').eq('id', 1).maybeSingle();
     if (!error && data) for (const k of Object.keys(CFG)) if (data[k] !== null && data[k] !== undefined) CFG[k] = Number(data[k]);
   }
+  // Une al mismo motorista que viene con dos piloto_id (o el nombre con "Dropper"/tildes/espacios distintos).
+  function normPiloto(s) {
+    return String(s == null ? '' : s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
+      .replace(/\s+/g, ' ').trim().replace(/\s+dropper$/, '').trim();
+  }
+  function unifyPilotos(rows) {
+    if (!rows || !rows.length) return rows || [];
+    const groups = new Map();
+    for (const r of rows) { const k = normPiloto(r.piloto); if (!groups.has(k)) groups.set(k, []); groups.get(k).push(r); }
+    const canon = new Map();   // normName -> { id, name }
+    for (const [k, rs] of groups) {
+      const cnt = {}; rs.forEach(r => cnt[r.piloto] = (cnt[r.piloto] || 0) + 1);
+      const drop = s => /\s+dropper\s*$/i.test(s) ? 1 : 0;   // nombre a mostrar: más usado, sin "Dropper", más corto
+      const name = Object.entries(cnt).sort((a, b) => b[1] - a[1] || drop(a[0]) - drop(b[0]) || a[0].length - b[0].length)[0][0];
+      canon.set(k, { id: rs[0].piloto_id, name });
+    }
+    const merged = new Map();  // id|fecha -> fila sumada
+    for (const r of rows) {
+      const c = canon.get(normPiloto(r.piloto)), mk = c.id + '|' + r.fecha;
+      let e = merged.get(mk);
+      if (!e) { e = { ...r, piloto_id: c.id, piloto: c.name }; merged.set(mk, e); }
+      else { e.entregados += r.entregados; e.rechazos += r.rechazos; }
+    }
+    return [...merged.values()];
+  }
+
   async function cargar() {
     const desde = $('#f-desde').value, hasta = $('#f-hasta').value;
     if (!desde || !hasta || desde > hasta) { status('Revisá el rango de fechas.', 'err'); return; }
@@ -780,7 +806,7 @@
         todas(() => sb.from('temu_dia_piloto').select('fecha,piloto_id,entregados,rechazos').gte('fecha', pDesde).lte('fecha', pHasta)),
         todas(() => sb.from('temu_motivos_dia').select('*').gte('fecha', desde).lte('fecha', hasta)),
       ]);
-      DP = dp.map(r => ({ ...r, entregados: Number(r.entregados), rechazos: Number(r.rechazos) }));
+      DP = unifyPilotos(dp.map(r => ({ ...r, entregados: Number(r.entregados), rechazos: Number(r.rechazos) })));
       DP_PREV = prev.map(r => ({ ...r, entregados: Number(r.entregados), rechazos: Number(r.rechazos) }));
       MOT = mot.map(r => ({ ...r, cantidad: Number(r.cantidad) }));
       await cargarPend();

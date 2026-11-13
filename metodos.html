@@ -249,7 +249,8 @@ function buildView(){
   // Nombre a mostrar = la variante que más aparece (desempate: la más larga)
   NAMEOF={};
   Object.keys(nameCount).forEach(k=>{
-    NAMEOF[k]=Object.entries(nameCount[k]).sort((a,b)=> b[1]-a[1] || b[0].length-a[0].length)[0][0];
+    const drop=s=>/\s+dropper\s*$/i.test(s)?1:0;   // más usado, sin "Dropper", más corto
+    NAMEOF[k]=Object.entries(nameCount[k]).sort((a,b)=> b[1]-a[1] || drop(a[0])-drop(b[0]) || a[0].length-b[0].length)[0][0];
   });
   DAYS=[...daySet].sort();
   MENS=[...menSet].sort((a,b)=>(NAMEOF[a]||a).localeCompare(NAMEOF[b]||b,'es'));
