@@ -190,6 +190,7 @@
     <div class="selrow">
       <label style="font-size:.84rem;font-weight:600;color:var(--muted)">Ver <select id="sol-filtro"><option value="pendiente">Pendientes</option><option value="resueltas">Historial (resueltas)</option><option value="aprobada">Aprobadas</option><option value="rechazada">Rechazadas</option><option value="all">Todas</option></select></label>
     </div>
+    <div id="ext-list" style="margin-bottom:16px"></div>
     <div id="sol-list"></div>
   </div>
 
@@ -421,6 +422,40 @@ function justificaSalida(list,emp,fecha){
 function justificaRefaccion(list,emp,fecha){
   return (list||[]).some(s=> s.empleado===emp && s.fecha<=fecha && fecha<=(s.fecha_fin||s.fecha) && ['refaccion','permiso','ausencia'].includes(s.tipo));
 }
+// ---- Horas extra: aprobaciones ----
+let EXTRAS=new Map();
+async function loadExtras(from,to){
+  EXTRAS=new Map(); if(!window.sb) return;
+  let q=window.sb.from('asistencia_extras').select('*'); if(from) q=q.gte('fecha',from); if(to) q=q.lte('fecha',to);
+  const {data}=await q; (data||[]).forEach(r=>EXTRAS.set(r.empleado+'|'+r.fecha,r));
+}
+async function resolverExtra(emp,fecha,minutos,estado){
+  const {error}=await window.sb.from('asistencia_extras').upsert({empleado:emp,fecha,minutos,estado,resuelto_por:USER.email||null,resuelto_at:new Date().toISOString()},{onConflict:'empleado,fecha'});
+  if(error){ status('No se pudo: '+error.message,'err'); return false; }
+  EXTRAS.set(emp+'|'+fecha,{empleado:emp,fecha,minutos,estado});
+  status('✓ Tiempo extra '+(estado==='aprobada'?'aprobado':'rechazado')+'.','ok'); return true;
+}
+function extraCell(r){
+  if(!(r.extra>0)) return '—';
+  const lbl='+'+fmtMin(r.extra)+(r.libre?' (día libre)':'');
+  const est=r.extraEstado==='aprobada'?pill(lbl+' ✓','ok'):(r.extraEstado==='rechazada'?pill(lbl+' ✗','gray'):pill(lbl+' · por aprobar','warn'));
+  const b=(e,t,c)=>`<button class="x ex-btn" data-emp="${esc(r.empleado)}" data-f="${r.fecha}" data-m="${r.extra}" data-e="${e}" title="${t}" style="margin-left:4px;${c}">${e==='aprobada'?'✓':'✗'}</button>`;
+  const acc=r.extraEstado==='aprobada'?b('rechazada','Rechazar',''):(r.extraEstado==='rechazada'?b('aprobada','Aprobar',''):b('aprobada','Aprobar','color:var(--green)')+b('rechazada','Rechazar',''));
+  return est+acc;
+}
+document.addEventListener('click',async ev=>{
+  const bt=ev.target.closest('.ex-btn'); if(!bt) return; ev.stopPropagation();
+  bt.disabled=true;
+  const ok=await resolverExtra(bt.dataset.emp,bt.dataset.f,+bt.dataset.m,bt.dataset.e);
+  if(!ok){ bt.disabled=false; return; }
+  // recalcular en la vista abierta
+  if(D_REGS.length){ D_REGS=D_REGS.map(r=>r.empleado===bt.dataset.emp&&r.fecha===bt.dataset.f?{...r,extraEstado:bt.dataset.e,extraAprob:bt.dataset.e==='aprobada'?r.extra:0}:r);
+    const abiertos=[...document.querySelectorAll('#d-table tr.ddetail:not([hidden])')].map(t=>t.dataset.i); renderDTable();
+    abiertos.forEach(i=>{ const det=document.querySelector(`#d-table tr.ddetail[data-i="${i}"]`); if(det){ det.hidden=false; const c=document.querySelector(`#d-table tr.drow[data-i="${i}"] .dcaret`); if(c) c.style.transform='rotate(90deg)'; } }); }
+  if(!$('#v-solicitudes').hidden) renderSolicitudes();
+  updateExtraBadge();
+},true);
+
 function punchDaysToRegs(days,just){
   return days.map(d=>{
     const emp=empByName(d.empleado), P=progFor(emp,d.fecha);
@@ -438,14 +473,22 @@ function punchDaysToRegs(days,just){
     const req=d.libre?0:Math.min(base,span);   // requerido del día, nunca más que el turno; 0 si es día libre
     const deuda=(entH!=null&&salH!=null)?Math.max(0,req-horasEfec):0;   // 0 si está justificado
     const salioAntes=(salH!=null&&progSal!=null&&!d.libre)?Math.max(0,progSal-salH):0;
-    // Tiempo extra: minutos que se quedó después de su hora de salida (en día libre, todo lo trabajado)
-    const extra=(entH!=null&&salH!=null)?(d.libre?Math.round(horasEfec*60):(progSal!=null?Math.max(0,salH-progSal):0)):0;
+    // Tiempo extra (automático): lo que pasa de la jornada + 1 h de refacción (8 h + 1 h = 9 h en la oficina).
+    // En jornadas cortas (p. ej. sábado) no se descuenta refacción si no la marcaron. En día libre, todo lo trabajado.
+    let extra=0;
+    if(entH!=null&&salH!=null){
+      const presencia=salH-entH, almuerzo=req>=6?Math.max(refMin,60):refMin;
+      extra=d.libre?Math.max(0,presencia-refMin):Math.max(0,Math.round(presencia-almuerzo-req*60));
+    }
+    const ex=EXTRAS.get(d.empleado+'|'+d.fecha);
+    const extraEstado=extra>0?(ex?ex.estado:'pendiente'):null;
+    const extraAprob=extraEstado==='aprobada'?Math.min(extra,ex.minutos||extra):0;
     return {
       empleado:d.empleado, fecha:d.fecha,
       entrada_prog: (d.libre?'Libre':P.ent),
       entrada_real: d.ent?String(d.ent.hora).slice(0,5):null,
       salida_real: d.sal?String(d.sal.hora).slice(0,5):null,
-      tardanza_min: jTarde?0:d.tard, horas: horasEfec, deuda, jSal, jRef, refMin, refExcede, salioAntes, extra, libre:!!d.libre, ausente:false, justificado:jTarde
+      tardanza_min: jTarde?0:d.tard, horas: horasEfec, deuda, jSal, jRef, refMin, refExcede, salioAntes, extra, extraEstado, extraAprob, libre:!!d.libre, ausente:false, justificado:jTarde
     };
   });
 }
@@ -453,6 +496,7 @@ async function fetchRange(from,to){
   if(!window.sb) return [];
   const {marc,act}=await fetchPunch(from,to,'');
   const just=await loadJustAll();
+  await loadExtras(from,to);
   return punchDaysToRegs(aggPunch(marc,act),just);
 }
 let D_REGS=[], D_SORT={key:'punt',dir:1};
@@ -467,9 +511,9 @@ function aggEmp(regs){
   const by=new Map();
   regs.forEach(r=>{ if(!by.has(r.empleado)) by.set(r.empleado,[]); by.get(r.empleado).push(r); });
   return [...by.entries()].map(([emp,list])=>{
-    let dias=list.length, aus=0, pres=0, aTiempo=0, tardT=0, horasT=0, deudaT=0, extraT=0;
-    list.forEach(r=>{ if(r.ausente){aus++;return;} if(!r.entrada_real) return; pres++; horasT+=+r.horas; tardT+=r.tardanza_min; if(r.tardanza_min<=5) aTiempo++; deudaT+=(+r.deuda||0); extraT+=(+r.extra||0); });
-    return {emp,dias,aus,pres,aTiempo,deuda:deudaT,extra:extraT,punt:pres>0?aTiempo/pres:0,tardProm:pres>0?tardT/pres:0,horasProm:pres>0?horasT/pres:0,days:list};
+    let dias=list.length, aus=0, pres=0, aTiempo=0, tardT=0, horasT=0, deudaT=0, extraT=0, extraP=0;
+    list.forEach(r=>{ if(r.ausente){aus++;return;} if(!r.entrada_real) return; pres++; horasT+=+r.horas; tardT+=r.tardanza_min; if(r.tardanza_min<=5) aTiempo++; deudaT+=(+r.deuda||0); extraT+=(+r.extraAprob||0); if(r.extraEstado==='pendiente') extraP+=r.extra; });
+    return {emp,dias,aus,pres,aTiempo,deuda:deudaT,extra:extraT,extraPend:extraP,punt:pres>0?aTiempo/pres:0,tardProm:pres>0?tardT/pres:0,horasProm:pres>0?horasT/pres:0,days:list};
   });
 }
 function puntCls(p){ return p>=0.9?'ok':(p>=0.75?'warn':'bad'); }
@@ -479,17 +523,17 @@ function renderDTable(){
   let rows=aggEmp(filteredRegs());
   const {key,dir}=D_SORT;
   rows.sort((a,b)=>{ const av=key==='emp'?a.emp.toLowerCase():a[key], bv=key==='emp'?b.emp.toLowerCase():b[key]; return av<bv?-dir:(av>bv?dir:0); });
-  const deudaTot=rows.reduce((s,r)=>s+r.deuda,0), extraTot=rows.reduce((s,r)=>s+r.extra,0);
-  $('#d-stats').innerHTML=`<div class="stat"><div class="k">Empleados</div><div class="v">${rows.length}</div></div><div class="stat"><div class="k">Días registrados</div><div class="v">${rows.reduce((s,r)=>s+r.dias,0)}</div></div><div class="stat"><div class="k">Ausencias</div><div class="v">${rows.reduce((s,r)=>s+r.aus,0)}</div></div><div class="stat"><div class="k">Deben (tiempo)</div><div class="v">${deudaTot>0.008?fmtDebe(deudaTot):'0'}</div></div><div class="stat"><div class="k">Tiempo extra</div><div class="v">${extraTot>0?fmtMin(extraTot):'0'}</div></div>`;
+  const deudaTot=rows.reduce((s,r)=>s+r.deuda,0), extraTot=rows.reduce((s,r)=>s+r.extra,0), extraPendTot=rows.reduce((s,r)=>s+r.extraPend,0);
+  $('#d-stats').innerHTML=`<div class="stat"><div class="k">Empleados</div><div class="v">${rows.length}</div></div><div class="stat"><div class="k">Días registrados</div><div class="v">${rows.reduce((s,r)=>s+r.dias,0)}</div></div><div class="stat"><div class="k">Ausencias</div><div class="v">${rows.reduce((s,r)=>s+r.aus,0)}</div></div><div class="stat"><div class="k">Deben (tiempo)</div><div class="v">${deudaTot>0.008?fmtDebe(deudaTot):'0'}</div></div><div class="stat"><div class="k">Extra aprobado</div><div class="v">${extraTot>0?fmtMin(extraTot):'0'}</div>${extraPendTot>0?`<div style="font-size:.78rem;color:#8a6200;margin-top:2px">+${fmtMin(extraPendTot)} por aprobar</div>`:''}</div>`;
   if(!rows.length){ $('#d-table').innerHTML='<div class="empty"><h3>Sin datos guardados en el período</h3></div>'; return; }
-  const cols=[['emp','Empleado'],['dias','Días'],['pres','Presentes'],['aus','Ausencias'],['punt','Puntualidad'],['tardProm','Tard. prom'],['horasProm','Horas prom'],['deuda','Debe'],['extra','Extra']];
+  const cols=[['emp','Empleado'],['dias','Días'],['pres','Presentes'],['aus','Ausencias'],['punt','Puntualidad'],['tardProm','Tard. prom'],['horasProm','Horas prom'],['deuda','Debe'],['extra','Extra aprobado']];
   const arrow=k2=>D_SORT.key===k2?(D_SORT.dir<0?' ▾':' ▴'):'';
   const head=cols.map(([k2,l])=>`<th class="sortable" data-k="${k2}">${l}${arrow(k2)}</th>`).join('');
   const body=rows.map((r,i)=>`
     <tr class="drow" data-i="${i}"><td><span class="dcaret">▸</span>${esc(r.emp)}</td>
       <td class="num">${r.dias}</td><td class="num">${r.pres}</td><td class="num">${r.aus||'—'}</td>
       <td>${pill(pctS(r.punt),puntCls(r.punt))}</td><td>${pill(Math.round(r.tardProm)+'m',tardCls(r.tardProm))}</td><td class="num">${f1(r.horasProm)}</td>
-      <td class="num">${r.deuda>0.008?pill(fmtDebe(r.deuda),'bad'):'—'}</td><td class="num">${r.extra>0?pill('+'+fmtMin(r.extra),'ok'):'—'}</td></tr>
+      <td class="num">${r.deuda>0.008?pill(fmtDebe(r.deuda),'bad'):'—'}</td><td class="num">${r.extra>0?pill('+'+fmtMin(r.extra),'ok'):'—'}${r.extraPend>0?`<div style="font-size:.72rem;color:#8a6200;margin-top:2px">+${fmtMin(r.extraPend)} por aprobar</div>`:''}</td></tr>
     <tr class="ddetail" data-i="${i}" hidden><td colspan="9">${dayDetail(r.days)}</td></tr>`).join('');
   $('#d-table').innerHTML=`<div class="tbl-wrap"><table class="hist"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div>`;
   $('#d-table').querySelectorAll('th.sortable').forEach(th=>th.addEventListener('click',()=>{ const k2=th.dataset.k; if(D_SORT.key===k2) D_SORT.dir*=-1; else D_SORT={key:k2,dir:(k2==='emp'?1:-1)}; renderDTable(); }));
@@ -501,7 +545,7 @@ function dayDetail(days){
     const est=r.ausente?pill('Ausente','gray'):(r.entrada_real?(r.justificado?pill('Justificado','ok'):pill(r.tardanza_min>0?'Tarde '+r.tardanza_min+'m':'A tiempo',tardCls(r.tardanza_min))):pill('Sin marcar','gray'));
     const ref = !r.refMin ? '—' : (r.refExcede ? pill(r.refMin+'m', r.jRef?'ok':'bad') : r.refMin+'m');
     const antes = !r.salioAntes ? '—' : pill(r.salioAntes+'m', r.jSal?'ok':'bad');
-    return `<tr><td>${fmtDate(r.fecha)}</td><td>${esc(r.entrada_real||'—')}</td><td>${esc(r.salida_real||'—')}</td><td>${est}</td><td class="num">${ref}</td><td class="num">${antes}</td><td class="num">${r.extra>0?pill('+'+fmtMin(r.extra)+(r.libre?' (día libre)':''),'ok'):'—'}</td><td class="num">${f1(r.horas)}</td><td class="num">${r.deuda>0.008?pill(fmtDebe(r.deuda),'bad'):'—'}</td></tr>`;
+    return `<tr><td>${fmtDate(r.fecha)}</td><td>${esc(r.entrada_real||'—')}</td><td>${esc(r.salida_real||'—')}</td><td>${est}</td><td class="num">${ref}</td><td class="num">${antes}</td><td class="num" style="white-space:nowrap">${extraCell(r)}</td><td class="num">${f1(r.horas)}</td><td class="num">${r.deuda>0.008?pill(fmtDebe(r.deuda),'bad'):'—'}</td></tr>`;
   }).join('')}</tbody></table>`;
 }
 $('#d-apply').addEventListener('click',renderDashboard);
@@ -533,7 +577,7 @@ $('#d-xlsx').addEventListener('click',async()=>{
   [26,8,11,11,13,12,11,10,11].forEach((w,i)=>ws.getColumn(i+1).width=w);
   ws.mergeCells('A1:I1'); ws.getRow(1).height=28; let t=ws.getCell('A1'); t.value='Dropper · Reporte de Asistencia'; t.font={name:'Arial',bold:true,size:13,color:{argb:'FFFFFFFF'}}; t.fill=fill('FF0C0F0D'); t.alignment={vertical:'middle',horizontal:'left',indent:1};
   ws.getCell('A3').value='Período:'; ws.getCell('A3').font={name:'Arial',bold:true,size:10}; ws.getCell('B3').value=periodo; ws.getCell('B3').font={name:'Arial',size:10};
-  let r=5; ['Empleado','Días','Presentes','Ausencias','Puntualidad','Tard. prom','Horas prom','Debe (h)','Extra (h)'].forEach((x,j)=>{ const c=ws.getCell(r,j+1); c.value=x; c.font={name:'Arial',bold:true,size:10}; c.fill=fill('FFF2F4F5'); c.border=bd; c.alignment={horizontal:j===0?'left':'center'}; }); r++;
+  let r=5; ['Empleado','Días','Presentes','Ausencias','Puntualidad','Tard. prom','Horas prom','Debe (h)','Extra aprobado (h)'].forEach((x,j)=>{ const c=ws.getCell(r,j+1); c.value=x; c.font={name:'Arial',bold:true,size:10}; c.fill=fill('FFF2F4F5'); c.border=bd; c.alignment={horizontal:j===0?'left':'center'}; }); r++;
   rows.forEach((row,i)=>{ const even=i%2===0; const vals=[row.emp,row.dias,row.pres,row.aus,r2(row.punt),Math.round(row.tardProm),r2(row.horasProm),r2(row.deuda),r2((row.extra||0)/60)]; vals.forEach((v,j)=>{ const c=ws.getCell(r,j+1); c.value=v; c.fill=fill(even?'FFFFFFFF':'FFDDF0E2'); c.border=bd; c.font={name:'Arial',size:10,color:{argb:j===7&&row.deuda>0.05?'FFA3261A':(j===8&&row.extra>0?'FF14572A':'FF1A1A1A')}}; c.alignment={horizontal:j===0?'left':'center'}; if(j===4) c.numFmt='0%'; }); r++; });
 
   // ----- Hoja: Detalle por día (cada día del período) -----
@@ -545,9 +589,9 @@ $('#d-xlsx').addEventListener('click',async()=>{
   let r2n=5; ['Empleado','Fecha','Entrada','Salida','Estado','Refacción (min)','Salió antes (min)','Tiempo extra (min)','Horas','Debe (h)'].forEach((x,j)=>{ const c=ws2.getCell(r2n,j+1); c.value=x; c.font={name:'Arial',bold:true,size:10}; c.fill=fill('FFF2F4F5'); c.border=bd; c.alignment={horizontal:j===0?'left':'center'}; }); r2n++;
   det.forEach((row,i)=>{ const even=i%2===0;
     const refBad=row.refExcede&&!row.jRef, antesBad=row.salioAntes>0&&!row.jSal;
-    const vals=[row.empleado,fmtDate(row.fecha),row.entrada_real||'—',row.salida_real||'—',regEstadoTxt(row),row.refMin||0,row.salioAntes||0,row.extra||0,r2(row.horas),r2(row.deuda)];
+    const vals=[row.empleado,fmtDate(row.fecha),row.entrada_real||'—',row.salida_real||'—',regEstadoTxt(row),row.refMin||0,row.salioAntes||0,row.extra>0?(row.extra+' ('+(row.extraEstado==='aprobada'?'aprobado':row.extraEstado==='rechazada'?'rechazado':'por aprobar')+')'):0,r2(row.horas),r2(row.deuda)];
     vals.forEach((v,j)=>{ const c=ws2.getCell(r2n,j+1); c.value=v; c.fill=fill(even?'FFFFFFFF':'FFDDF0E2'); c.border=bd;
-      let col='FF1A1A1A'; if(j===5&&refBad) col='FFA3261A'; if(j===6&&antesBad) col='FFA3261A'; if(j===7&&row.extra>0) col='FF14572A'; if(j===9&&row.deuda>0.05) col='FFA3261A';
+      let col='FF1A1A1A'; if(j===5&&refBad) col='FFA3261A'; if(j===6&&antesBad) col='FFA3261A'; if(j===7&&row.extraEstado==='aprobada') col='FF14572A'; if(j===7&&row.extraEstado==='pendiente') col='FF8A6200'; if(j===9&&row.deuda>0.05) col='FFA3261A';
       c.font={name:'Arial',size:10,color:{argb:col}}; c.alignment={horizontal:j===0?'left':'center'};
     }); r2n++;
   });
@@ -559,7 +603,7 @@ $('#d-pdf').addEventListener('click',()=>{
   const {jsPDF}=window.jspdf; const doc=new jsPDF({unit:'pt',format:'a4'}); const PW=doc.internal.pageSize.getWidth(),M=40;
   doc.setFillColor(12,15,13); doc.rect(0,0,PW,60,'F'); doc.setFont('helvetica','bold'); doc.setFontSize(15); doc.setTextColor(255,255,255); doc.text('Dropper · Reporte de Asistencia',M,30);
   doc.setFont('helvetica','normal'); doc.setFontSize(9.5); doc.setTextColor(207,230,211); doc.text(`Período: ${periodo}`,M,47);
-  doc.autoTable({ startY:78, head:[['Empleado','Días','Presentes','Ausencias','Puntualidad','Tard. prom','Horas prom','Debe','Extra']],
+  doc.autoTable({ startY:78, head:[['Empleado','Días','Presentes','Ausencias','Puntualidad','Tard. prom','Horas prom','Debe','Extra aprob.']],
     body:rows.map(r=>[r.emp,r.dias,r.pres,r.aus,pctS(r.punt),Math.round(r.tardProm)+'m',f1(r.horasProm),r.deuda>0.008?fmtDebe(r.deuda):'—',r.extra>0?fmtMin(r.extra):'—']),
     styles:{font:'helvetica',fontSize:8.5,cellPadding:4,textColor:[26,26,26],lineColor:[213,218,222],lineWidth:0.5},
     headStyles:{fillColor:[31,122,61],textColor:[255,255,255],fontStyle:'bold'}, alternateRowStyles:{fillColor:[221,240,226]},
@@ -572,7 +616,7 @@ $('#d-pdf').addEventListener('click',()=>{
     doc.setFont('helvetica','bold'); doc.setFontSize(12); doc.setTextColor(26,26,26); doc.text('Detalle por día',M,dy);
     doc.autoTable({ startY:dy+8,
       head:[['Empleado','Fecha','Entrada','Salida','Estado','Refacc.','Salió antes','Extra','Horas','Debe']],
-      body:det.map(r=>[r.empleado,fmtDate(r.fecha),r.entrada_real||'—',r.salida_real||'—',regEstadoTxt(r),(r.refMin||0)+'m',(r.salioAntes||0)+'m',r.extra>0?fmtMin(r.extra):'—',f1(r.horas),r.deuda>0.008?fmtDebe(r.deuda):'—']),
+      body:det.map(r=>[r.empleado,fmtDate(r.fecha),r.entrada_real||'—',r.salida_real||'—',regEstadoTxt(r),(r.refMin||0)+'m',(r.salioAntes||0)+'m',r.extra>0?fmtMin(r.extra)+(r.extraEstado==='aprobada'?' ✓':r.extraEstado==='rechazada'?' (rech.)':' (pend.)'):'—',f1(r.horas),r.deuda>0.008?fmtDebe(r.deuda):'—']),
       styles:{font:'helvetica',fontSize:7.5,cellPadding:3,textColor:[26,26,26],lineColor:[213,218,222],lineWidth:0.5},
       headStyles:{fillColor:[31,122,61],textColor:[255,255,255],fontStyle:'bold'}, alternateRowStyles:{fillColor:[221,240,226]},
       columnStyles:{0:{cellWidth:'auto'},1:{cellWidth:52,halign:'center'},2:{cellWidth:38,halign:'center'},3:{cellWidth:38,halign:'center'},4:{cellWidth:56,halign:'center'},5:{cellWidth:36,halign:'center'},6:{cellWidth:44,halign:'center'},7:{cellWidth:40,halign:'center'},8:{cellWidth:32,halign:'center'},9:{cellWidth:36,halign:'center'}}, margin:{left:M,right:M} });
@@ -780,11 +824,31 @@ async function renderAvisos(){
 const TIPO_LBL={ausencia:'Ausencia justificada',permiso:'Permiso',entrada_tarde:'Entrada tarde',salida_temprano:'Salida temprano',refaccion:'Regresó tarde de refacción',cambio_turno:'Cambio de turno',otro:'Otro'};
 let SOL=[];
 async function loadSol(){ SOL=[]; if(!window.sb) return; const {data}=await window.sb.from('solicitudes').select('*').order('created_at',{ascending:false}).limit(500); SOL=data||[]; }
-function solBadge(){ const n=SOL.filter(s=>s.estado==='pendiente').length; const b=$('#sol-badge'); if(b){ b.textContent=n; b.hidden=n===0; } }
+function solBadge(){ const n=SOL.filter(s=>s.estado==='pendiente').length+(typeof EXT_PEND==='number'?EXT_PEND:0); const b=$('#sol-badge'); if(b){ b.textContent=n; b.hidden=n===0; } }
 async function updateSolBadge(){ if(PREVIEW){ return; } await loadSol(); solBadge(); }
 function fillSolEmp(){ const cur=$('#sf-emp').value; $('#sf-emp').innerHTML=EMP.map(e=>`<option ${e.nombre===cur?'selected':''}>${esc(e.nombre)}</option>`).join(''); }
+// Horas extra por aprobar (automáticas, últimos 45 días)
+async function extrasPendientes(){
+  const hasta=todayStr(), d=new Date(hasta+'T00:00:00'); d.setDate(d.getDate()-45);
+  const desde=d.toISOString().slice(0,10);
+  const regs=await fetchRange(desde,hasta);
+  return regs.filter(r=>r.extra>0&&r.extraEstado==='pendiente').sort((a,b)=>b.fecha.localeCompare(a.fecha)||a.empleado.localeCompare(b.empleado));
+}
+async function renderExtras(){
+  const box=$('#ext-list'); if(!box) return;
+  const L=await extrasPendientes();
+  setExtBadge(L.length);
+  if(!L.length){ box.innerHTML='<div class="note" style="margin:0 0 6px">Horas extra: no hay ninguna por aprobar. Se calculan solas cuando alguien pasa de 9 h en la oficina (8 h + 1 h de refacción).</div>'; return; }
+  box.innerHTML=`<h3 style="margin:0 0 6px;font-size:1rem">Horas extra por aprobar <span class="pill warn">${L.length}</span></h3>
+    <div class="note" style="margin:0 0 8px">Se calculan solas cuando alguien pasa de 9 h en la oficina (8 h + 1 h de refacción). Solo lo aprobado cuenta en los totales.</div>
+    <div class="tbl-wrap"><table class="hist"><thead><tr><th>Empleado</th><th>Fecha</th><th>Entrada</th><th>Salida</th><th>Refacción</th><th>Tiempo extra</th><th>Acción</th></tr></thead><tbody>${L.map(r=>`<tr><td>${esc(r.empleado)}</td><td>${fmtDate(r.fecha)}</td><td>${esc(r.entrada_real||'—')}</td><td>${esc(r.salida_real||'—')}</td><td>${r.refMin?r.refMin+'m':'—'}</td><td>${pill('+'+fmtMin(r.extra)+(r.libre?' (día libre)':''),'warn')}</td><td style="white-space:nowrap"><button class="btn btn-primary ex-btn" data-emp="${esc(r.empleado)}" data-f="${r.fecha}" data-m="${r.extra}" data-e="aprobada" style="width:auto;padding:5px 10px;font-size:.76rem">Aprobar</button> <button class="btn btn-ghost ex-btn" data-emp="${esc(r.empleado)}" data-f="${r.fecha}" data-m="${r.extra}" data-e="rechazada" style="width:auto;padding:5px 10px;font-size:.76rem">Rechazar</button></td></tr>`).join('')}</tbody></table></div>`;
+}
+let EXT_PEND=0;
+function setExtBadge(n){ EXT_PEND=n; solBadge(); }
+async function updateExtraBadge(){ try{ const L=await extrasPendientes(); setExtBadge(L.length); }catch(e){} }
 async function renderSolicitudes(){
   if(PREVIEW){ $('#sol-list').innerHTML='<div class="empty"><h3>Configurá Supabase para gestionar solicitudes</h3></div>'; return; }
+  renderExtras();
   await loadSol(); fillSolEmp(); solBadge();
   const filt=$('#sol-filtro').value;
   let rows;
@@ -892,7 +956,7 @@ $('#sf-desde').value=todayStr();
   if(!IS_ADMIN){ location.replace('inicio.html'); return; }   // Asistencia es solo para el administrador
   applyRole();
   await loadConfig();
-  await loadEmp(); fillPEmp(); renderDia(); updateSolBadge();
+  await loadEmp(); fillPEmp(); renderDia(); updateSolBadge(); updateExtraBadge();
 })();
 const ADMIN_EMAILS=['juanjoogaldez3@gmail.com','jogaldez@droppergt.com'];   // respaldo por si la función RPC no responde
 async function checkAdmin(){
