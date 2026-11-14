@@ -888,7 +888,9 @@ $('#sf-desde').value=todayStr();
   $('#v-dia').hidden=false;
   if(guard.previewMode){ PREVIEW=true; $('#notice').classList.add('show'); fillPEmp(); renderDia(); return; }
   PREVIEW=false; USER=guard.user; window.dropperNav.setUser(guard.user.email||'');
-  IS_ADMIN=await checkAdmin(); applyRole();
+  IS_ADMIN=await checkAdmin();
+  if(!IS_ADMIN){ location.replace('inicio.html'); return; }   // Asistencia es solo para el administrador
+  applyRole();
   await loadConfig();
   await loadEmp(); fillPEmp(); renderDia(); updateSolBadge();
 })();

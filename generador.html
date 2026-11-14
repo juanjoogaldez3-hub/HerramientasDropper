@@ -1071,6 +1071,8 @@ let SESSION_USER=null;
     return;
   }
   SESSION_USER=guard.user;
+  // Asistencia es solo para el administrador
+  window.sb.rpc('is_asis_admin').then(({data})=>{ if(!data) document.querySelectorAll('a[href="asistencia.html"]').forEach(el=>el.style.display='none'); }).catch(()=>{});
   const av=$('#nav-av');
   if(av && SESSION_USER.email){ av.textContent=navInitials(SESSION_USER.email); av.title=SESSION_USER.email; av.classList.add('show'); }
 })();

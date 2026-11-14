@@ -22,6 +22,13 @@
         av.title = email;
         av.classList.add("show");
       }
+      // Asistencia es solo para el administrador: esconder el enlace y la tarjeta a los demás.
+      if (window.sb && email) {
+        window.sb.rpc("is_asis_admin").then(({ data }) => {
+          if (data) return;
+          document.querySelectorAll('a[href="asistencia.html"], #card-asistencia').forEach((el) => (el.style.display = "none"));
+        }).catch(() => {});
+      }
     },
   };
   document.addEventListener("DOMContentLoaded", () => window.dropperNav.setLogo());
