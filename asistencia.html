@@ -438,12 +438,14 @@ function punchDaysToRegs(days,just){
     const req=d.libre?0:Math.min(base,span);   // requerido del día, nunca más que el turno; 0 si es día libre
     const deuda=(entH!=null&&salH!=null)?Math.max(0,req-horasEfec):0;   // 0 si está justificado
     const salioAntes=(salH!=null&&progSal!=null&&!d.libre)?Math.max(0,progSal-salH):0;
+    // Tiempo extra: minutos que se quedó después de su hora de salida (en día libre, todo lo trabajado)
+    const extra=(entH!=null&&salH!=null)?(d.libre?Math.round(horasEfec*60):(progSal!=null?Math.max(0,salH-progSal):0)):0;
     return {
       empleado:d.empleado, fecha:d.fecha,
       entrada_prog: (d.libre?'Libre':P.ent),
       entrada_real: d.ent?String(d.ent.hora).slice(0,5):null,
       salida_real: d.sal?String(d.sal.hora).slice(0,5):null,
-      tardanza_min: jTarde?0:d.tard, horas: horasEfec, deuda, jSal, jRef, refMin, refExcede, salioAntes, ausente:false, justificado:jTarde
+      tardanza_min: jTarde?0:d.tard, horas: horasEfec, deuda, jSal, jRef, refMin, refExcede, salioAntes, extra, libre:!!d.libre, ausente:false, justificado:jTarde
     };
   });
 }
@@ -465,40 +467,41 @@ function aggEmp(regs){
   const by=new Map();
   regs.forEach(r=>{ if(!by.has(r.empleado)) by.set(r.empleado,[]); by.get(r.empleado).push(r); });
   return [...by.entries()].map(([emp,list])=>{
-    let dias=list.length, aus=0, pres=0, aTiempo=0, tardT=0, horasT=0, deudaT=0;
-    list.forEach(r=>{ if(r.ausente){aus++;return;} if(!r.entrada_real) return; pres++; horasT+=+r.horas; tardT+=r.tardanza_min; if(r.tardanza_min<=5) aTiempo++; deudaT+=(+r.deuda||0); });
-    return {emp,dias,aus,pres,aTiempo,deuda:deudaT,punt:pres>0?aTiempo/pres:0,tardProm:pres>0?tardT/pres:0,horasProm:pres>0?horasT/pres:0,days:list};
+    let dias=list.length, aus=0, pres=0, aTiempo=0, tardT=0, horasT=0, deudaT=0, extraT=0;
+    list.forEach(r=>{ if(r.ausente){aus++;return;} if(!r.entrada_real) return; pres++; horasT+=+r.horas; tardT+=r.tardanza_min; if(r.tardanza_min<=5) aTiempo++; deudaT+=(+r.deuda||0); extraT+=(+r.extra||0); });
+    return {emp,dias,aus,pres,aTiempo,deuda:deudaT,extra:extraT,punt:pres>0?aTiempo/pres:0,tardProm:pres>0?tardT/pres:0,horasProm:pres>0?horasT/pres:0,days:list};
   });
 }
 function puntCls(p){ return p>=0.9?'ok':(p>=0.75?'warn':'bad'); }
+function fmtMin(m){ m=Math.round(+m||0); return m<60 ? m+' min' : Math.floor(m/60)+'h '+String(m%60).padStart(2,'0')+'m'; }
 function fmtDebe(h){ const min=Math.round((+h||0)*60); return min<60 ? min+' min' : f1(min/60)+'h'; }
 function renderDTable(){
   let rows=aggEmp(filteredRegs());
   const {key,dir}=D_SORT;
   rows.sort((a,b)=>{ const av=key==='emp'?a.emp.toLowerCase():a[key], bv=key==='emp'?b.emp.toLowerCase():b[key]; return av<bv?-dir:(av>bv?dir:0); });
-  const deudaTot=rows.reduce((s,r)=>s+r.deuda,0);
-  $('#d-stats').innerHTML=`<div class="stat"><div class="k">Empleados</div><div class="v">${rows.length}</div></div><div class="stat"><div class="k">Días registrados</div><div class="v">${rows.reduce((s,r)=>s+r.dias,0)}</div></div><div class="stat"><div class="k">Ausencias</div><div class="v">${rows.reduce((s,r)=>s+r.aus,0)}</div></div><div class="stat"><div class="k">Deben (tiempo)</div><div class="v">${deudaTot>0.008?fmtDebe(deudaTot):'0'}</div></div>`;
+  const deudaTot=rows.reduce((s,r)=>s+r.deuda,0), extraTot=rows.reduce((s,r)=>s+r.extra,0);
+  $('#d-stats').innerHTML=`<div class="stat"><div class="k">Empleados</div><div class="v">${rows.length}</div></div><div class="stat"><div class="k">Días registrados</div><div class="v">${rows.reduce((s,r)=>s+r.dias,0)}</div></div><div class="stat"><div class="k">Ausencias</div><div class="v">${rows.reduce((s,r)=>s+r.aus,0)}</div></div><div class="stat"><div class="k">Deben (tiempo)</div><div class="v">${deudaTot>0.008?fmtDebe(deudaTot):'0'}</div></div><div class="stat"><div class="k">Tiempo extra</div><div class="v">${extraTot>0?fmtMin(extraTot):'0'}</div></div>`;
   if(!rows.length){ $('#d-table').innerHTML='<div class="empty"><h3>Sin datos guardados en el período</h3></div>'; return; }
-  const cols=[['emp','Empleado'],['dias','Días'],['pres','Presentes'],['aus','Ausencias'],['punt','Puntualidad'],['tardProm','Tard. prom'],['horasProm','Horas prom'],['deuda','Debe']];
+  const cols=[['emp','Empleado'],['dias','Días'],['pres','Presentes'],['aus','Ausencias'],['punt','Puntualidad'],['tardProm','Tard. prom'],['horasProm','Horas prom'],['deuda','Debe'],['extra','Extra']];
   const arrow=k2=>D_SORT.key===k2?(D_SORT.dir<0?' ▾':' ▴'):'';
   const head=cols.map(([k2,l])=>`<th class="sortable" data-k="${k2}">${l}${arrow(k2)}</th>`).join('');
   const body=rows.map((r,i)=>`
     <tr class="drow" data-i="${i}"><td><span class="dcaret">▸</span>${esc(r.emp)}</td>
       <td class="num">${r.dias}</td><td class="num">${r.pres}</td><td class="num">${r.aus||'—'}</td>
       <td>${pill(pctS(r.punt),puntCls(r.punt))}</td><td>${pill(Math.round(r.tardProm)+'m',tardCls(r.tardProm))}</td><td class="num">${f1(r.horasProm)}</td>
-      <td class="num">${r.deuda>0.008?pill(fmtDebe(r.deuda),'bad'):'—'}</td></tr>
-    <tr class="ddetail" data-i="${i}" hidden><td colspan="8">${dayDetail(r.days)}</td></tr>`).join('');
+      <td class="num">${r.deuda>0.008?pill(fmtDebe(r.deuda),'bad'):'—'}</td><td class="num">${r.extra>0?pill('+'+fmtMin(r.extra),'ok'):'—'}</td></tr>
+    <tr class="ddetail" data-i="${i}" hidden><td colspan="9">${dayDetail(r.days)}</td></tr>`).join('');
   $('#d-table').innerHTML=`<div class="tbl-wrap"><table class="hist"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div>`;
   $('#d-table').querySelectorAll('th.sortable').forEach(th=>th.addEventListener('click',()=>{ const k2=th.dataset.k; if(D_SORT.key===k2) D_SORT.dir*=-1; else D_SORT={key:k2,dir:(k2==='emp'?1:-1)}; renderDTable(); }));
   $('#d-table').querySelectorAll('tr.drow').forEach(tr=>tr.addEventListener('click',()=>{ const det=$('#d-table').querySelector(`tr.ddetail[data-i="${tr.dataset.i}"]`); det.hidden=!det.hidden; tr.querySelector('.dcaret').style.transform=det.hidden?'':'rotate(90deg)'; }));
 }
 function dayDetail(days){
   const ds=[...days].sort((a,b)=>b.fecha.localeCompare(a.fecha));
-  return `<table class="hist"><thead><tr><th>Fecha</th><th>Entrada</th><th>Salida</th><th>Estado</th><th>Refacción</th><th>Salió antes</th><th>Horas</th><th>Debe</th></tr></thead><tbody>${ds.map(r=>{
+  return `<table class="hist"><thead><tr><th>Fecha</th><th>Entrada</th><th>Salida</th><th>Estado</th><th>Refacción</th><th>Salió antes</th><th>Tiempo extra</th><th>Horas</th><th>Debe</th></tr></thead><tbody>${ds.map(r=>{
     const est=r.ausente?pill('Ausente','gray'):(r.entrada_real?(r.justificado?pill('Justificado','ok'):pill(r.tardanza_min>0?'Tarde '+r.tardanza_min+'m':'A tiempo',tardCls(r.tardanza_min))):pill('Sin marcar','gray'));
     const ref = !r.refMin ? '—' : (r.refExcede ? pill(r.refMin+'m', r.jRef?'ok':'bad') : r.refMin+'m');
     const antes = !r.salioAntes ? '—' : pill(r.salioAntes+'m', r.jSal?'ok':'bad');
-    return `<tr><td>${fmtDate(r.fecha)}</td><td>${esc(r.entrada_real||'—')}</td><td>${esc(r.salida_real||'—')}</td><td>${est}</td><td class="num">${ref}</td><td class="num">${antes}</td><td class="num">${f1(r.horas)}</td><td class="num">${r.deuda>0.008?pill(fmtDebe(r.deuda),'bad'):'—'}</td></tr>`;
+    return `<tr><td>${fmtDate(r.fecha)}</td><td>${esc(r.entrada_real||'—')}</td><td>${esc(r.salida_real||'—')}</td><td>${est}</td><td class="num">${ref}</td><td class="num">${antes}</td><td class="num">${r.extra>0?pill('+'+fmtMin(r.extra)+(r.libre?' (día libre)':''),'ok'):'—'}</td><td class="num">${f1(r.horas)}</td><td class="num">${r.deuda>0.008?pill(fmtDebe(r.deuda),'bad'):'—'}</td></tr>`;
   }).join('')}</tbody></table>`;
 }
 $('#d-apply').addEventListener('click',renderDashboard);
@@ -527,24 +530,24 @@ $('#d-xlsx').addEventListener('click',async()=>{
   const rows=aggEmp(filteredRegs()); if(!rows.length){ alert('Sin datos en el período.'); return; } const empF=($('#d-emp')&&$('#d-emp').value!=='__all__')?$('#d-emp').value:''; const periodo=periodoDash()+(empF?(' · '+empF):'');
   const wb=new ExcelJS.Workbook(); const ws=wb.addWorksheet('Asistencia',{views:[{showGridLines:false}]});
   const fill=c=>({type:'pattern',pattern:'solid',fgColor:{argb:c}}); const bd={top:{style:'thin',color:{argb:'FFD5DADE'}},bottom:{style:'thin',color:{argb:'FFD5DADE'}},left:{style:'thin',color:{argb:'FFD5DADE'}},right:{style:'thin',color:{argb:'FFD5DADE'}}};
-  [26,8,11,11,13,12,11,10].forEach((w,i)=>ws.getColumn(i+1).width=w);
-  ws.mergeCells('A1:H1'); ws.getRow(1).height=28; let t=ws.getCell('A1'); t.value='Dropper · Reporte de Asistencia'; t.font={name:'Arial',bold:true,size:13,color:{argb:'FFFFFFFF'}}; t.fill=fill('FF0C0F0D'); t.alignment={vertical:'middle',horizontal:'left',indent:1};
+  [26,8,11,11,13,12,11,10,11].forEach((w,i)=>ws.getColumn(i+1).width=w);
+  ws.mergeCells('A1:I1'); ws.getRow(1).height=28; let t=ws.getCell('A1'); t.value='Dropper · Reporte de Asistencia'; t.font={name:'Arial',bold:true,size:13,color:{argb:'FFFFFFFF'}}; t.fill=fill('FF0C0F0D'); t.alignment={vertical:'middle',horizontal:'left',indent:1};
   ws.getCell('A3').value='Período:'; ws.getCell('A3').font={name:'Arial',bold:true,size:10}; ws.getCell('B3').value=periodo; ws.getCell('B3').font={name:'Arial',size:10};
-  let r=5; ['Empleado','Días','Presentes','Ausencias','Puntualidad','Tard. prom','Horas prom','Debe (h)'].forEach((x,j)=>{ const c=ws.getCell(r,j+1); c.value=x; c.font={name:'Arial',bold:true,size:10}; c.fill=fill('FFF2F4F5'); c.border=bd; c.alignment={horizontal:j===0?'left':'center'}; }); r++;
-  rows.forEach((row,i)=>{ const even=i%2===0; const vals=[row.emp,row.dias,row.pres,row.aus,r2(row.punt),Math.round(row.tardProm),r2(row.horasProm),r2(row.deuda)]; vals.forEach((v,j)=>{ const c=ws.getCell(r,j+1); c.value=v; c.fill=fill(even?'FFFFFFFF':'FFDDF0E2'); c.border=bd; c.font={name:'Arial',size:10,color:{argb:j===7&&row.deuda>0.05?'FFA3261A':'FF1A1A1A'}}; c.alignment={horizontal:j===0?'left':'center'}; if(j===4) c.numFmt='0%'; }); r++; });
+  let r=5; ['Empleado','Días','Presentes','Ausencias','Puntualidad','Tard. prom','Horas prom','Debe (h)','Extra (h)'].forEach((x,j)=>{ const c=ws.getCell(r,j+1); c.value=x; c.font={name:'Arial',bold:true,size:10}; c.fill=fill('FFF2F4F5'); c.border=bd; c.alignment={horizontal:j===0?'left':'center'}; }); r++;
+  rows.forEach((row,i)=>{ const even=i%2===0; const vals=[row.emp,row.dias,row.pres,row.aus,r2(row.punt),Math.round(row.tardProm),r2(row.horasProm),r2(row.deuda),r2((row.extra||0)/60)]; vals.forEach((v,j)=>{ const c=ws.getCell(r,j+1); c.value=v; c.fill=fill(even?'FFFFFFFF':'FFDDF0E2'); c.border=bd; c.font={name:'Arial',size:10,color:{argb:j===7&&row.deuda>0.05?'FFA3261A':(j===8&&row.extra>0?'FF14572A':'FF1A1A1A')}}; c.alignment={horizontal:j===0?'left':'center'}; if(j===4) c.numFmt='0%'; }); r++; });
 
   // ----- Hoja: Detalle por día (cada día del período) -----
   const det=detalleOrdenado();
   const ws2=wb.addWorksheet('Detalle por día',{views:[{showGridLines:false}]});
-  [24,12,10,10,14,15,16,9,9].forEach((w,i)=>ws2.getColumn(i+1).width=w);
-  ws2.mergeCells('A1:I1'); ws2.getRow(1).height=28; let t2=ws2.getCell('A1'); t2.value='Dropper · Detalle de asistencia por día'; t2.font={name:'Arial',bold:true,size:13,color:{argb:'FFFFFFFF'}}; t2.fill=fill('FF0C0F0D'); t2.alignment={vertical:'middle',horizontal:'left',indent:1};
+  [24,12,10,10,14,15,16,16,9,9].forEach((w,i)=>ws2.getColumn(i+1).width=w);
+  ws2.mergeCells('A1:J1'); ws2.getRow(1).height=28; let t2=ws2.getCell('A1'); t2.value='Dropper · Detalle de asistencia por día'; t2.font={name:'Arial',bold:true,size:13,color:{argb:'FFFFFFFF'}}; t2.fill=fill('FF0C0F0D'); t2.alignment={vertical:'middle',horizontal:'left',indent:1};
   ws2.getCell('A3').value='Período:'; ws2.getCell('A3').font={name:'Arial',bold:true,size:10}; ws2.getCell('B3').value=periodo; ws2.getCell('B3').font={name:'Arial',size:10};
-  let r2n=5; ['Empleado','Fecha','Entrada','Salida','Estado','Refacción (min)','Salió antes (min)','Horas','Debe (h)'].forEach((x,j)=>{ const c=ws2.getCell(r2n,j+1); c.value=x; c.font={name:'Arial',bold:true,size:10}; c.fill=fill('FFF2F4F5'); c.border=bd; c.alignment={horizontal:j===0?'left':'center'}; }); r2n++;
+  let r2n=5; ['Empleado','Fecha','Entrada','Salida','Estado','Refacción (min)','Salió antes (min)','Tiempo extra (min)','Horas','Debe (h)'].forEach((x,j)=>{ const c=ws2.getCell(r2n,j+1); c.value=x; c.font={name:'Arial',bold:true,size:10}; c.fill=fill('FFF2F4F5'); c.border=bd; c.alignment={horizontal:j===0?'left':'center'}; }); r2n++;
   det.forEach((row,i)=>{ const even=i%2===0;
     const refBad=row.refExcede&&!row.jRef, antesBad=row.salioAntes>0&&!row.jSal;
-    const vals=[row.empleado,fmtDate(row.fecha),row.entrada_real||'—',row.salida_real||'—',regEstadoTxt(row),row.refMin||0,row.salioAntes||0,r2(row.horas),r2(row.deuda)];
+    const vals=[row.empleado,fmtDate(row.fecha),row.entrada_real||'—',row.salida_real||'—',regEstadoTxt(row),row.refMin||0,row.salioAntes||0,row.extra||0,r2(row.horas),r2(row.deuda)];
     vals.forEach((v,j)=>{ const c=ws2.getCell(r2n,j+1); c.value=v; c.fill=fill(even?'FFFFFFFF':'FFDDF0E2'); c.border=bd;
-      let col='FF1A1A1A'; if(j===5&&refBad) col='FFA3261A'; if(j===6&&antesBad) col='FFA3261A'; if(j===8&&row.deuda>0.05) col='FFA3261A';
+      let col='FF1A1A1A'; if(j===5&&refBad) col='FFA3261A'; if(j===6&&antesBad) col='FFA3261A'; if(j===7&&row.extra>0) col='FF14572A'; if(j===9&&row.deuda>0.05) col='FFA3261A';
       c.font={name:'Arial',size:10,color:{argb:col}}; c.alignment={horizontal:j===0?'left':'center'};
     }); r2n++;
   });
@@ -556,11 +559,11 @@ $('#d-pdf').addEventListener('click',()=>{
   const {jsPDF}=window.jspdf; const doc=new jsPDF({unit:'pt',format:'a4'}); const PW=doc.internal.pageSize.getWidth(),M=40;
   doc.setFillColor(12,15,13); doc.rect(0,0,PW,60,'F'); doc.setFont('helvetica','bold'); doc.setFontSize(15); doc.setTextColor(255,255,255); doc.text('Dropper · Reporte de Asistencia',M,30);
   doc.setFont('helvetica','normal'); doc.setFontSize(9.5); doc.setTextColor(207,230,211); doc.text(`Período: ${periodo}`,M,47);
-  doc.autoTable({ startY:78, head:[['Empleado','Días','Presentes','Ausencias','Puntualidad','Tard. prom','Horas prom','Debe']],
-    body:rows.map(r=>[r.emp,r.dias,r.pres,r.aus,pctS(r.punt),Math.round(r.tardProm)+'m',f1(r.horasProm),r.deuda>0.008?fmtDebe(r.deuda):'—']),
+  doc.autoTable({ startY:78, head:[['Empleado','Días','Presentes','Ausencias','Puntualidad','Tard. prom','Horas prom','Debe','Extra']],
+    body:rows.map(r=>[r.emp,r.dias,r.pres,r.aus,pctS(r.punt),Math.round(r.tardProm)+'m',f1(r.horasProm),r.deuda>0.008?fmtDebe(r.deuda):'—',r.extra>0?fmtMin(r.extra):'—']),
     styles:{font:'helvetica',fontSize:8.5,cellPadding:4,textColor:[26,26,26],lineColor:[213,218,222],lineWidth:0.5},
     headStyles:{fillColor:[31,122,61],textColor:[255,255,255],fontStyle:'bold'}, alternateRowStyles:{fillColor:[221,240,226]},
-    columnStyles:{0:{cellWidth:'auto'},1:{halign:'center'},2:{halign:'center'},3:{halign:'center'},4:{halign:'center'},5:{halign:'center'},6:{halign:'center'},7:{halign:'center'}}, margin:{left:M,right:M} });
+    columnStyles:{0:{cellWidth:'auto'},1:{halign:'center'},2:{halign:'center'},3:{halign:'center'},4:{halign:'center'},5:{halign:'center'},6:{halign:'center'},7:{halign:'center'},8:{halign:'center'}}, margin:{left:M,right:M} });
   const det=detalleOrdenado();
   if(det.length){
     const ph=doc.internal.pageSize.getHeight();
@@ -568,11 +571,11 @@ $('#d-pdf').addEventListener('click',()=>{
     if(dy>ph-110){ doc.addPage(); dy=50; }   // solo salta de hoja si casi no queda espacio
     doc.setFont('helvetica','bold'); doc.setFontSize(12); doc.setTextColor(26,26,26); doc.text('Detalle por día',M,dy);
     doc.autoTable({ startY:dy+8,
-      head:[['Empleado','Fecha','Entrada','Salida','Estado','Refacc.','Salió antes','Horas','Debe']],
-      body:det.map(r=>[r.empleado,fmtDate(r.fecha),r.entrada_real||'—',r.salida_real||'—',regEstadoTxt(r),(r.refMin||0)+'m',(r.salioAntes||0)+'m',f1(r.horas),r.deuda>0.008?fmtDebe(r.deuda):'—']),
+      head:[['Empleado','Fecha','Entrada','Salida','Estado','Refacc.','Salió antes','Extra','Horas','Debe']],
+      body:det.map(r=>[r.empleado,fmtDate(r.fecha),r.entrada_real||'—',r.salida_real||'—',regEstadoTxt(r),(r.refMin||0)+'m',(r.salioAntes||0)+'m',r.extra>0?fmtMin(r.extra):'—',f1(r.horas),r.deuda>0.008?fmtDebe(r.deuda):'—']),
       styles:{font:'helvetica',fontSize:7.5,cellPadding:3,textColor:[26,26,26],lineColor:[213,218,222],lineWidth:0.5},
       headStyles:{fillColor:[31,122,61],textColor:[255,255,255],fontStyle:'bold'}, alternateRowStyles:{fillColor:[221,240,226]},
-      columnStyles:{0:{cellWidth:'auto'},1:{cellWidth:56,halign:'center'},2:{cellWidth:44,halign:'center'},3:{cellWidth:44,halign:'center'},4:{cellWidth:58,halign:'center'},5:{cellWidth:40,halign:'center'},6:{cellWidth:52,halign:'center'},7:{cellWidth:36,halign:'center'},8:{cellWidth:38,halign:'center'}}, margin:{left:M,right:M} });
+      columnStyles:{0:{cellWidth:'auto'},1:{cellWidth:52,halign:'center'},2:{cellWidth:38,halign:'center'},3:{cellWidth:38,halign:'center'},4:{cellWidth:56,halign:'center'},5:{cellWidth:36,halign:'center'},6:{cellWidth:44,halign:'center'},7:{cellWidth:40,halign:'center'},8:{cellWidth:32,halign:'center'},9:{cellWidth:36,halign:'center'}}, margin:{left:M,right:M} });
   }
   doc.save('Reporte_Asistencia.pdf');
 });
