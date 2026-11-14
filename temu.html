@@ -728,6 +728,8 @@
   };
 
   // ---------- Fechas en hora de Guatemala ----------
+  // Nombre de la persona como lo usa el tablero: "carlos zacarias Dropper" → "Carlos Zacarias"
+  const persona = n => String(n || '').trim().toLowerCase().replace(/\s+dropper$/, '').replace(/\s+/g, ' ').replace(/(^|[^a-záéíóúñü])([a-záéíóúñü])/g, (m, a, b) => a + b.toUpperCase());
   const hoyGT = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Guatemala' }).format(new Date());
   const addDays = (f, n) => new Date(Date.parse(f + 'T00:00:00Z') + n * 864e5).toISOString().slice(0, 10);
   const diffDays = (a, b) => Math.round((Date.parse(b) - Date.parse(a)) / 864e5);
@@ -776,8 +778,9 @@
     status('Cargando datos…', 'work');
     try {
       const [dp, prev, mot] = await Promise.all([
-        todas(() => sb.from('temu_dia_piloto').select('*').gte('fecha', desde).lte('fecha', hasta).order('fecha')),
-        todas(() => sb.from('temu_dia_piloto').select('fecha,piloto_id,entregados,rechazos').gte('fecha', pDesde).lte('fecha', pHasta)),
+        // Por persona (no por usuario de CPS: CPS a veces pasa un usuario viejo a otro motorista)
+        todas(() => sb.from('temu_dia_persona').select('*').gte('fecha', desde).lte('fecha', hasta).order('fecha')),
+        todas(() => sb.from('temu_dia_persona').select('fecha,piloto_id,entregados,rechazos').gte('fecha', pDesde).lte('fecha', pHasta)),
         todas(() => sb.from('temu_motivos_dia').select('*').gte('fecha', desde).lte('fecha', hasta)),
       ]);
       DP = dp.map(r => ({ ...r, entregados: Number(r.entregados), rechazos: Number(r.rechazos) }));
@@ -813,17 +816,21 @@
   async function cargarHoy() {
     try {
       const h = hoyGT();
-      const [rows, pil, rut, zon] = await Promise.all([
+      const [rows, pil, rut, zon, per] = await Promise.all([
         todas(() => sb.from('temu_envios').select('piloto_id,piloto,estado,registrado_at').eq('fecha', h).order('registrado_at')),
         sb.from('temu_pilotos').select('piloto_id,nombre,tipo'),
         sb.from('temu_rutas_piloto').select('piloto_id,ruta,total,pendientes,entregados,rechazados').eq('fecha', h),
         sb.from('temu_zonas_pendientes').select('ruta,zona,por_llegar,en_bodega'),
+        sb.from('temu_personas').select('persona,tipo'),
       ]);
+      const tipoPer = new Map((per.data || []).map(x => [x.persona, x.tipo]));
+      // Nombre limpio y tipo (Fijo/Apoyo) por persona
+      for (const p of pil.data || []) { p.nombre = persona(p.nombre) || p.nombre; p.tipo = tipoPer.get(p.nombre) || 'Fijo'; }
       ZONAS = (zon.data || []).map(z => ({ ...z, por_llegar: Number(z.por_llegar), en_bodega: Number(z.en_bodega) }));
       window.__tiposHoy = new Map((pil.data || []).map(p => [p.piloto_id, p]));
       RUTAS = (rut.data || []).map(r => ({ ...r, total: Number(r.total), pendientes: Number(r.pendientes) }));
       const tipos = new Map((pil.data || []).map(p => [p.piloto_id, p]));
-      HOY = rows.map(r => ({ ...r, nombre: (tipos.get(r.piloto_id) || {}).nombre || r.piloto, tipo: (tipos.get(r.piloto_id) || {}).tipo || 'Fijo' }));
+      HOY = rows.map(r => { const n = persona(r.piloto) || (tipos.get(r.piloto_id) || {}).nombre || ''; return { ...r, nombre: n, tipo: tipoPer.get(n) || 'Fijo' }; });
       await cargarPend();
       dibujarHoy();
     } catch (e) {
@@ -1394,8 +1401,8 @@
       if (r) generarRecibos([r]);
     }));
     $$('select[data-id]', tb).forEach(sel => sel.addEventListener('change', async () => {
-      const id = Number(sel.dataset.id), tipo = sel.value;
-      const { error } = await sb.from('temu_pilotos').update({ tipo, updated_at: new Date().toISOString() }).eq('piloto_id', id);
+      const id = sel.dataset.id, tipo = sel.value;
+      const { error } = await sb.from('temu_personas').upsert({ persona: id, tipo, updated_at: new Date().toISOString() });
       if (error) { status('No se pudo cambiar el tipo: ' + esc(error.message), 'err'); return; }
       DP.forEach(r => { if (r.piloto_id === id) r.tipo = tipo; });
       dibujar();
@@ -1547,7 +1554,7 @@
       const slot = i % 2;
       if (i > 0 && slot === 0) doc.addPage();
       const y0 = M + slot * (blockH + gap);
-      dibujarRecibo(doc, r, desde, hasta, y0, blockH, `${base}-${String(r.piloto_id)}`, hoyTxt);
+      dibujarRecibo(doc, r, desde, hasta, y0, blockH, `${base}-${String(r.piloto_id).replace(/[^A-Za-z0-9]+/g, '').slice(0, 12).toUpperCase()}`, hoyTxt);
       if (slot === 0 && i !== sel.length - 1) {
         const ly = M + blockH + gap / 2;
         doc.setDrawColor(190, 200, 192); doc.setLineWidth(0.6); doc.setLineDashPattern([3, 3], 0);
@@ -1581,7 +1588,7 @@
       // Un paquete se cobra una sola vez, aunque CPS lo muestre con dos motoristas.
       const ent = new Map(), rech = new Map();
       for (const r of rows) {
-        const x = { ...r, motorista: nom.get(r.piloto_id) || r.piloto || '' };
+        const x = { ...r, motorista: persona(r.piloto) || nom.get(r.piloto_id) || '' };
         if (r.estado === 'entregado') { if (!ent.has(r.id_envio_detalle)) ent.set(r.id_envio_detalle, x); }
         else rech.set(r.id_envio_detalle, x);
       }
@@ -1965,14 +1972,14 @@
         sb.functions.invoke('temu-mover', { body: { accion: 'buscar', guia } }),
       ]);
       const H = (hist.data || []), M = (movs.data || []), C = cps.data || {};
-      const nom = id => ((window.__tiposHoy && window.__tiposHoy.get(id)) || {}).nombre;
+      const nomR = r => persona(r.piloto) || ((window.__tiposHoy && window.__tiposHoy.get(r.piloto_id)) || {}).nombre || '';
       const c = C.cps, pend = C.pendiente;
       const entregado = H.find(r => r.estado === 'entregado');
       const ultimo = H[H.length - 1];
       const corr = (c && c.correlativo) || (pend && pend.correlativo) || (ultimo && ultimo.correlativo) || '';
       // Dónde está ahorita
       let cls = '', titulo = '', texto = '';
-      if (entregado) { cls = 'ok'; titulo = 'Entregado'; texto = 'El ' + esc(fechaLarga(entregado.fecha)) + ' a las ' + esc(relojGT(entregado.registrado_at)) + ' por ' + esc(nom(entregado.piloto_id) || entregado.piloto) + '.'; }
+      if (entregado) { cls = 'ok'; titulo = 'Entregado'; texto = 'El ' + esc(fechaLarga(entregado.fecha)) + ' a las ' + esc(relojGT(entregado.registrado_at)) + ' por ' + esc(nomR(entregado)) + '.'; }
       else if (pend) { cls = ''; titulo = ESTADOS_CPS[pend.id_estado_objeto] || cap(pend.estado || 'Pendiente'); texto = 'Ruta ' + esc(pend.ruta || '—') + '.'; }
       else if (c && c.puede_mover) { cls = 'warn'; titulo = 'En camino'; texto = 'Lo lleva ' + esc(c.piloto || '—') + ' en la ruta ' + esc(c.ruta || '—') + '. Se puede mover desde la pestaña Mover.'; }
       else if (c) {
@@ -1987,7 +1994,7 @@
         ${c ? `<div><span>Motorista en CPS</span><b>${esc(c.piloto || '—')}</b></div><div><span>Ruta en CPS</span><b>${esc(c.ruta || '—')}</b></div>` : ''}
         ${ultimo && ultimo.tamano ? `<div><span>Tamaño</span><b>${esc(ultimo.tamano)}</b></div>` : ''}</div></div>`;
       // Historial
-      const ev = H.map(r => ({ t: r.registrado_at, txt: (r.estado === 'entregado' ? '<b class="good" style="color:var(--green)">Entregado</b>' : r.estado === 'rechazo' ? '<b style="color:#c0392b">Rechazado</b>' : 'Registrado') + ' · ' + esc(nom(r.piloto_id) || r.piloto) + (r.motivo ? ' · ' + esc(cap(r.motivo)) : '') }))
+      const ev = H.map(r => ({ t: r.registrado_at, txt: (r.estado === 'entregado' ? '<b class="good" style="color:var(--green)">Entregado</b>' : r.estado === 'rechazo' ? '<b style="color:#c0392b">Rechazado</b>' : 'Registrado') + ' · ' + esc(nomR(r)) + (r.motivo ? ' · ' + esc(cap(r.motivo)) : '') }))
         .concat(M.map(m => ({ t: m.created_at, txt: (m.ok ? '<b>Movido</b>' : '<b>Intento de mover</b>') + ' de ' + esc(m.piloto_origen || '—') + ' a ' + esc(m.piloto_destino || '—') + (m.motivo ? ' · “' + esc(m.motivo) + '”' : '') + (m.hecho_por ? ' · por ' + esc(m.hecho_por) : '') + (m.ok ? '' : ' · ' + esc(m.mensaje || '')) })))
         .sort((a, b) => a.t < b.t ? -1 : 1);
       html += `<div><h3 style="font-size:.95rem;margin:0 0 6px">Historial</h3>` + (ev.length
