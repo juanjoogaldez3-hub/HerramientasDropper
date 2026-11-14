@@ -889,7 +889,7 @@ $('#sf-desde').value=todayStr();
   await loadConfig();
   await loadEmp(); fillPEmp(); renderDia(); updateSolBadge();
 })();
-const ADMIN_EMAILS=['juanjoogaldez3@gmail.com'];   // respaldo por si la función RPC no responde
+const ADMIN_EMAILS=['juanjoogaldez3@gmail.com','jogaldez@droppergt.com'];   // respaldo por si la función RPC no responde
 async function checkAdmin(){
   const byEmail=ADMIN_EMAILS.includes(((USER&&USER.email)||'').toLowerCase());
   if(!window.sb) return byEmail;
