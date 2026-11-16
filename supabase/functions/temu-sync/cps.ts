@@ -13,6 +13,11 @@ export function md5hex(texto: string): string {
 
 export type Piloto = { id: number; nombre: string };
 
+// CPS le agrega "Dropper" al apellido de algunos motoristas ("Carlos Zacarias Dropper")
+export function limpiarNombre(n: unknown): string {
+  return String(n ?? "").replace(/\s+Dropper\s*$/i, "").replace(/\s+/g, " ").trim();
+}
+
 // ---------- Fechas (todo en hora de Guatemala) ----------
 export const DAY = 86_400_000;
 export function hoyLocal(): string {
@@ -57,7 +62,7 @@ export function aFila(x: any, piloto: Piloto) {
     guia: x?.IDENTIFICADOR_DETALLE != null ? String(x.IDENTIFICADOR_DETALLE) : null,
     billing_name: x?.BILLING_NAME ?? null,
     piloto_id: piloto.id,
-    piloto: (x?.NOMBRE_COMPLETO || piloto.nombre || "").trim(),
+    piloto: limpiarNombre(x?.NOMBRE_COMPLETO || piloto.nombre || ""),
     fecha: fechaLocal(reg),
     registrado_at: reg.toISOString(),
     estado,

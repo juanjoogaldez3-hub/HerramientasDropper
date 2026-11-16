@@ -1,5 +1,5 @@
 // Pruebas de la conversión de envíos de CPS.  Correr con:  deno test supabase/functions/temu-sync/cps_test.ts
-import { aFila, contarZonas, contarZonasPendientes, finUTC, inicioUTC, md5hex, sumarDias, unicos, zonaDe } from "./cps.ts";
+import { aFila, contarZonas, contarZonasPendientes, limpiarNombre, finUTC, inicioUTC, md5hex, sumarDias, unicos, zonaDe } from "./cps.ts";
 
 function igual(a: unknown, b: unknown, msg: string) {
   if (JSON.stringify(a) !== JSON.stringify(b)) throw new Error(`${msg}: esperaba ${JSON.stringify(b)}, salió ${JSON.stringify(a)}`);
@@ -95,4 +95,9 @@ Deno.test("lo que viene mañana por ruta y zona", () => {
   ]);
   igual(c.find((x) => x.zona === "10"), { ruta: "MIXCO Z9", zona: "10", por_llegar: 1, en_bodega: 1 }, "z10");
   igual(c.find((x) => x.zona === "9")?.por_llegar, 1, "z9");
+});
+
+Deno.test("nombre sin el Dropper que agrega CPS", () => {
+  igual(limpiarNombre("Carlos Zacarias Dropper"), "Carlos Zacarias", "dropper");
+  igual(limpiarNombre("Fredy  Alonzo "), "Fredy Alonzo", "espacios");
 });

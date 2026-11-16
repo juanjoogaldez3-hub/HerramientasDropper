@@ -15,7 +15,7 @@
 // la página consulta temu_sync_runs para saber cuándo terminó.
 // ============================================================
 import { createClient } from "npm:@supabase/supabase-js@2";
-import { aFila, contarZonasPendientes, unicos, DAY, md5hex, esFecha, finUTC, hoyLocal, inicioUTC, sumarDias, type Piloto } from "./cps.ts";
+import { aFila, contarZonasPendientes, limpiarNombre, unicos, DAY, md5hex, esFecha, finUTC, hoyLocal, inicioUTC, sumarDias, type Piloto } from "./cps.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_KEY  = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -80,7 +80,7 @@ async function pilotosCps(token: string): Promise<Piloto[]> {
     .filter((p) => typeof p?.ID_USUARIO === "number")
     .map((p) => ({
       id: p.ID_USUARIO,
-      nombre: [p.PRIMER_NOMBRE, p.PRIMER_APELLIDO].filter(Boolean).join(" ").trim() || p.USERNAME || `Piloto ${p.ID_USUARIO}`,
+      nombre: limpiarNombre([p.PRIMER_NOMBRE, p.PRIMER_APELLIDO].filter(Boolean).join(" ")) || p.USERNAME || `Piloto ${p.ID_USUARIO}`,
     }));
 }
 
